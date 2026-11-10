@@ -44,16 +44,16 @@
 
     svg { display: block; flex-shrink: 0; }
 
+    /* HEARTBEAT GLOWING ICON SPLASH SCREEN */
     #splash-screen {
       position: fixed;
       inset: 0;
-      background: radial-gradient(circle at 50% 35%, #2b1118 0%, #0d0d0f 70%);
+      background: radial-gradient(circle at 50% 50%, #240d13 0%, #0d0d0f 68%);
       z-index: 9999;
       display: flex;
-      flex-direction: column;
       align-items: center;
       justify-content: center;
-      transition: opacity 0.45s ease, visibility 0.45s ease;
+      transition: opacity 0.5s ease, visibility 0.5s ease;
     }
 
     #splash-screen.hidden {
@@ -63,57 +63,40 @@
     }
 
     .splash-logo-wrap {
-      width: 96px;
-      height: 96px;
-      border-radius: 24px;
+      width: 104px;
+      height: 104px;
+      border-radius: 26px;
       background: linear-gradient(135deg, #fb5c74, #fa233b);
-      box-shadow: 0 18px 45px rgba(250, 36, 60, 0.45);
       display: flex;
       align-items: center;
       justify-content: center;
-      animation: pulseLogo 2s infinite ease-in-out;
+      animation: heartbeatGlow 1.5s infinite ease-in-out;
     }
 
-    @keyframes pulseLogo {
-      0%, 100% { transform: scale(1); }
-      50% { transform: scale(1.06); }
+    @keyframes heartbeatGlow {
+      0% {
+        transform: scale(1);
+        box-shadow: 0 0 25px rgba(250, 36, 60, 0.45), 0 0 55px rgba(250, 36, 60, 0.2);
+      }
+      14% {
+        transform: scale(1.15);
+        box-shadow: 0 0 45px rgba(250, 36, 60, 0.9), 0 0 95px rgba(250, 36, 60, 0.6);
+      }
+      28% {
+        transform: scale(1);
+        box-shadow: 0 0 28px rgba(250, 36, 60, 0.5), 0 0 60px rgba(250, 36, 60, 0.25);
+      }
+      42% {
+        transform: scale(1.1);
+        box-shadow: 0 0 40px rgba(250, 36, 60, 0.8), 0 0 80px rgba(250, 36, 60, 0.5);
+      }
+      70%, 100% {
+        transform: scale(1);
+        box-shadow: 0 0 25px rgba(250, 36, 60, 0.45), 0 0 55px rgba(250, 36, 60, 0.2);
+      }
     }
 
-    .splash-title {
-      margin-top: 1.4rem;
-      font-size: 1.65rem;
-      font-weight: 800;
-      letter-spacing: -0.5px;
-    }
-
-    .splash-sub {
-      margin-top: 0.4rem;
-      font-size: 0.88rem;
-      color: var(--am-subtext);
-    }
-
-    .splash-loader {
-      margin-top: 1.5rem;
-      width: 160px;
-      height: 4px;
-      background: rgba(255, 255, 255, 0.12);
-      border-radius: 99px;
-      overflow: hidden;
-    }
-
-    .splash-loader-bar {
-      width: 45%;
-      height: 100%;
-      background: var(--am-accent);
-      border-radius: 99px;
-      animation: slideBar 1.2s infinite ease-in-out;
-    }
-
-    @keyframes slideBar {
-      0% { transform: translateX(-100%); }
-      100% { transform: translateX(250%); }
-    }
-
+    /* TOAST NOTIFICATION */
     #toast-box {
       position: fixed;
       top: 20px;
@@ -138,11 +121,17 @@
 
     #toast-box.show { transform: translateX(-50%) translateY(0); }
 
+    /* APP LAYOUT - FULL HEIGHT WHEN PLAYER IS HIDDEN */
     .app-shell {
       display: flex;
       flex: 1;
-      height: calc(100vh - 84px);
+      height: 100vh;
       overflow: hidden;
+      transition: height 0.25s ease;
+    }
+
+    body.player-active .app-shell {
+      height: calc(100vh - 84px);
     }
 
     .sidebar {
@@ -254,7 +243,7 @@
       align-items: flex-end;
       border-bottom: 1px solid var(--am-border);
       padding-bottom: 1rem;
-      margin-bottom: 1.5rem;
+      margin-bottom: 1.3rem;
       flex-wrap: wrap;
       gap: 1rem;
     }
@@ -268,6 +257,59 @@
       align-items: center;
       flex-wrap: wrap;
     }
+
+    /* TRENDING SEARCH BAR */
+    .trending-search-wrap {
+      position: relative;
+      margin-bottom: 1.35rem;
+      max-width: 560px;
+    }
+
+    .trending-search-input {
+      width: 100%;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 12px;
+      padding: 0.78rem 2.6rem 0.78rem 2.65rem;
+      color: var(--am-text);
+      font-size: 0.92rem;
+      outline: none;
+      transition: border-color 0.15s, background 0.15s;
+    }
+
+    .trending-search-input:focus {
+      border-color: var(--am-accent);
+      background: rgba(255, 255, 255, 0.12);
+    }
+
+    .trending-search-icon {
+      position: absolute;
+      left: 0.9rem;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--am-subtext);
+      pointer-events: none;
+    }
+
+    .trending-clear-btn {
+      position: absolute;
+      right: 0.75rem;
+      top: 50%;
+      transform: translateY(-50%);
+      background: rgba(255, 255, 255, 0.14);
+      border: none;
+      color: #fff;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      font-size: 0.72rem;
+      cursor: pointer;
+      display: none;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .trending-clear-btn.show { display: inline-flex; }
 
     .btn-am {
       background: var(--am-accent);
@@ -584,18 +626,29 @@
       background: rgba(250, 36, 60, 0.05);
     }
 
+    /* BOTTOM MINI PLAYER BAR - HIDDEN UNTIL SONG PLAYS */
     .am-player-bar {
       height: 84px;
-      background: rgba(22, 22, 26, 0.92);
+      background: rgba(22, 22, 26, 0.94);
       backdrop-filter: saturate(180%) blur(25px);
       border-top: 1px solid var(--am-border);
-      display: grid;
+      display: none;
       grid-template-columns: 240px 1fr 240px;
       align-items: center;
       padding: 0 1.4rem;
       gap: 1rem;
       z-index: 200;
       cursor: pointer;
+      animation: slideUpPlayer 0.32s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    .am-player-bar.visible {
+      display: grid;
+    }
+
+    @keyframes slideUpPlayer {
+      from { transform: translateY(100%); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
     }
 
     .transport-controls { display: flex; align-items: center; gap: 0.85rem; }
@@ -875,7 +928,8 @@
 
     @media (max-width: 768px) {
       .sidebar { display: none; }
-      .app-shell { height: calc(100vh - 134px); }
+      .app-shell { height: calc(100vh - 56px); }
+      body.player-active .app-shell { height: calc(100vh - 126px); }
       .main-content { padding: 1.2rem 1rem 4rem; }
       .track-row { grid-template-columns: 30px 42px 1fr auto; }
       .track-album { display: none; }
@@ -897,18 +951,15 @@
 </head>
 <body>
 
+  <!-- MINIMAL HEARTBEAT GLOWING ICON SPLASH SCREEN -->
   <div id="splash-screen">
     <div class="splash-logo-wrap">
-      <svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+      <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
         <path d="M9 18V5l12-2v13"></path>
         <circle cx="6" cy="18" r="3" fill="#ffffff"></circle>
         <circle cx="18" cy="16" r="3" fill="#ffffff"></circle>
       </svg>
     </div>
-    <div class="splash-title">Musix</div>
-    <div class="splash-sub" id="splash-status">Connecting to your Cloud Library...</div>
-    <div class="splash-loader"><div class="splash-loader-bar"></div></div>
-    <button class="btn-am-secondary" style="margin-top:1.8rem; font-size:0.78rem;" onclick="dismissSplash()">Enter App Immediately</button>
   </div>
 
   <div id="toast-box">Copied song link!</div>
@@ -924,7 +975,7 @@
         <span class="search-icon">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
         </span>
-        <input type="text" id="global-search" placeholder="Search songs, artists, vibe..." oninput="handleSearch(this.value)" />
+        <input type="text" id="global-search" placeholder="Search library songs..." oninput="handleSearch(this.value)" />
       </div>
 
       <div class="nav-group">
@@ -1017,7 +1068,7 @@
         <div id="smart-artist-grid" class="smart-grid"></div>
       </section>
 
-      <!-- 3. WEEKLY TRENDING (100+ SONGS IN MALAYALAM, TAMIL, ENGLISH, HINDI) -->
+      <!-- 3. WEEKLY TRENDING + ANY SONG LINK SEARCH -->
       <section id="view-browse" class="view">
         <div class="page-header">
           <div>
@@ -1031,6 +1082,21 @@
             <button id="lang-hindi" class="btn-am-secondary" onclick="selectTrendingLang('hindi')">Hindi (100+)</button>
           </div>
         </div>
+
+        <div class="trending-search-wrap">
+          <span class="trending-search-icon">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+          </span>
+          <input
+            type="text"
+            id="trending-search-input"
+            class="trending-search-input"
+            placeholder="Search any song, movie, or artist to copy its link..."
+            oninput="handleTrendingSearchInput(this.value)"
+          />
+          <button id="trending-clear-btn" class="trending-clear-btn" onclick="clearTrendingSearch()" title="Clear search">✕</button>
+        </div>
+
         <div id="trending-container" class="track-table"></div>
       </section>
 
@@ -1118,30 +1184,8 @@
     </main>
   </div>
 
-  <nav class="mobile-nav">
-    <button class="mob-tab active" id="mob-home" onclick="switchView('home')">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
-      <span>Home</span>
-    </button>
-    <button class="mob-tab" id="mob-smart" onclick="switchView('smart')">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4"/></svg>
-      <span>Smart Mix</span>
-    </button>
-    <button class="mob-tab" id="mob-browse" onclick="switchView('browse')">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
-      <span>Trending</span>
-    </button>
-    <button class="mob-tab" id="mob-songs" onclick="switchView('songs')">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
-      <span>Library</span>
-    </button>
-    <button class="mob-tab" id="mob-upload" onclick="switchView('upload')">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-      <span>Upload</span>
-    </button>
-  </nav>
-
-  <footer class="am-player-bar" onclick="openFullscreenPlayer(event)">
+  <!-- BOTTOM MINI PLAYER (ONLY APPEARS WHEN PLAYING A SONG) -->
+  <footer id="bottom-player" class="am-player-bar" onclick="openFullscreenPlayer(event)">
     <div class="transport-controls" onclick="event.stopPropagation()">
       <button class="ctrl-icon" id="btn-shuffle" onclick="toggleShuffle()" title="Shuffle">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>
@@ -1165,8 +1209,8 @@
       <div class="lcd-body">
         <div class="lcd-top">
           <div style="min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
-            <span id="lcd-title" class="lcd-title">Tap a song to play</span>
-            <span id="lcd-artist" class="lcd-artist" style="margin-left:6px;">— Tap bar to expand player</span>
+            <span id="lcd-title" class="lcd-title">Now Playing</span>
+            <span id="lcd-artist" class="lcd-artist" style="margin-left:6px;"></span>
           </div>
           <span class="lcd-time"><span id="cur-time">0:00</span> / <span id="tot-time">0:00</span></span>
         </div>
@@ -1187,6 +1231,29 @@
 
     <audio id="audio-player" preload="metadata"></audio>
   </footer>
+
+  <nav class="mobile-nav">
+    <button class="mob-tab active" id="mob-home" onclick="switchView('home')">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+      <span>Home</span>
+    </button>
+    <button class="mob-tab" id="mob-smart" onclick="switchView('smart')">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4"/></svg>
+      <span>Smart Mix</span>
+    </button>
+    <button class="mob-tab" id="mob-browse" onclick="switchView('browse')">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+      <span>Trending</span>
+    </button>
+    <button class="mob-tab" id="mob-songs" onclick="switchView('songs')">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+      <span>Library</span>
+    </button>
+    <button class="mob-tab" id="mob-upload" onclick="switchView('upload')">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      <span>Upload</span>
+    </button>
+  </nav>
 
   <div id="fullscreen-player">
     <div class="fs-bg-blur" id="fs-bg"></div>
@@ -1295,6 +1362,8 @@
     let isRepeat = false;
     let currentTrendingLang = 'malayalam';
     let trendingByLang = { malayalam: [], tamil: [], english: [], hindi: [] };
+    let displayedTrendingList = [];
+    let trendingSearchTimer = null;
     let activePlaylistId = null;
     let activeSmartSongs = [];
     let songPendingPlaylistAdd = null;
@@ -1306,8 +1375,12 @@
     const audioPlayer = document.getElementById('audio-player');
 
     function dismissSplash() {
-      document.getElementById('splash-screen').classList.add('hidden');
+      const sp = document.getElementById('splash-screen');
+      if (sp) sp.classList.add('hidden');
     }
+
+    // Automatically open app after a brief heartbeat if server is still waking up
+    setTimeout(dismissSplash, 2800);
 
     function showToast(msg) {
       const t = document.getElementById('toast-box');
@@ -1461,10 +1534,13 @@
       if (mobBtn) mobBtn.classList.add('active');
 
       if (viewName === 'browse') {
-        if (!trendingByLang[currentTrendingLang] || trendingByLang[currentTrendingLang].length === 0) {
-          fetchTrendingByLang(currentTrendingLang);
-        } else {
-          renderTrending();
+        const searchVal = (document.getElementById('trending-search-input').value || '').trim();
+        if (!searchVal) {
+          if (!trendingByLang[currentTrendingLang] || trendingByLang[currentTrendingLang].length === 0) {
+            fetchTrendingByLang(currentTrendingLang);
+          } else {
+            renderTrendingList(trendingByLang[currentTrendingLang], false);
+          }
         }
       }
       if (viewName === 'liked') renderLikedView();
@@ -1499,7 +1575,6 @@
         renderAllSongsView();
         renderSmartPlaylistsView();
       } catch (err) {
-        document.getElementById('splash-status').textContent = 'Waking up cloud server... almost ready!';
         setTimeout(function () { fetchLibrary(force); }, 3500);
       }
     }
@@ -1917,6 +1992,10 @@
       const song = currentQueue[currentIndex];
       const meta = getSongMeta(song);
 
+      // Reveal bottom player bar only when playback starts
+      document.body.classList.add('player-active');
+      document.getElementById('bottom-player').classList.add('visible');
+
       audioPlayer.src = '/api/stream/' + song.id;
       audioPlayer.play();
 
@@ -2044,7 +2123,7 @@
       return m + ':' + s;
     }
 
-    // WEEKLY TRENDING: 100+ SONGS IN MALAYALAM, TAMIL, ENGLISH, HINDI
+    // WEEKLY TRENDING + LIVE SONG LINK SEARCH
     async function fetchClientSideTrendingFallback(lang) {
       const queriesByLang = {
         malayalam: [
@@ -2120,11 +2199,11 @@
         const data = await res.json();
         if (!data.songs || data.songs.length === 0) throw new Error('Empty');
         trendingByLang[lang] = data.songs;
-        renderTrending();
+        renderTrendingList(trendingByLang[lang], false);
       } catch (e) {
         try {
           trendingByLang[lang] = await fetchClientSideTrendingFallback(lang);
-          renderTrending();
+          renderTrendingList(trendingByLang[lang], false);
         } catch (err) {
           box.innerHTML = '<p style="color:#ff453a;">Failed to load trending songs. Check your connection.</p>';
         }
@@ -2133,6 +2212,10 @@
 
     function selectTrendingLang(lang) {
       currentTrendingLang = lang;
+      const searchInput = document.getElementById('trending-search-input');
+      if (searchInput) searchInput.value = '';
+      document.getElementById('trending-clear-btn').classList.remove('show');
+
       ['malayalam', 'tamil', 'english', 'hindi'].forEach(function (l) {
         const btn = document.getElementById('lang-' + l);
         if (btn) btn.className = l === lang ? 'btn-am' : 'btn-am-secondary';
@@ -2140,14 +2223,68 @@
       if (!trendingByLang[lang] || trendingByLang[lang].length === 0) {
         fetchTrendingByLang(lang);
       } else {
-        renderTrending();
+        renderTrendingList(trendingByLang[lang], false);
+      }
+    }
+
+    function handleTrendingSearchInput(val) {
+      const q = (val || '').trim();
+      const clearBtn = document.getElementById('trending-clear-btn');
+      if (clearBtn) clearBtn.classList.toggle('show', q.length > 0);
+
+      clearTimeout(trendingSearchTimer);
+      if (!q) {
+        renderTrendingList(trendingByLang[currentTrendingLang] || [], false);
+        return;
+      }
+
+      trendingSearchTimer = setTimeout(function () {
+        searchSongsForLink(q);
+      }, 320);
+    }
+
+    function clearTrendingSearch() {
+      const input = document.getElementById('trending-search-input');
+      input.value = '';
+      document.getElementById('trending-clear-btn').classList.remove('show');
+      renderTrendingList(trendingByLang[currentTrendingLang] || [], false);
+    }
+
+    async function searchSongsForLink(query) {
+      const box = document.getElementById('trending-container');
+      const countLabel = document.getElementById('trending-sub-count');
+      box.innerHTML = '<p style="color:var(--am-subtext); padding:1rem 0;">Searching songs matching "' + query + '"...</p>';
+
+      try {
+        const url = 'https://itunes.apple.com/search?term=' + encodeURIComponent(query) + '&country=in&media=music&entity=song&limit=60';
+        const res = await fetch(url);
+        const data = await res.json();
+        const raw = data.results || [];
+        const results = raw.map(function (item, idx) {
+          return {
+            rank: idx + 1,
+            trackId: item.trackId,
+            title: item.trackName || 'Unknown',
+            artist: item.artistName || 'Unknown Artist',
+            album: item.collectionName || 'Single',
+            genre: item.primaryGenreName || 'Music',
+            artwork: (item.artworkUrl100 || '/icon-192.png').replace('100x100bb', '600x600bb'),
+            trackViewUrl: item.trackViewUrl || ''
+          };
+        });
+
+        if (countLabel) {
+          countLabel.textContent = results.length + ' Search Results for "' + query + '" • Tap ••• to copy direct song link';
+        }
+        renderTrendingList(results, true);
+      } catch (e) {
+        box.innerHTML = '<p style="color:#ff453a;">Search failed. Please check your connection.</p>';
       }
     }
 
     async function copyTrendingSongLink(idx, event) {
       if (event) event.stopPropagation();
-      const list = trendingByLang[currentTrendingLang] || [];
-      const item = list[idx];
+      const item = displayedTrendingList[idx];
       if (!item) return;
 
       showToast('Fetching direct song link for "' + item.title + '"...');
@@ -2178,22 +2315,22 @@
       showToast('✓ Copied song link: ' + item.title);
     }
 
-    function renderTrending() {
-      const list = trendingByLang[currentTrendingLang] || [];
+    function renderTrendingList(list, isSearchResult) {
+      displayedTrendingList = list || [];
       const box = document.getElementById('trending-container');
       const countLabel = document.getElementById('trending-sub-count');
 
-      if (countLabel) {
+      if (!isSearchResult && countLabel) {
         const langTitle = currentTrendingLang.charAt(0).toUpperCase() + currentTrendingLang.slice(1);
-        countLabel.textContent = list.length + ' ' + langTitle + ' Trending Songs • Tap ••• to copy direct song link';
+        countLabel.textContent = displayedTrendingList.length + ' ' + langTitle + ' Trending Songs • Tap ••• to copy direct song link';
       }
 
-      if (list.length === 0) {
-        box.innerHTML = '<p style="color:var(--am-subtext);">No songs found.</p>';
+      if (displayedTrendingList.length === 0) {
+        box.innerHTML = '<p style="color:var(--am-subtext); padding:1rem 0;">No matching songs found.</p>';
         return;
       }
 
-      box.innerHTML = list.map(function (item, idx) {
+      box.innerHTML = displayedTrendingList.map(function (item, idx) {
         return (
           '<div class="track-row" onclick="copyTrendingSongLink(' + idx + ', event)">' +
             '<div class="track-num">#' + (idx + 1) + '</div>' +
