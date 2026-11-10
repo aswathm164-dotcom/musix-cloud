@@ -26,20 +26,30 @@ const DRIVE_FOLDER_ID = process.env.DRIVE_FOLDER_ID;
 
 let songsCache = null;
 let lastCacheTime = 0;
+const fileMetaCache = {};
 const trendingCache = {};
+const artistPhotoCache = {};
 
 async function getDriveSongs(forceRefresh = false) {
-  if (!forceRefresh && songsCache && Date.now() - lastCacheTime < 25000) {
+  if (!forceRefresh && songsCache && Date.now() - lastCacheTime < 30000) {
     return songsCache;
   }
   const response = await drive.files.list({
     q: "'" + DRIVE_FOLDER_ID + "' in parents and trashed = false",
-    fields: 'files(id, name, size, createdTime)',
+    fields: 'files(id, name, size, mimeType, createdTime)',
     orderBy: 'createdTime desc',
     pageSize: 500,
   });
   songsCache = response.data.files || [];
   lastCacheTime = Date.now();
+  songsCache.forEach(function (f) {
+    if (f.size) {
+      fileMetaCache[f.id] = {
+        size: parseInt(f.size, 10),
+        mimeType: f.mimeType || 'audio/mpeg'
+      };
+    }
+  });
   return songsCache;
 }
 
@@ -63,7 +73,7 @@ app.post('/api/upload', upload.single('audio'), async (req, res) => {
         mimeType: req.file.mimetype,
         body: bufferStream,
       },
-      fields: 'id, name, size',
+      fields: 'id, name, size, mimeType',
     });
 
     songsCache = null;
@@ -73,7 +83,7 @@ app.post('/api/upload', upload.single('audio'), async (req, res) => {
   }
 });
 
-// 2. List All Uploaded Songs from Google Drive
+// 2. List All Uploaded Songs
 app.get('/api/songs', async (req, res) => {
   try {
     const force = req.query.refresh === '1';
@@ -84,18 +94,27 @@ app.get('/api/songs', async (req, res) => {
   }
 });
 
-// 3. Stream Audio with HTTP 206 Byte-Range Support
+// 3. Fast Zero-Buffer Audio Stream with In-Memory Metadata & Cache Headers
 app.get('/api/stream/:fileId', async (req, res) => {
   try {
     const fileId = req.params.fileId;
     const range = req.headers.range;
 
-    const meta = await drive.files.get({
-      fileId,
-      fields: 'size, mimeType',
-    });
-    const fileSize = parseInt(meta.data.size, 10);
-    const mimeType = meta.data.mimeType || 'audio/mpeg';
+    let meta = fileMetaCache[fileId];
+    if (!meta) {
+      const gMeta = await drive.files.get({
+        fileId: fileId,
+        fields: 'size, mimeType',
+      });
+      meta = {
+        size: parseInt(gMeta.data.size, 10),
+        mimeType: gMeta.data.mimeType || 'audio/mpeg'
+      };
+      fileMetaCache[fileId] = meta;
+    }
+
+    const fileSize = meta.size;
+    const mimeType = meta.mimeType;
 
     if (range) {
       const parts = range.replace(/bytes=/, '').split('-');
@@ -104,7 +123,7 @@ app.get('/api/stream/:fileId', async (req, res) => {
       const chunkSize = end - start + 1;
 
       const driveStream = await drive.files.get(
-        { fileId, alt: 'media' },
+        { fileId: fileId, alt: 'media' },
         {
           responseType: 'stream',
           headers: { Range: 'bytes=' + start + '-' + end },
@@ -116,6 +135,7 @@ app.get('/api/stream/:fileId', async (req, res) => {
         'Accept-Ranges': 'bytes',
         'Content-Length': chunkSize,
         'Content-Type': mimeType,
+        'Cache-Control': 'public, max-age=31536000, immutable'
       });
 
       driveStream.data.pipe(res);
@@ -123,20 +143,48 @@ app.get('/api/stream/:fileId', async (req, res) => {
       res.writeHead(200, {
         'Content-Length': fileSize,
         'Content-Type': mimeType,
+        'Accept-Ranges': 'bytes',
+        'Cache-Control': 'public, max-age=31536000, immutable'
       });
 
       const driveStream = await drive.files.get(
-        { fileId, alt: 'media' },
+        { fileId: fileId, alt: 'media' },
         { responseType: 'stream' }
       );
       driveStream.data.pipe(res);
     }
   } catch (error) {
-    res.status(500).send('Error streaming audio from Drive');
+    res.status(500).send('Error streaming audio');
   }
 });
 
-// Helper: Fetch 100+ Songs per Language from iTunes API
+// 4. Real Artist Face Photo Resolver (Deezer Artist API)
+app.get('/api/artist-image', async (req, res) => {
+  const name = (req.query.name || '').trim();
+  if (!name) return res.json({ image: '/icon-512.png' });
+
+  const key = name.toLowerCase();
+  if (artistPhotoCache[key]) {
+    return res.json({ image: artistPhotoCache[key] });
+  }
+
+  try {
+    const url = 'https://api.deezer.com/search/artist?q=' + encodeURIComponent(name) + '&limit=1';
+    const response = await axios.get(url, { timeout: 4500 });
+    const list = (response.data && response.data.data) || [];
+    if (list.length > 0) {
+      const pic = list[0].picture_big || list[0].picture_medium || list[0].picture_xl;
+      if (pic && pic.indexOf('/images/artist//') === -1) {
+        artistPhotoCache[key] = pic;
+        return res.json({ image: pic });
+      }
+    }
+  } catch (e) {}
+
+  return res.json({ image: '' });
+});
+
+// Helper: Fetch 100+ Songs per Language
 async function fetchLanguageTrending(lang) {
   const queriesByLang = {
     malayalam: [
@@ -207,7 +255,7 @@ async function fetchLanguageTrending(lang) {
         artist: item.artistName || 'Unknown Artist',
         album: item.collectionName || 'Single',
         genre: item.primaryGenreName || 'Music',
-        artwork: (item.artworkUrl100 || '/icon-192.png').replace('100x100bb', '600x600bb'),
+        artwork: (item.artworkUrl100 || '/icon-512.png').replace('100x100bb', '600x600bb'),
         trackViewUrl: item.trackViewUrl || ''
       });
       if (merged.length >= 120) break;
@@ -218,7 +266,7 @@ async function fetchLanguageTrending(lang) {
   return merged;
 }
 
-// 4. Trending 100+ Songs Endpoint
+// 5. Trending Songs Endpoint
 app.get('/api/trending', async (req, res) => {
   try {
     const lang = (req.query.lang || 'malayalam').toLowerCase();
@@ -236,14 +284,13 @@ app.get('/api/trending', async (req, res) => {
   }
 });
 
-// 5. Direct Downloadable Song Link Resolver
+// 6. Direct Downloadable Song Link Resolver
 app.get('/api/song-link', async (req, res) => {
   const trackId = req.query.trackId || '';
   const trackUrl = req.query.trackUrl || '';
   const title = req.query.title || '';
   const artist = req.query.artist || '';
 
-  // Step A: Odesli / Songlink API for direct Spotify Track URL or YouTube Watch URL
   try {
     const lookupUrl = trackUrl || ('https://music.apple.com/in/song/' + trackId);
     const odesliUrl =
@@ -263,7 +310,6 @@ app.get('/api/song-link', async (req, res) => {
     }
   } catch (e) {}
 
-  // Step B: Fallback to direct YouTube video watch URL
   try {
     const rawSearch = (title + ' ' + artist + ' official audio').trim();
     const ytUrl = 'https://www.youtube.com/results?search_query=' + encodeURIComponent(rawSearch);
@@ -280,7 +326,6 @@ app.get('/api/song-link', async (req, res) => {
     }
   } catch (e) {}
 
-  // Step C: Fallback to direct Apple Music song link
   return res.json({
     url: trackUrl || ('https://music.apple.com/in/song/' + trackId),
     source: 'Apple Music'

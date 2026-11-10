@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>Musix</title>
   <link rel="manifest" href="/manifest.json" />
-  <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png" />
-  <link rel="apple-touch-icon" href="/icon-192.png" />
+  <link rel="icon" type="image/png" sizes="512x512" href="/icon-512.png" />
+  <link rel="apple-touch-icon" href="/icon-512.png" />
   <meta name="theme-color" content="#0d0d0f" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
@@ -44,16 +44,16 @@
 
     svg { display: block; flex-shrink: 0; }
 
-    /* HEARTBEAT GLOWING ICON SPLASH SCREEN */
+    /* SINGLE SEAMLESS HEARTBEAT SPLASH SCREEN */
     #splash-screen {
       position: fixed;
       inset: 0;
-      background: radial-gradient(circle at 50% 50%, #240d13 0%, #0d0d0f 68%);
+      background-color: #0d0d0f;
       z-index: 9999;
       display: flex;
       align-items: center;
       justify-content: center;
-      transition: opacity 0.5s ease, visibility 0.5s ease;
+      transition: opacity 0.35s ease, visibility 0.35s ease;
     }
 
     #splash-screen.hidden {
@@ -63,14 +63,14 @@
     }
 
     .splash-logo-wrap {
-      width: 104px;
-      height: 104px;
+      width: 108px;
+      height: 108px;
       border-radius: 26px;
       background: linear-gradient(135deg, #fb5c74, #fa233b);
       display: flex;
       align-items: center;
       justify-content: center;
-      animation: heartbeatGlow 1.5s infinite ease-in-out;
+      animation: heartbeatGlow 1.3s infinite ease-in-out;
     }
 
     @keyframes heartbeatGlow {
@@ -78,25 +78,25 @@
         transform: scale(1);
         box-shadow: 0 0 25px rgba(250, 36, 60, 0.45), 0 0 55px rgba(250, 36, 60, 0.2);
       }
-      14% {
-        transform: scale(1.15);
-        box-shadow: 0 0 45px rgba(250, 36, 60, 0.9), 0 0 95px rgba(250, 36, 60, 0.6);
+      16% {
+        transform: scale(1.16);
+        box-shadow: 0 0 48px rgba(250, 36, 60, 0.95), 0 0 95px rgba(250, 36, 60, 0.6);
       }
-      28% {
+      32% {
         transform: scale(1);
         box-shadow: 0 0 28px rgba(250, 36, 60, 0.5), 0 0 60px rgba(250, 36, 60, 0.25);
       }
-      42% {
+      48% {
         transform: scale(1.1);
-        box-shadow: 0 0 40px rgba(250, 36, 60, 0.8), 0 0 80px rgba(250, 36, 60, 0.5);
+        box-shadow: 0 0 42px rgba(250, 36, 60, 0.85), 0 0 80px rgba(250, 36, 60, 0.5);
       }
-      70%, 100% {
+      75%, 100% {
         transform: scale(1);
         box-shadow: 0 0 25px rgba(250, 36, 60, 0.45), 0 0 55px rgba(250, 36, 60, 0.2);
       }
     }
 
-    /* TOAST NOTIFICATION */
+    /* TOAST */
     #toast-box {
       position: fixed;
       top: 20px;
@@ -121,7 +121,7 @@
 
     #toast-box.show { transform: translateX(-50%) translateY(0); }
 
-    /* APP LAYOUT - FULL HEIGHT WHEN PLAYER IS HIDDEN */
+    /* APP LAYOUT */
     .app-shell {
       display: flex;
       flex: 1;
@@ -135,7 +135,7 @@
     }
 
     .sidebar {
-      width: 265px;
+      width: 260px;
       background-color: var(--am-sidebar);
       border-right: 1px solid var(--am-border);
       display: flex;
@@ -155,7 +155,42 @@
       letter-spacing: -0.5px;
     }
 
-    .brand img { width: 32px; height: 32px; border-radius: 8px; }
+    .brand-badge {
+      width: 34px;
+      height: 34px;
+      border-radius: 9px;
+      background: linear-gradient(135deg, #fb5c74, #fa233b);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 14px rgba(250, 36, 60, 0.4);
+    }
+
+    /* TOP MUSIX BRAND HEADER ABOVE HOME */
+    .home-top-brand {
+      display: flex;
+      align-items: center;
+      gap: 0.65rem;
+      margin-bottom: 0.85rem;
+    }
+
+    .home-top-brand-logo {
+      width: 34px;
+      height: 34px;
+      border-radius: 9px;
+      background: linear-gradient(135deg, #fb5c74, #fa233b);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 6px 18px rgba(250, 36, 60, 0.45);
+    }
+
+    .home-top-brand-name {
+      font-size: 1.35rem;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      color: #ffffff;
+    }
 
     .search-box { position: relative; margin-bottom: 1.2rem; }
 
@@ -225,7 +260,7 @@
     .main-content {
       flex: 1;
       overflow-y: auto;
-      padding: 2rem 2.5rem 5rem;
+      padding: 1.8rem 2.2rem 5rem;
       background: linear-gradient(180deg, #221217 0%, var(--am-canvas) 280px);
     }
 
@@ -248,8 +283,8 @@
       gap: 1rem;
     }
 
-    .page-title { font-size: 2.1rem; font-weight: 800; letter-spacing: -0.7px; }
-    .page-subtitle { color: var(--am-subtext); font-size: 0.88rem; margin-top: 0.25rem; }
+    .page-title { font-size: 2rem; font-weight: 800; letter-spacing: -0.7px; }
+    .page-subtitle { color: var(--am-subtext); font-size: 0.86rem; margin-top: 0.2rem; }
 
     .header-actions {
       display: flex;
@@ -261,7 +296,7 @@
     /* TRENDING SEARCH BAR */
     .trending-search-wrap {
       position: relative;
-      margin-bottom: 1.35rem;
+      margin-bottom: 1.2rem;
       max-width: 560px;
     }
 
@@ -274,7 +309,6 @@
       color: var(--am-text);
       font-size: 0.92rem;
       outline: none;
-      transition: border-color 0.15s, background 0.15s;
     }
 
     .trending-search-input:focus {
@@ -311,6 +345,57 @@
 
     .trending-clear-btn.show { display: inline-flex; }
 
+    /* SQUARE LANGUAGE SELECTOR TILES IN TRENDING & SMART MIX */
+    .lang-square-row {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(75px, 130px));
+      gap: 0.8rem;
+      margin-bottom: 1.4rem;
+    }
+
+    .lang-sq-tile {
+      aspect-ratio: 1 / 1;
+      border-radius: 16px;
+      padding: 0.85rem;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      cursor: pointer;
+      border: 2px solid transparent;
+      position: relative;
+      overflow: hidden;
+      transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+    }
+
+    .lang-sq-tile:hover { transform: translateY(-3px); }
+
+    .lang-sq-tile.active-tile {
+      border-color: #ffffff;
+      box-shadow: 0 10px 28px rgba(250, 36, 60, 0.45);
+    }
+
+    .lang-sq-badge {
+      width: 32px;
+      height: 32px;
+      border-radius: 9px;
+      background: rgba(255, 255, 255, 0.2);
+      backdrop-filter: blur(8px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 0.82rem;
+      color: #fff;
+    }
+
+    .lang-sq-name {
+      font-size: 0.95rem;
+      font-weight: 800;
+      color: #fff;
+      letter-spacing: -0.2px;
+    }
+
     .btn-am {
       background: var(--am-accent);
       color: #fff;
@@ -345,39 +430,128 @@
 
     .btn-am-secondary:hover { background: rgba(255, 255, 255, 0.15); }
 
+    /* SQUARE SMART CARDS (HOME & SMART MIX) */
     .smart-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-      gap: 1rem;
+      grid-template-columns: repeat(auto-fill, minmax(145px, 1fr));
+      gap: 1.05rem;
       margin-bottom: 2rem;
     }
 
     .smart-card {
       position: relative;
-      border-radius: 14px;
-      padding: 1.2rem;
-      min-height: 115px;
+      aspect-ratio: 1 / 1;
+      border-radius: 16px;
+      padding: 1rem;
       display: flex;
       flex-direction: column;
       justify-content: space-between;
       cursor: pointer;
       overflow: hidden;
-      border: 1px solid rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      box-shadow: 0 10px 24px rgba(0, 0, 0, 0.4);
       transition: transform 0.2s, box-shadow 0.2s;
     }
 
     .smart-card:hover {
-      transform: translateY(-3px);
-      box-shadow: 0 12px 26px rgba(0, 0, 0, 0.45);
+      transform: translateY(-4px);
+      box-shadow: 0 14px 30px rgba(0, 0, 0, 0.55);
     }
 
-    .smart-card-title { font-size: 1.12rem; font-weight: 800; letter-spacing: -0.3px; }
-    .smart-card-count { font-size: 0.78rem; color: rgba(255, 255, 255, 0.82); font-weight: 600; }
+    .smart-card-bg {
+      position: absolute;
+      inset: 0;
+      background-size: cover;
+      background-position: center;
+      opacity: 0.34;
+      filter: blur(2px) saturate(140%);
+      transition: transform 0.3s ease;
+    }
+
+    .smart-card:hover .smart-card-bg {
+      transform: scale(1.08);
+    }
+
+    .smart-card-top {
+      position: relative;
+      z-index: 2;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .smart-pill {
+      font-size: 0.65rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      padding: 0.22rem 0.55rem;
+      border-radius: 99px;
+      background: rgba(0, 0, 0, 0.42);
+      backdrop-filter: blur(8px);
+      color: #fff;
+    }
+
+    .smart-card-bottom {
+      position: relative;
+      z-index: 2;
+    }
+
+    .smart-card-title {
+      font-size: 1.05rem;
+      font-weight: 800;
+      letter-spacing: -0.3px;
+      line-height: 1.2;
+      text-shadow: 0 2px 10px rgba(0,0,0,0.5);
+    }
+
+    .smart-card-count {
+      font-size: 0.75rem;
+      color: rgba(255, 255, 255, 0.85);
+      font-weight: 600;
+      margin-top: 3px;
+    }
+
+    /* ARTIST FACE SQUARE CARDS */
+    .artist-face-card {
+      background: var(--am-card);
+      border: 1px solid var(--am-border);
+      border-radius: 16px;
+      padding: 0.9rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      cursor: pointer;
+      transition: transform 0.2s, background 0.2s;
+    }
+
+    .artist-face-card:hover {
+      transform: translateY(-4px);
+      background: #24242b;
+    }
+
+    .artist-avatar-wrap {
+      width: 96px;
+      height: 96px;
+      border-radius: 50%;
+      overflow: hidden;
+      margin-bottom: 0.7rem;
+      border: 2px solid rgba(250, 36, 60, 0.5);
+      box-shadow: 0 8px 22px rgba(0, 0, 0, 0.45);
+      background: #141417;
+    }
+
+    .artist-avatar-wrap img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
 
     .section-title {
-      font-size: 1.25rem;
+      font-size: 1.2rem;
       font-weight: 700;
-      margin: 1.5rem 0 0.9rem;
+      margin: 1.4rem 0 0.85rem;
       letter-spacing: -0.3px;
       display: flex;
       justify-content: space-between;
@@ -386,8 +560,8 @@
 
     .card-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(155px, 1fr));
-      gap: 1.2rem;
+      grid-template-columns: repeat(auto-fill, minmax(145px, 1fr));
+      gap: 1.05rem;
     }
 
     .album-card { cursor: pointer; transition: transform 0.2s; }
@@ -397,11 +571,11 @@
       position: relative;
       width: 100%;
       aspect-ratio: 1 / 1;
-      border-radius: 11px;
+      border-radius: 14px;
       overflow: hidden;
       background: var(--am-card);
       box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
-      margin-bottom: 0.55rem;
+      margin-bottom: 0.5rem;
     }
 
     .album-art-wrap img { width: 100%; height: 100%; object-fit: cover; }
@@ -420,8 +594,8 @@
     .album-card:hover .card-play-overlay { opacity: 1; }
 
     .overlay-circle {
-      width: 44px;
-      height: 44px;
+      width: 42px;
+      height: 42px;
       border-radius: 50%;
       background: rgba(250, 36, 60, 0.95);
       color: #fff;
@@ -431,7 +605,7 @@
     }
 
     .card-title {
-      font-size: 0.88rem;
+      font-size: 0.86rem;
       font-weight: 600;
       white-space: nowrap;
       overflow: hidden;
@@ -439,7 +613,7 @@
     }
 
     .card-sub {
-      font-size: 0.78rem;
+      font-size: 0.76rem;
       color: var(--am-subtext);
       white-space: nowrap;
       overflow: hidden;
@@ -451,11 +625,11 @@
 
     .track-row {
       display: grid;
-      grid-template-columns: 36px 46px 1fr 180px auto;
+      grid-template-columns: 34px 44px 1fr 170px auto;
       align-items: center;
-      gap: 0.85rem;
-      padding: 0.52rem 0.75rem;
-      border-radius: 9px;
+      gap: 0.8rem;
+      padding: 0.5rem 0.7rem;
+      border-radius: 10px;
       border-bottom: 1px solid rgba(255, 255, 255, 0.04);
       cursor: pointer;
       transition: background 0.12s;
@@ -467,7 +641,7 @@
 
     .track-num {
       color: var(--am-subtext);
-      font-size: 0.82rem;
+      font-size: 0.8rem;
       text-align: center;
       font-variant-numeric: tabular-nums;
     }
@@ -475,7 +649,7 @@
     .track-thumb {
       width: 42px;
       height: 42px;
-      border-radius: 7px;
+      border-radius: 8px;
       object-fit: cover;
       background: var(--am-card);
     }
@@ -484,14 +658,14 @@
 
     .track-name {
       font-weight: 500;
-      font-size: 0.92rem;
+      font-size: 0.9rem;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
     }
 
     .track-artist {
-      font-size: 0.78rem;
+      font-size: 0.76rem;
       color: var(--am-subtext);
       white-space: nowrap;
       overflow: hidden;
@@ -499,21 +673,21 @@
       margin-top: 2px;
       display: flex;
       align-items: center;
-      gap: 0.4rem;
+      gap: 0.35rem;
     }
 
     .tag-pill {
       display: inline-block;
-      font-size: 0.65rem;
+      font-size: 0.64rem;
       font-weight: 600;
-      padding: 0.1rem 0.45rem;
+      padding: 0.1rem 0.42rem;
       border-radius: 99px;
       background: rgba(255, 255, 255, 0.08);
       color: var(--am-subtext);
     }
 
     .track-album {
-      font-size: 0.8rem;
+      font-size: 0.78rem;
       color: var(--am-subtext);
       white-space: nowrap;
       overflow: hidden;
@@ -524,7 +698,7 @@
       display: flex;
       align-items: center;
       justify-content: flex-end;
-      gap: 0.45rem;
+      gap: 0.4rem;
     }
 
     .icon-btn {
@@ -532,12 +706,11 @@
       border: none;
       color: var(--am-subtext);
       cursor: pointer;
-      padding: 0.42rem;
+      padding: 0.4rem;
       border-radius: 8px;
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      transition: color 0.15s, background 0.15s;
     }
 
     .icon-btn:hover { color: var(--am-text); background: rgba(255, 255, 255, 0.12); }
@@ -554,7 +727,6 @@
       align-items: center;
       justify-content: center;
       cursor: pointer;
-      transition: background 0.15s, transform 0.1s;
     }
 
     .dots-btn:hover {
@@ -562,22 +734,20 @@
       border-color: var(--am-accent);
     }
 
-    .dots-btn:active { transform: scale(0.92); }
-
     .playlist-hero {
       display: flex;
-      gap: 1.6rem;
+      gap: 1.5rem;
       align-items: flex-end;
-      margin-bottom: 1.8rem;
-      padding-bottom: 1.4rem;
+      margin-bottom: 1.6rem;
+      padding-bottom: 1.3rem;
       border-bottom: 1px solid var(--am-border);
       flex-wrap: wrap;
     }
 
     .playlist-cover-box {
-      width: 175px;
-      height: 175px;
-      border-radius: 14px;
+      width: 160px;
+      height: 160px;
+      border-radius: 16px;
       background: linear-gradient(135deg, #fa243c, #7928ca);
       display: flex;
       align-items: center;
@@ -593,7 +763,7 @@
       background: var(--am-card);
       border: 1px solid var(--am-border);
       border-radius: 14px;
-      padding: 1.8rem;
+      padding: 1.6rem;
       max-width: 520px;
     }
 
@@ -610,8 +780,6 @@
       outline: none;
     }
 
-    .am-input:focus { border-color: var(--am-accent); }
-
     .am-dropzone {
       border: 2px dashed rgba(255, 255, 255, 0.18);
       border-radius: 12px;
@@ -621,15 +789,10 @@
       margin-bottom: 1.1rem;
     }
 
-    .am-dropzone:hover {
-      border-color: var(--am-accent);
-      background: rgba(250, 36, 60, 0.05);
-    }
-
     /* BOTTOM MINI PLAYER BAR - HIDDEN UNTIL SONG PLAYS */
     .am-player-bar {
       height: 84px;
-      background: rgba(22, 22, 26, 0.94);
+      background: rgba(22, 22, 26, 0.95);
       backdrop-filter: saturate(180%) blur(25px);
       border-top: 1px solid var(--am-border);
       display: none;
@@ -639,17 +802,9 @@
       gap: 1rem;
       z-index: 200;
       cursor: pointer;
-      animation: slideUpPlayer 0.32s cubic-bezier(0.22, 1, 0.36, 1);
     }
 
-    .am-player-bar.visible {
-      display: grid;
-    }
-
-    @keyframes slideUpPlayer {
-      from { transform: translateY(100%); opacity: 0; }
-      to { transform: translateY(0); opacity: 1; }
-    }
+    .am-player-bar.visible { display: grid; }
 
     .transport-controls { display: flex; align-items: center; gap: 0.85rem; }
 
@@ -666,7 +821,6 @@
       justify-content: center;
     }
 
-    .ctrl-icon:hover { opacity: 1; background: rgba(255,255,255,0.08); }
     .ctrl-icon.active-mode { color: var(--am-accent); opacity: 1; }
 
     .am-lcd {
@@ -930,8 +1084,21 @@
       .sidebar { display: none; }
       .app-shell { height: calc(100vh - 56px); }
       body.player-active .app-shell { height: calc(100vh - 126px); }
-      .main-content { padding: 1.2rem 1rem 4rem; }
-      .track-row { grid-template-columns: 30px 42px 1fr auto; }
+      .main-content { padding: 1.15rem 1rem 4rem; }
+      .smart-grid, .card-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 0.85rem;
+      }
+      .lang-square-row {
+        grid-template-columns: repeat(4, 1fr);
+        gap: 0.55rem;
+      }
+      .lang-sq-tile {
+        padding: 0.6rem;
+        border-radius: 13px;
+      }
+      .lang-sq-name { font-size: 0.78rem; }
+      .track-row { grid-template-columns: 28px 42px 1fr auto; }
       .track-album { display: none; }
       .am-player-bar {
         grid-template-columns: 1fr auto;
@@ -951,10 +1118,10 @@
 </head>
 <body>
 
-  <!-- MINIMAL HEARTBEAT GLOWING ICON SPLASH SCREEN -->
+  <!-- SINGLE HEARTBEAT ICON SPLASH SCREEN -->
   <div id="splash-screen">
     <div class="splash-logo-wrap">
-      <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+      <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
         <path d="M9 18V5l12-2v13"></path>
         <circle cx="6" cy="18" r="3" fill="#ffffff"></circle>
         <circle cx="18" cy="16" r="3" fill="#ffffff"></circle>
@@ -967,7 +1134,13 @@
   <div class="app-shell">
     <aside class="sidebar">
       <div class="brand">
-        <img src="/icon-192.png" alt="Musix" />
+        <div class="brand-badge">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M9 18V5l12-2v13"></path>
+            <circle cx="6" cy="18" r="3" fill="#ffffff"></circle>
+            <circle cx="18" cy="16" r="3" fill="#ffffff"></circle>
+          </svg>
+        </div>
         <span>Musix</span>
       </div>
 
@@ -984,12 +1157,12 @@
           <span>Home</span>
         </button>
         <button class="nav-item" id="nav-smart" onclick="switchView('smart')">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
-          <span>Smart Auto-Playlists</span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>
+          <span>Smart Mix</span>
         </button>
         <button class="nav-item" id="nav-browse" onclick="switchView('browse')">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
-          <span>Weekly Trending</span>
+          <span>Trending</span>
         </button>
         <button class="nav-item" id="nav-upload" onclick="switchView('upload')">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
@@ -1022,39 +1195,71 @@
 
     <main class="main-content">
 
-      <!-- 1. HOME -->
+      <!-- 1. HOME (WITH MUSIX LOGO & NAME ABOVE HOME + SQUARE CARDS) -->
       <section id="view-home" class="view active">
+        <div class="home-top-brand">
+          <div class="home-top-brand-logo">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M9 18V5l12-2v13"></path>
+              <circle cx="6" cy="18" r="3" fill="#ffffff"></circle>
+              <circle cx="18" cy="16" r="3" fill="#ffffff"></circle>
+            </svg>
+          </div>
+          <span class="home-top-brand-name">Musix</span>
+        </div>
+
         <div class="page-header">
           <div>
             <h1 class="page-title">Home</h1>
-            <p class="page-subtitle">Personal Cloud Streamer • Auto-Organized Library</p>
           </div>
           <div class="header-actions">
             <button class="btn-am" onclick="playAllLibrary(false)">Play All</button>
             <button class="btn-am-secondary" onclick="playAllLibrary(true)">Shuffle</button>
-            <button class="btn-am-secondary" onclick="fetchLibrary(true)">Sync Drive</button>
+            <button class="btn-am-secondary" onclick="fetchLibrary(true)">Sync</button>
           </div>
         </div>
 
         <div class="section-title">
-          <span>Smart Vibe & Language Mixes</span>
-          <button class="btn-am-secondary" style="font-size:0.78rem; padding:0.35rem 0.75rem;" onclick="switchView('smart')">See All Mixes</button>
+          <span>Smart Mixes</span>
+          <button class="btn-am-secondary" style="font-size:0.76rem; padding:0.32rem 0.7rem;" onclick="switchView('smart')">See All</button>
         </div>
         <div id="home-smart-preview" class="smart-grid"></div>
 
         <div class="section-title"><span>Recently Added</span></div>
         <div id="home-recent-grid" class="card-grid"></div>
 
-        <div class="section-title" style="margin-top:2.2rem;"><span>Quick Picks</span></div>
+        <div class="section-title" style="margin-top:2rem;"><span>Artists</span></div>
+        <div id="home-artist-preview" class="smart-grid"></div>
+
+        <div class="section-title" style="margin-top:2rem;"><span>Quick Picks</span></div>
         <div id="home-quick-tracks" class="track-table"></div>
       </section>
 
-      <!-- 2. SMART AUTO-PLAYLISTS -->
+      <!-- 2. SMART MIX (SQUARE LANGUAGE, VIBE & ARTIST FACE CARDS) -->
       <section id="view-smart" class="view">
         <div class="page-header">
           <div>
-            <h1 class="page-title">Smart Playlists</h1>
-            <p class="page-subtitle">Automatically aligned by Language, Vibe & Artist</p>
+            <h1 class="page-title">Smart Mix</h1>
+          </div>
+        </div>
+
+        <div class="section-title"><span>Trending Charts</span></div>
+        <div class="lang-square-row">
+          <div class="lang-sq-tile" style="background:linear-gradient(135deg,#fa243c,#ff7b54);" onclick="openTrendingLangFromMix('malayalam')">
+            <div class="lang-sq-badge">ML</div>
+            <div class="lang-sq-name">Malayalam</div>
+          </div>
+          <div class="lang-sq-tile" style="background:linear-gradient(135deg,#6366f1,#a855f7);" onclick="openTrendingLangFromMix('tamil')">
+            <div class="lang-sq-badge">TA</div>
+            <div class="lang-sq-name">Tamil</div>
+          </div>
+          <div class="lang-sq-tile" style="background:linear-gradient(135deg,#0ea5e9,#2563eb);" onclick="openTrendingLangFromMix('english')">
+            <div class="lang-sq-badge">EN</div>
+            <div class="lang-sq-name">English</div>
+          </div>
+          <div class="lang-sq-tile" style="background:linear-gradient(135deg,#10b981,#059669);" onclick="openTrendingLangFromMix('hindi')">
+            <div class="lang-sq-badge">HI</div>
+            <div class="lang-sq-name">Hindi</div>
           </div>
         </div>
 
@@ -1068,18 +1273,30 @@
         <div id="smart-artist-grid" class="smart-grid"></div>
       </section>
 
-      <!-- 3. WEEKLY TRENDING + ANY SONG LINK SEARCH -->
+      <!-- 3. WEEKLY TRENDING (SQUARE TABS, NO 111 SONGS SUBTITLE) -->
       <section id="view-browse" class="view">
         <div class="page-header">
           <div>
-            <h1 class="page-title">Weekly Trending</h1>
-            <p class="page-subtitle" id="trending-sub-count">Tap ••• on any song to copy its direct song link</p>
+            <h1 class="page-title">Trending</h1>
           </div>
-          <div class="header-actions">
-            <button id="lang-malayalam" class="btn-am" onclick="selectTrendingLang('malayalam')">Malayalam (100+)</button>
-            <button id="lang-tamil" class="btn-am-secondary" onclick="selectTrendingLang('tamil')">Tamil (100+)</button>
-            <button id="lang-english" class="btn-am-secondary" onclick="selectTrendingLang('english')">English (100+)</button>
-            <button id="lang-hindi" class="btn-am-secondary" onclick="selectTrendingLang('hindi')">Hindi (100+)</button>
+        </div>
+
+        <div class="lang-square-row">
+          <div id="tile-malayalam" class="lang-sq-tile active-tile" style="background:linear-gradient(135deg,#fa243c,#ff7b54);" onclick="selectTrendingLang('malayalam')">
+            <div class="lang-sq-badge">ML</div>
+            <div class="lang-sq-name">Malayalam</div>
+          </div>
+          <div id="tile-tamil" class="lang-sq-tile" style="background:linear-gradient(135deg,#6366f1,#a855f7);" onclick="selectTrendingLang('tamil')">
+            <div class="lang-sq-badge">TA</div>
+            <div class="lang-sq-name">Tamil</div>
+          </div>
+          <div id="tile-english" class="lang-sq-tile" style="background:linear-gradient(135deg,#0ea5e9,#2563eb);" onclick="selectTrendingLang('english')">
+            <div class="lang-sq-badge">EN</div>
+            <div class="lang-sq-name">English</div>
+          </div>
+          <div id="tile-hindi" class="lang-sq-tile" style="background:linear-gradient(135deg,#10b981,#059669);" onclick="selectTrendingLang('hindi')">
+            <div class="lang-sq-badge">HI</div>
+            <div class="lang-sq-name">Hindi</div>
           </div>
         </div>
 
@@ -1091,7 +1308,7 @@
             type="text"
             id="trending-search-input"
             class="trending-search-input"
-            placeholder="Search any song, movie, or artist to copy its link..."
+            placeholder="Search any song, movie, or artist..."
             oninput="handleTrendingSearchInput(this.value)"
           />
           <button id="trending-clear-btn" class="trending-clear-btn" onclick="clearTrendingSearch()" title="Clear search">✕</button>
@@ -1169,7 +1386,7 @@
             <div class="am-dropzone" onclick="document.getElementById('audio-file').click()">
               <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#fa243c" stroke-width="2" style="margin:0 auto 0.6rem;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
               <p id="file-label" style="font-weight:600;">Tap to select an audio file</p>
-              <p style="font-size:0.78rem; color:var(--am-subtext); margin-top:0.3rem;">Auto-detects Artwork, Language, Artist & Vibe</p>
+              <p style="font-size:0.78rem; color:var(--am-subtext); margin-top:0.3rem;">Auto-detects Artwork, Artist Face, Language & Vibe</p>
               <input type="file" id="audio-file" accept="audio/*" style="display:none;" onchange="handleFileSelect(event)" required />
             </div>
 
@@ -1205,7 +1422,7 @@
     </div>
 
     <div class="am-lcd">
-      <img id="lcd-cover" src="/icon-192.png" class="lcd-cover" alt="Cover" />
+      <img id="lcd-cover" src="/icon-512.png" class="lcd-cover" alt="Cover" />
       <div class="lcd-body">
         <div class="lcd-top">
           <div style="min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
@@ -1229,7 +1446,9 @@
       </button>
     </div>
 
-    <audio id="audio-player" preload="metadata"></audio>
+    <!-- Preload=auto + Next Track Preloader for Zero Buffering -->
+    <audio id="audio-player" preload="auto" playsinline></audio>
+    <audio id="next-audio-preloader" preload="auto" style="display:none;"></audio>
   </footer>
 
   <nav class="mobile-nav">
@@ -1238,7 +1457,7 @@
       <span>Home</span>
     </button>
     <button class="mob-tab" id="mob-smart" onclick="switchView('smart')">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4"/></svg>
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>
       <span>Smart Mix</span>
     </button>
     <button class="mob-tab" id="mob-browse" onclick="switchView('browse')">
@@ -1360,6 +1579,7 @@
     let currentIndex = -1;
     let isShuffle = false;
     let isRepeat = false;
+    let userIntentionallyPaused = true;
     let currentTrendingLang = 'malayalam';
     let trendingByLang = { malayalam: [], tamil: [], english: [], hindi: [] };
     let displayedTrendingList = [];
@@ -1371,16 +1591,17 @@
     let likedIds = JSON.parse(localStorage.getItem('am_liked_ids') || '[]');
     let playlists = JSON.parse(localStorage.getItem('am_playlists') || '[]');
     let metaCache = JSON.parse(localStorage.getItem('am_meta_cache_v2') || '{}');
+    let artistFaceCache = JSON.parse(localStorage.getItem('am_artist_faces_v1') || '{}');
 
     const audioPlayer = document.getElementById('audio-player');
+    const nextPreloader = document.getElementById('next-audio-preloader');
 
     function dismissSplash() {
       const sp = document.getElementById('splash-screen');
       if (sp) sp.classList.add('hidden');
     }
 
-    // Automatically open app after a brief heartbeat if server is still waking up
-    setTimeout(dismissSplash, 2800);
+    setTimeout(dismissSplash, 1400);
 
     function showToast(msg) {
       const t = document.getElementById('toast-box');
@@ -1423,7 +1644,7 @@
     }
 
     function parseTrackName(rawName) {
-      const clean = rawName.replace(/\.(mp3|m4a|wav|flac|ogg)$/i, '');
+      const clean = rawName.replace(/\.(mp3|m4a|wav|flac|ogg)$/i, '').replace(/_/g, ' ');
       const parts = clean.split(' - ');
       if (parts.length >= 2) {
         return { title: parts[0].trim(), artist: parts.slice(1).join(' - ').trim() };
@@ -1434,30 +1655,47 @@
     function classifyLanguageAndVibe(title, artist, album, genre) {
       const blob = (title + ' ' + artist + ' ' + album + ' ' + genre).toLowerCase();
 
-      let language = 'English / Global';
-      if (/malayalam|mollywood|sushin|jakes bejoy|vineeth|shaan rahman|gopi sundar|rex vijayan|dabzee|fejo|govind vasantha|vishnu vijay|aavesham|premalu|manjummel|kumbalangi|hridayam|sithara|harisankar/.test(blob)) {
+      let language = 'English';
+      if (/malayalam|mollywood|sushin|jakes bejoy|vineeth|shaan rahman|gopi sundar|rex vijayan|dabzee|fejo|govind vasantha|vishnu vijay|aavesham|premalu|manjummel|kumbalangi|hridayam|sithara|harisankar|varnajaalam/.test(blob)) {
         language = 'Malayalam';
-      } else if (/tamil|kollywood|anirudh|rahman|yuvan|harris jayaraj|gv prakash|santhosh narayanan|sid sriram|ilayaraja|dhanush|lokesh|leo|jailer|vikram|saroja|sai abhyankkar/.test(blob)) {
+      } else if (/tamil|kollywood|anirudh|rahman|yuvan|harris jayaraj|gv prakash|santhosh narayanan|sid sriram|ilayaraja|dhanush|lokesh|leo|jailer|vikram|saroja|sai abhyankkar|farhash|muthu/.test(blob)) {
         language = 'Tamil';
       } else if (/hindi|bollywood|arijit|pritam|vishal|shreya ghoshal|atif|jubin|badshah|diljit|amit trivedi|sachin-jigar|ap dhillon|kk|sonu nigam/.test(blob)) {
         language = 'Hindi';
       } else if (/telugu|tollywood|devi sri|thaman|allu arjun|pushpa|rrr|keeravani/.test(blob)) {
         language = 'Telugu';
-      } else if (/kannada|sandalwood|ravi basrur|kgf|kantara|charan raj/.test(blob)) {
-        language = 'Kannada';
       }
 
-      let vibe = 'Feel Good & Vibe';
-      if (/hip-hop|rap|electronic|dance|phonk|rock|workout|gym|bass|mass|kuthu|illuminati|hukum|power|beast|party|club|remix/.test(blob)) {
-        vibe = 'High Energy & Workout';
+      let vibe = 'Feel Good';
+      if (/hip-hop|rap|electronic|dance|phonk|rock|workout|gym|bass|mass|kuthu|illuminati|hukum|power|beast|party|club|remix|saroja/.test(blob)) {
+        vibe = 'High Energy';
       } else if (/r&b|soul|lofi|lo-fi|chill|slowed|reverb|acoustic|unplugged|indie|night|sleep|ambient/.test(blob)) {
-        vibe = 'Late Night & Chill';
-      } else if (/love|romantic|melody|ballad|gehra|ishq|dil|pyaar|kaadhal|kanave|uyire|nenje|premam|heart/.test(blob)) {
-        vibe = 'Melody & Romantic';
+        vibe = 'Late Night Chill';
+      } else if (/love|romantic|melody|ballad|gehra|ishq|dil|pyaar|kaadhal|kanave|uyire|nenje|premam|heart|varnajaalam/.test(blob)) {
+        vibe = 'Melody & Vibe';
       }
 
       const primaryArtist = artist.split(/,|&|feat\.|ft\./i)[0].trim() || 'Cloud Artist';
       return { language: language, vibe: vibe, primaryArtist: primaryArtist };
+    }
+
+    async function fetchArtistFace(artistName, fallbackArt) {
+      if (!artistName || artistName === 'Cloud Artist') return fallbackArt || '/icon-512.png';
+      if (artistFaceCache[artistName]) return artistFaceCache[artistName];
+
+      try {
+        const res = await fetch('/api/artist-image?name=' + encodeURIComponent(artistName));
+        const data = await res.json();
+        if (data && data.image) {
+          artistFaceCache[artistName] = data.image;
+          localStorage.setItem('am_artist_faces_v1', JSON.stringify(artistFaceCache));
+          const imgEl = document.querySelector('[data-artist-img="' + artistName.replace(/"/g, '') + '"]');
+          if (imgEl) imgEl.src = data.image;
+          return data.image;
+        }
+      } catch (e) {}
+
+      return fallbackArt || '/icon-512.png';
     }
 
     async function enrichSongMetadata(song) {
@@ -1497,6 +1735,7 @@
           };
           metaCache[song.id] = enriched;
           localStorage.setItem('am_meta_cache_v2', JSON.stringify(metaCache));
+          fetchArtistFace(tags.primaryArtist, enriched.artwork);
           return enriched;
         }
       } catch (e) {}
@@ -1539,7 +1778,7 @@
           if (!trendingByLang[currentTrendingLang] || trendingByLang[currentTrendingLang].length === 0) {
             fetchTrendingByLang(currentTrendingLang);
           } else {
-            renderTrendingList(trendingByLang[currentTrendingLang], false);
+            renderTrendingList(trendingByLang[currentTrendingLang]);
           }
         }
       }
@@ -1547,6 +1786,11 @@
       if (viewName === 'songs') renderAllSongsView();
       if (viewName === 'smart') renderSmartPlaylistsView();
       if (viewName === 'home') renderHomeView();
+    }
+
+    function openTrendingLangFromMix(lang) {
+      switchView('browse');
+      selectTrendingLang(lang);
     }
 
     function handleSearch(query) {
@@ -1569,13 +1813,18 @@
         for (const song of driveSongs) {
           if (!metaCache[song.id]) {
             await enrichSongMetadata(song);
+          } else {
+            const m = metaCache[song.id];
+            if (m && m.primaryArtist && !artistFaceCache[m.primaryArtist]) {
+              fetchArtistFace(m.primaryArtist, m.artwork);
+            }
           }
         }
         renderHomeView();
         renderAllSongsView();
         renderSmartPlaylistsView();
       } catch (err) {
-        setTimeout(function () { fetchLibrary(force); }, 3500);
+        setTimeout(function () { fetchLibrary(force); }, 3000);
       }
     }
 
@@ -1608,24 +1857,57 @@
       'linear-gradient(135deg, #ec4899, #8b5cf6)'
     ];
 
-    function renderSmartCardsHTML(groupObj, categoryLabel) {
+    function renderSquareSmartCardsHTML(groupObj, categoryLabel) {
       const entries = Object.entries(groupObj).sort(function (a, b) { return b[1].length - a[1].length; });
       if (entries.length === 0) {
-        return '<p style="color:var(--am-subtext); font-size:0.86rem;">Upload songs to auto-generate ' + categoryLabel + ' playlists.</p>';
+        return '<p style="color:var(--am-subtext); font-size:0.86rem;">Upload songs to auto-generate ' + categoryLabel + ' mixes.</p>';
       }
       return entries.map(function (entry, i) {
         const name = entry[0];
         const list = entry[1];
         const bg = GRADIENTS[i % GRADIENTS.length];
         const safeName = name.replace(/'/g, "\\'");
+        const firstArt = list.length > 0 ? getSongMeta(list[0]).artwork : '/icon-512.png';
         const countText = list.length + (list.length === 1 ? ' Song' : ' Songs');
         return (
           '<div class="smart-card" style="background:' + bg + ';" onclick="openSmartPlaylist(\'' + categoryLabel + '\', \'' + safeName + '\')">' +
-            '<div class="smart-card-count">' + categoryLabel + '</div>' +
-            '<div>' +
-              '<div class="smart-card-title">' + name + '</div>' +
-              '<div class="smart-card-count" style="margin-top:3px;">' + countText + '</div>' +
+            '<div class="smart-card-bg" style="background-image:url(\'' + firstArt + '\');"></div>' +
+            '<div class="smart-card-top">' +
+              '<span class="smart-pill">' + categoryLabel + '</span>' +
             '</div>' +
+            '<div class="smart-card-bottom">' +
+              '<div class="smart-card-title">' + name + '</div>' +
+              '<div class="smart-card-count">' + countText + '</div>' +
+            '</div>' +
+          '</div>'
+        );
+      }).join('');
+    }
+
+    function renderArtistFaceCardsHTML(artistsObj, maxLimit) {
+      let entries = Object.entries(artistsObj).sort(function (a, b) { return b[1].length - a[1].length; });
+      if (maxLimit) entries = entries.slice(0, maxLimit);
+      if (entries.length === 0) {
+        return '<p style="color:var(--am-subtext); font-size:0.86rem;">Upload songs to see artists.</p>';
+      }
+      return entries.map(function (entry) {
+        const artistName = entry[0];
+        const list = entry[1];
+        const safeName = artistName.replace(/'/g, "\\'");
+        const cleanAttr = artistName.replace(/"/g, '');
+        const fallbackArt = list.length > 0 ? getSongMeta(list[0]).artwork : '/icon-512.png';
+        const faceImg = artistFaceCache[artistName] || fallbackArt;
+        if (!artistFaceCache[artistName]) {
+          fetchArtistFace(artistName, fallbackArt);
+        }
+        const countText = list.length + (list.length === 1 ? ' Song' : ' Songs');
+        return (
+          '<div class="artist-face-card" onclick="openSmartPlaylist(\'Artist\', \'' + safeName + '\')">' +
+            '<div class="artist-avatar-wrap">' +
+              '<img data-artist-img="' + cleanAttr + '" src="' + faceImg + '" alt="' + cleanAttr + '" loading="lazy" />' +
+            '</div>' +
+            '<div class="card-title" style="width:100%;">' + artistName + '</div>' +
+            '<div class="card-sub">' + countText + '</div>' +
           '</div>'
         );
       }).join('');
@@ -1633,9 +1915,9 @@
 
     function renderSmartPlaylistsView() {
       const groups = buildSmartGroups();
-      document.getElementById('smart-lang-grid').innerHTML = renderSmartCardsHTML(groups.languages, 'Language');
-      document.getElementById('smart-vibe-grid').innerHTML = renderSmartCardsHTML(groups.vibes, 'Vibe Mix');
-      document.getElementById('smart-artist-grid').innerHTML = renderSmartCardsHTML(groups.artists, 'Artist');
+      document.getElementById('smart-lang-grid').innerHTML = renderSquareSmartCardsHTML(groups.languages, 'Language');
+      document.getElementById('smart-vibe-grid').innerHTML = renderSquareSmartCardsHTML(groups.vibes, 'Vibe Mix');
+      document.getElementById('smart-artist-grid').innerHTML = renderArtistFaceCardsHTML(groups.artists);
     }
 
     function openSmartPlaylist(category, name) {
@@ -1649,13 +1931,15 @@
       activeSmartSongs = list;
       switchView('playlist');
 
-      document.getElementById('pl-hero-type').textContent = 'Auto ' + category + ' Playlist';
+      document.getElementById('pl-hero-type').textContent = category;
       document.getElementById('pl-hero-title').textContent = name;
-      document.getElementById('pl-hero-meta').textContent = list.length + ' Songs • Automatically aligned';
+      document.getElementById('pl-hero-meta').textContent = list.length + ' Songs';
       document.getElementById('pl-delete-btn').style.display = 'none';
 
       const coverBox = document.getElementById('pl-hero-cover');
-      if (list.length > 0) {
+      if (category === 'Artist' && artistFaceCache[name]) {
+        coverBox.innerHTML = '<img src="' + artistFaceCache[name] + '" alt="Artist" />';
+      } else if (list.length > 0) {
         coverBox.innerHTML = '<img src="' + getSongMeta(list[0]).artwork + '" alt="Cover" />';
       } else {
         coverBox.innerHTML = '';
@@ -1668,6 +1952,7 @@
       const grid = document.getElementById('home-recent-grid');
       const quickTable = document.getElementById('home-quick-tracks');
       const smartPreview = document.getElementById('home-smart-preview');
+      const artistPreview = document.getElementById('home-artist-preview');
 
       const groups = buildSmartGroups();
       const combinedPreview = Object.assign({}, groups.vibes, groups.languages);
@@ -1680,10 +1965,12 @@
           const isLang = Boolean(groups.languages[name]);
           const cat = isLang ? 'Language' : 'Vibe Mix';
           const safeName = name.replace(/'/g, "\\'");
+          const firstArt = list.length > 0 ? getSongMeta(list[0]).artwork : '/icon-512.png';
           return (
             '<div class="smart-card" style="background:' + GRADIENTS[idx % GRADIENTS.length] + ';" onclick="openSmartPlaylist(\'' + cat + '\', \'' + safeName + '\')">' +
-              '<div class="smart-card-count">' + cat + '</div>' +
-              '<div>' +
+              '<div class="smart-card-bg" style="background-image:url(\'' + firstArt + '\');"></div>' +
+              '<div class="smart-card-top"><span class="smart-pill">' + cat + '</span></div>' +
+              '<div class="smart-card-bottom">' +
                 '<div class="smart-card-title">' + name + '</div>' +
                 '<div class="smart-card-count">' + list.length + ' Songs</div>' +
               '</div>' +
@@ -1691,11 +1978,15 @@
           );
         }).join('');
       } else {
-        smartPreview.innerHTML = '<p style="color:var(--am-subtext); font-size:0.86rem;">Your smart mixes will appear here as soon as you upload songs.</p>';
+        smartPreview.innerHTML = '<p style="color:var(--am-subtext); font-size:0.86rem;">Upload songs to see square smart mixes.</p>';
+      }
+
+      if (artistPreview) {
+        artistPreview.innerHTML = renderArtistFaceCardsHTML(groups.artists, 6);
       }
 
       if (driveSongs.length === 0) {
-        grid.innerHTML = '<p style="color:var(--am-subtext);">No songs in your Google Drive yet. Tap "Upload to Cloud" to add tracks.</p>';
+        grid.innerHTML = '<p style="color:var(--am-subtext);">No songs in your Google Drive yet. Tap "Upload" to add tracks.</p>';
         quickTable.innerHTML = '';
         return;
       }
@@ -1738,7 +2029,6 @@
               '<div class="track-artist">' +
                 '<span>' + meta.artist + '</span>' +
                 '<span class="tag-pill">' + meta.language + '</span>' +
-                '<span class="tag-pill">' + meta.vibe + '</span>' +
               '</div>' +
             '</div>' +
             '<div class="track-album">' + meta.album + '</div>' +
@@ -1768,7 +2058,7 @@
           m.vibe.toLowerCase().includes(q)
         );
       });
-      document.getElementById('total-songs-count').textContent = filtered.length + ' Songs in Cloud Library';
+      document.getElementById('total-songs-count').textContent = filtered.length + ' Songs';
       document.getElementById('all-songs-table').innerHTML =
         filtered.length > 0
           ? renderTrackRows(filtered)
@@ -1986,25 +2276,70 @@
       startPlaybackAtIndex(0);
     }
 
+    function preloadNextTrackInQueue() {
+      if (currentQueue.length <= 1) return;
+      const nextIdx = (currentIndex + 1) % currentQueue.length;
+      const nextSong = currentQueue[nextIdx];
+      if (nextSong && nextPreloader) {
+        nextPreloader.src = '/api/stream/' + nextSong.id;
+        nextPreloader.load();
+      }
+    }
+
+    function updateMediaSessionMetadata(meta) {
+      if (!('mediaSession' in navigator)) return;
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: meta.title,
+        artist: meta.artist,
+        album: 'Musix',
+        artwork: [
+          { src: meta.artwork || '/icon-512.png', sizes: '512x512', type: 'image/png' },
+          { src: '/icon-512.png', sizes: '512x512', type: 'image/png' },
+          { src: '/icon-192.png', sizes: '192x192', type: 'image/png' }
+        ]
+      });
+
+      navigator.mediaSession.setActionHandler('play', function () {
+        userIntentionallyPaused = false;
+        audioPlayer.play();
+      });
+      navigator.mediaSession.setActionHandler('pause', function () {
+        userIntentionallyPaused = true;
+        audioPlayer.pause();
+      });
+      navigator.mediaSession.setActionHandler('previoustrack', playPrevSong);
+      navigator.mediaSession.setActionHandler('nexttrack', playNextSong);
+      try {
+        navigator.mediaSession.setActionHandler('seekto', function (details) {
+          if (details.seekTime !== undefined) {
+            audioPlayer.currentTime = details.seekTime;
+          }
+        });
+      } catch (e) {}
+    }
+
     function startPlaybackAtIndex(idx) {
       if (idx < 0 || idx >= currentQueue.length) return;
       currentIndex = idx;
+      userIntentionallyPaused = false;
       const song = currentQueue[currentIndex];
       const meta = getSongMeta(song);
 
-      // Reveal bottom player bar only when playback starts
       document.body.classList.add('player-active');
       document.getElementById('bottom-player').classList.add('visible');
 
       audioPlayer.src = '/api/stream/' + song.id;
-      audioPlayer.play();
+      audioPlayer.play().catch(function () {});
+
+      // Pre-buffer next song immediately so track transitions have zero buffering
+      setTimeout(preloadNextTrackInQueue, 1500);
 
       document.getElementById('lcd-title').textContent = meta.title;
       document.getElementById('lcd-artist').textContent = '— ' + meta.artist;
       document.getElementById('lcd-cover').src = meta.artwork;
 
       document.getElementById('fs-title').textContent = meta.title;
-      document.getElementById('fs-artist').textContent = meta.artist + ' — ' + meta.album;
+      document.getElementById('fs-artist').textContent = meta.artist;
       document.getElementById('fs-cover').src = meta.artwork;
       document.getElementById('fs-bg').style.backgroundImage = "url('" + meta.artwork + "')";
       document.getElementById('fs-badges').innerHTML =
@@ -2013,27 +2348,18 @@
 
       setPlayStateUI(true);
       updateLikeButtons();
+      updateMediaSessionMetadata(meta);
       renderHomeView();
       renderAllSongsView(document.getElementById('global-search').value);
-
-      if ('mediaSession' in navigator) {
-        navigator.mediaSession.metadata = new MediaMetadata({
-          title: meta.title,
-          artist: meta.artist,
-          album: meta.album,
-          artwork: [{ src: meta.artwork, sizes: '512x512', type: 'image/png' }]
-        });
-        navigator.mediaSession.setActionHandler('play', function () { audioPlayer.play(); });
-        navigator.mediaSession.setActionHandler('pause', function () { audioPlayer.pause(); });
-        navigator.mediaSession.setActionHandler('previoustrack', playPrevSong);
-        navigator.mediaSession.setActionHandler('nexttrack', playNextSong);
-      }
     }
 
     function setPlayStateUI(playing) {
       document.getElementById('play-pause-btn').innerHTML = playing ? SVG_PAUSE : SVG_PLAY;
       document.getElementById('fs-play-pause-btn').innerHTML = playing ? SVG_PAUSE : SVG_PLAY;
       document.getElementById('fs-art-box').classList.toggle('paused', !playing);
+      if ('mediaSession' in navigator) {
+        navigator.mediaSession.playbackState = playing ? 'playing' : 'paused';
+      }
     }
 
     function togglePlay() {
@@ -2042,16 +2368,30 @@
         return;
       }
       if (audioPlayer.paused) {
+        userIntentionallyPaused = false;
         audioPlayer.play();
         setPlayStateUI(true);
       } else {
+        userIntentionallyPaused = true;
         audioPlayer.pause();
         setPlayStateUI(false);
       }
     }
 
     audioPlayer.addEventListener('play', function () { setPlayStateUI(true); });
-    audioPlayer.addEventListener('pause', function () { setPlayStateUI(false); });
+    audioPlayer.addEventListener('pause', function () {
+      setPlayStateUI(false);
+      // If Android WebView tried to pause when minimizing, resume automatically
+      if (!userIntentionallyPaused && !audioPlayer.ended && document.hidden) {
+        audioPlayer.play().catch(function () {});
+      }
+    });
+
+    document.addEventListener('visibilitychange', function () {
+      if (document.hidden && !userIntentionallyPaused && audioPlayer.src && audioPlayer.paused) {
+        audioPlayer.play().catch(function () {});
+      }
+    });
 
     function playNextSong() {
       if (currentQueue.length === 0) return;
@@ -2096,7 +2436,7 @@
     }
 
     audioPlayer.addEventListener('timeupdate', function () {
-      if (audioPlayer.duration) {
+      if (audioPlayer.duration && !isNaN(audioPlayer.duration)) {
         const pct = (audioPlayer.currentTime / audioPlayer.duration) * 100;
         document.getElementById('seek-bar').value = pct;
         document.getElementById('fs-seek-bar').value = pct;
@@ -2106,6 +2446,16 @@
         document.getElementById('tot-time').textContent = tot;
         document.getElementById('fs-cur-time').textContent = cur;
         document.getElementById('fs-tot-time').textContent = tot;
+
+        if ('mediaSession' in navigator && 'setPositionState' in navigator.mediaSession) {
+          try {
+            navigator.mediaSession.setPositionState({
+              duration: audioPlayer.duration,
+              playbackRate: audioPlayer.playbackRate || 1,
+              position: audioPlayer.currentTime
+            });
+          } catch (e) {}
+        }
       }
     });
 
@@ -2180,7 +2530,7 @@
             artist: item.artistName || 'Unknown Artist',
             album: item.collectionName || 'Single',
             genre: item.primaryGenreName || 'Music',
-            artwork: (item.artworkUrl100 || '/icon-192.png').replace('100x100bb', '600x600bb'),
+            artwork: (item.artworkUrl100 || '/icon-512.png').replace('100x100bb', '600x600bb'),
             trackViewUrl: item.trackViewUrl || ''
           });
           if (merged.length >= 120) break;
@@ -2192,20 +2542,20 @@
 
     async function fetchTrendingByLang(lang) {
       const box = document.getElementById('trending-container');
-      box.innerHTML = '<p style="color:var(--am-subtext); padding:1rem 0;">Loading 100+ trending ' + lang.toUpperCase() + ' songs...</p>';
+      box.innerHTML = '<p style="color:var(--am-subtext); padding:1rem 0;">Loading songs...</p>';
       try {
         const res = await fetch('/api/trending?lang=' + lang);
         if (!res.ok) throw new Error('Fallback');
         const data = await res.json();
         if (!data.songs || data.songs.length === 0) throw new Error('Empty');
         trendingByLang[lang] = data.songs;
-        renderTrendingList(trendingByLang[lang], false);
+        renderTrendingList(trendingByLang[lang]);
       } catch (e) {
         try {
           trendingByLang[lang] = await fetchClientSideTrendingFallback(lang);
-          renderTrendingList(trendingByLang[lang], false);
+          renderTrendingList(trendingByLang[lang]);
         } catch (err) {
-          box.innerHTML = '<p style="color:#ff453a;">Failed to load trending songs. Check your connection.</p>';
+          box.innerHTML = '<p style="color:#ff453a;">Failed to load songs. Check your connection.</p>';
         }
       }
     }
@@ -2217,13 +2567,13 @@
       document.getElementById('trending-clear-btn').classList.remove('show');
 
       ['malayalam', 'tamil', 'english', 'hindi'].forEach(function (l) {
-        const btn = document.getElementById('lang-' + l);
-        if (btn) btn.className = l === lang ? 'btn-am' : 'btn-am-secondary';
+        const tile = document.getElementById('tile-' + l);
+        if (tile) tile.classList.toggle('active-tile', l === lang);
       });
       if (!trendingByLang[lang] || trendingByLang[lang].length === 0) {
         fetchTrendingByLang(lang);
       } else {
-        renderTrendingList(trendingByLang[lang], false);
+        renderTrendingList(trendingByLang[lang]);
       }
     }
 
@@ -2234,7 +2584,7 @@
 
       clearTimeout(trendingSearchTimer);
       if (!q) {
-        renderTrendingList(trendingByLang[currentTrendingLang] || [], false);
+        renderTrendingList(trendingByLang[currentTrendingLang] || []);
         return;
       }
 
@@ -2247,13 +2597,12 @@
       const input = document.getElementById('trending-search-input');
       input.value = '';
       document.getElementById('trending-clear-btn').classList.remove('show');
-      renderTrendingList(trendingByLang[currentTrendingLang] || [], false);
+      renderTrendingList(trendingByLang[currentTrendingLang] || []);
     }
 
     async function searchSongsForLink(query) {
       const box = document.getElementById('trending-container');
-      const countLabel = document.getElementById('trending-sub-count');
-      box.innerHTML = '<p style="color:var(--am-subtext); padding:1rem 0;">Searching songs matching "' + query + '"...</p>';
+      box.innerHTML = '<p style="color:var(--am-subtext); padding:1rem 0;">Searching "' + query + '"...</p>';
 
       try {
         const url = 'https://itunes.apple.com/search?term=' + encodeURIComponent(query) + '&country=in&media=music&entity=song&limit=60';
@@ -2268,15 +2617,12 @@
             artist: item.artistName || 'Unknown Artist',
             album: item.collectionName || 'Single',
             genre: item.primaryGenreName || 'Music',
-            artwork: (item.artworkUrl100 || '/icon-192.png').replace('100x100bb', '600x600bb'),
+            artwork: (item.artworkUrl100 || '/icon-512.png').replace('100x100bb', '600x600bb'),
             trackViewUrl: item.trackViewUrl || ''
           };
         });
 
-        if (countLabel) {
-          countLabel.textContent = results.length + ' Search Results for "' + query + '" • Tap ••• to copy direct song link';
-        }
-        renderTrendingList(results, true);
+        renderTrendingList(results);
       } catch (e) {
         box.innerHTML = '<p style="color:#ff453a;">Search failed. Please check your connection.</p>';
       }
@@ -2312,18 +2658,12 @@
 
       item.cachedDirectUrl = finalUrl;
       await copyTextUniversal(finalUrl);
-      showToast('✓ Copied song link: ' + item.title);
+      showToast('✓ Copied link: ' + item.title);
     }
 
-    function renderTrendingList(list, isSearchResult) {
+    function renderTrendingList(list) {
       displayedTrendingList = list || [];
       const box = document.getElementById('trending-container');
-      const countLabel = document.getElementById('trending-sub-count');
-
-      if (!isSearchResult && countLabel) {
-        const langTitle = currentTrendingLang.charAt(0).toUpperCase() + currentTrendingLang.slice(1);
-        countLabel.textContent = displayedTrendingList.length + ' ' + langTitle + ' Trending Songs • Tap ••• to copy direct song link';
-      }
 
       if (displayedTrendingList.length === 0) {
         box.innerHTML = '<p style="color:var(--am-subtext); padding:1rem 0;">No matching songs found.</p>';
@@ -2339,7 +2679,6 @@
               '<div class="track-name">' + item.title + '</div>' +
               '<div class="track-artist">' +
                 '<span>' + item.artist + '</span>' +
-                '<span class="tag-pill">' + (item.genre || 'Trending') + '</span>' +
               '</div>' +
             '</div>' +
             '<div class="track-album">' + (item.album || '') + '</div>' +
@@ -2384,7 +2723,7 @@
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Upload failed');
 
-        status.textContent = '✓ Added "' + data.name + '" & auto-aligned into Smart Playlists!';
+        status.textContent = '✓ Added "' + data.name + '"!';
         status.style.color = '#30d158';
         document.getElementById('upload-form').reset();
         document.getElementById('file-label').textContent = 'Tap to select an audio file';
