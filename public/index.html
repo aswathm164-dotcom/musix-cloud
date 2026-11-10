@@ -2,215 +2,1575 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Musix — Cloud Drive Streamer</title>
-  <meta name="theme-color" content="#0f172a" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Musix — Apple Music Web Player</title>
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+  <link rel="apple-touch-icon" href="/icon.svg" />
+  <meta name="theme-color" content="#161616" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <style>
-    :root { --bg-main: #090d16; --bg-card: #131b2e; --bg-hover: #1e293b; --accent: #10b981; --text-main: #f8fafc; --text-muted: #94a3b8; --border: #1e293b; }
-    * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, sans-serif; }
-    body { background-color: var(--bg-main); color: var(--text-main); padding-bottom: 110px; min-height: 100vh; }
-    header { background: rgba(19, 27, 46, 0.9); border-bottom: 1px solid var(--border); padding: 1rem 1.5rem; position: sticky; top: 0; z-index: 50; display: flex; justify-content: space-between; align-items: center; }
-    .logo { font-size: 1.4rem; font-weight: 800; color: var(--accent); }
-    .nav-tabs { display: flex; gap: 0.5rem; background: var(--bg-main); padding: 0.35rem; border-radius: 0.75rem; border: 1px solid var(--border); }
-    .tab-btn { background: transparent; border: none; color: var(--text-muted); padding: 0.5rem 1rem; border-radius: 0.5rem; font-weight: 600; cursor: pointer; }
-    .tab-btn.active { background: var(--accent); color: #052e16; }
-    main { max-width: 1000px; margin: 1.5rem auto; padding: 0 1rem; }
-    .view-section { display: none; }
-    .view-section.active { display: block; }
-    .toolbar { display: flex; justify-content: space-between; gap: 1rem; margin-bottom: 1.25rem; }
-    .search-input { flex: 1; background: var(--bg-card); border: 1px solid var(--border); color: var(--text-main); padding: 0.7rem 1rem; border-radius: 0.6rem; }
-    .song-list { display: flex; flex-direction: column; gap: 0.6rem; }
-    .song-item { background: var(--bg-card); border: 1px solid var(--border); border-radius: 0.75rem; padding: 0.85rem 1.1rem; display: flex; align-items: center; justify-content: space-between; cursor: pointer; }
-    .song-item:hover { background: var(--bg-hover); }
-    .song-item.playing { border-color: var(--accent); background: rgba(16, 185, 129, 0.1); }
-    .song-info { display: flex; align-items: center; gap: 0.9rem; }
-    .song-title { font-weight: 600; }
-    .song-meta { color: var(--text-muted); font-size: 0.8rem; }
-    .btn-small { background: var(--accent); color: #052e16; border: none; padding: 0.4rem 0.75rem; border-radius: 0.5rem; font-weight: 700; cursor: pointer; }
-    .upload-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 1rem; padding: 2rem; max-width: 540px; margin: 1rem auto; }
-    .form-group { margin-bottom: 1.25rem; }
-    .form-input { width: 100%; background: var(--bg-main); border: 1px solid var(--border); color: var(--text-main); padding: 0.75rem; border-radius: 0.6rem; }
-    .drop-zone { border: 2px dashed var(--border); border-radius: 0.75rem; padding: 2rem 1rem; text-align: center; cursor: pointer; }
-    .submit-btn { width: 100%; background: var(--accent); color: #052e16; border: none; padding: 0.85rem; border-radius: 0.6rem; font-weight: 700; cursor: pointer; }
-    .player-bar { position: fixed; bottom: 0; left: 0; right: 0; background: rgba(15, 23, 42, 0.96); border-top: 1px solid var(--border); padding: 0.75rem 1.5rem; display: flex; justify-content: space-between; align-items: center; z-index: 100; }
-    .player-controls { flex: 1; max-width: 550px; display: flex; flex-direction: column; align-items: center; gap: 0.4rem; }
-    .ctrl-btn { background: none; border: none; color: var(--text-main); font-size: 1.1rem; cursor: pointer; }
-    .ctrl-btn.play-main { background: var(--accent); color: #052e16; width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; }
+    :root {
+      --am-bg: #1f1f1f;
+      --am-canvas: #161616;
+      --am-sidebar: #1c1c1e;
+      --am-card: #262629;
+      --am-hover: rgba(255, 255, 255, 0.07);
+      --am-border: rgba(255, 255, 255, 0.08);
+      --am-accent: #fa243c;
+      --am-accent-hover: #ff3b52;
+      --am-text: #ffffff;
+      --am-subtext: rgba(235, 235, 245, 0.6);
+      --am-muted: rgba(235, 235, 245, 0.35);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Segoe UI", Roboto, Helvetica, sans-serif;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      background-color: var(--am-canvas);
+      color: var(--am-text);
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      user-select: none;
+    }
+
+    /* App Layout */
+    .app-shell {
+      display: flex;
+      flex: 1;
+      height: calc(100vh - 84px);
+      overflow: hidden;
+    }
+
+    /* Left Sidebar (Apple Music Style) */
+    .sidebar {
+      width: 260px;
+      background-color: var(--am-sidebar);
+      border-right: 1px solid var(--am-border);
+      display: flex;
+      flex-direction: column;
+      padding: 1.2rem 0.85rem;
+      overflow-y: auto;
+      flex-shrink: 0;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.65rem;
+      padding: 0 0.65rem 1.1rem;
+      font-size: 1.35rem;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+    }
+
+    .brand img {
+      width: 30px;
+      height: 30px;
+      border-radius: 7px;
+    }
+
+    .search-box {
+      position: relative;
+      margin-bottom: 1.2rem;
+    }
+
+    .search-box input {
+      width: 100%;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid var(--am-border);
+      border-radius: 8px;
+      padding: 0.55rem 0.75rem 0.55rem 2.1rem;
+      color: var(--am-text);
+      font-size: 0.88rem;
+      outline: none;
+    }
+
+    .search-box input:focus {
+      border-color: var(--am-accent);
+      background: rgba(255, 255, 255, 0.12);
+    }
+
+    .search-icon {
+      position: absolute;
+      left: 0.65rem;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--am-subtext);
+      font-size: 0.85rem;
+    }
+
+    .nav-group {
+      margin-bottom: 1.4rem;
+    }
+
+    .nav-group-label {
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--am-subtext);
+      padding: 0 0.65rem 0.45rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      width: 100%;
+      padding: 0.55rem 0.65rem;
+      border: none;
+      background: transparent;
+      color: var(--am-text);
+      font-size: 0.92rem;
+      font-weight: 500;
+      border-radius: 8px;
+      cursor: pointer;
+      text-align: left;
+      transition: background 0.15s;
+    }
+
+    .nav-item:hover {
+      background: var(--am-hover);
+    }
+
+    .nav-item.active {
+      background: rgba(250, 36, 60, 0.18);
+      color: var(--am-accent);
+      font-weight: 600;
+    }
+
+    .nav-icon {
+      color: var(--am-accent);
+      font-size: 1.05rem;
+      width: 20px;
+      text-align: center;
+    }
+
+    .add-playlist-btn {
+      background: none;
+      border: none;
+      color: var(--am-accent);
+      font-size: 1.1rem;
+      font-weight: 700;
+      cursor: pointer;
+      line-height: 1;
+    }
+
+    /* Main Viewport */
+    .main-content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 2rem 2.5rem 4rem;
+      background: linear-gradient(180deg, #25161a 0%, var(--am-canvas) 260px);
+    }
+
+    .view {
+      display: none;
+    }
+
+    .view.active {
+      display: block;
+      animation: fadeIn 0.2s ease;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Page Headers */
+    .page-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      border-bottom: 1px solid var(--am-border);
+      padding-bottom: 1rem;
+      margin-bottom: 1.5rem;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+
+    .page-title {
+      font-size: 2.1rem;
+      font-weight: 800;
+      letter-spacing: -0.7px;
+    }
+
+    .page-subtitle {
+      color: var(--am-subtext);
+      font-size: 0.9rem;
+      margin-top: 0.25rem;
+    }
+
+    .header-actions {
+      display: flex;
+      gap: 0.65rem;
+      align-items: center;
+    }
+
+    .btn-am {
+      background: var(--am-accent);
+      color: #fff;
+      border: none;
+      padding: 0.55rem 1.15rem;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 0.88rem;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.45rem;
+      transition: background 0.15s, transform 0.1s;
+    }
+
+    .btn-am:hover {
+      background: var(--am-accent-hover);
+    }
+
+    .btn-am:active {
+      transform: scale(0.97);
+    }
+
+    .btn-am-secondary {
+      background: rgba(255, 255, 255, 0.1);
+      color: var(--am-text);
+      border: 1px solid var(--am-border);
+      padding: 0.55rem 1.1rem;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 0.88rem;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    .btn-am-secondary:hover {
+      background: rgba(255, 255, 255, 0.16);
+    }
+
+    /* Hero Cards Grid (Home / Listen Now) */
+    .section-title {
+      font-size: 1.3rem;
+      font-weight: 700;
+      margin: 1.5rem 0 0.9rem;
+      letter-spacing: -0.3px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .card-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(165px, 1fr));
+      gap: 1.25rem;
+    }
+
+    .album-card {
+      cursor: pointer;
+      transition: transform 0.2s;
+    }
+
+    .album-card:hover {
+      transform: translateY(-3px);
+    }
+
+    .album-art-wrap {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 1 / 1;
+      border-radius: 10px;
+      overflow: hidden;
+      background: var(--am-card);
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+      margin-bottom: 0.55rem;
+    }
+
+    .album-art-wrap img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .card-play-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.35);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+
+    .album-card:hover .card-play-overlay {
+      opacity: 1;
+    }
+
+    .overlay-circle {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: rgba(250, 36, 60, 0.95);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.1rem;
+      backdrop-filter: blur(8px);
+    }
+
+    .card-title {
+      font-size: 0.9rem;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .card-sub {
+      font-size: 0.8rem;
+      color: var(--am-subtext);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-top: 2px;
+    }
+
+    /* Apple Music Tracklist Table */
+    .track-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    .track-row {
+      display: grid;
+      grid-template-columns: 36px 48px 1fr 180px 110px;
+      align-items: center;
+      gap: 0.85rem;
+      padding: 0.5rem 0.75rem;
+      border-radius: 8px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+      cursor: pointer;
+      transition: background 0.12s;
+    }
+
+    .track-row:hover {
+      background: var(--am-hover);
+    }
+
+    .track-row.playing {
+      background: rgba(250, 36, 60, 0.14);
+    }
+
+    .track-row.playing .track-name {
+      color: var(--am-accent);
+    }
+
+    .track-num {
+      color: var(--am-subtext);
+      font-size: 0.85rem;
+      text-align: center;
+    }
+
+    .track-Thumb {
+      width: 42px;
+      height: 42px;
+      border-radius: 6px;
+      object-fit: cover;
+      background: var(--am-card);
+    }
+
+    .track-main {
+      min-width: 0;
+    }
+
+    .track-name {
+      font-weight: 500;
+      font-size: 0.93rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .track-artist {
+      font-size: 0.8rem;
+      color: var(--am-subtext);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-top: 2px;
+    }
+
+    .track-album {
+      font-size: 0.84rem;
+      color: var(--am-subtext);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .track-actions {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 0.55rem;
+    }
+
+    .icon-btn {
+      background: none;
+      border: none;
+      color: var(--am-subtext);
+      font-size: 1rem;
+      cursor: pointer;
+      padding: 0.3rem;
+      border-radius: 6px;
+      transition: color 0.15s, background 0.15s;
+    }
+
+    .icon-btn:hover {
+      color: var(--am-text);
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    .icon-btn.liked {
+      color: var(--am-accent);
+    }
+
+    /* Playlist Banner */
+    .playlist-hero {
+      display: flex;
+      gap: 1.75rem;
+      align-items: flex-end;
+      margin-bottom: 2rem;
+      padding-bottom: 1.5rem;
+      border-bottom: 1px solid var(--am-border);
+      flex-wrap: wrap;
+    }
+
+    .playlist-cover-box {
+      width: 190px;
+      height: 190px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, #fa243c, #7928ca);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 4rem;
+      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
+      flex-shrink: 0;
+      overflow: hidden;
+    }
+
+    .playlist-cover-box img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    /* Status Badges for Weekly Trending */
+    .badge-in-drive {
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: #30d158;
+      background: rgba(48, 209, 88, 0.15);
+      padding: 0.25rem 0.55rem;
+      border-radius: 6px;
+    }
+
+    /* Upload Card */
+    .upload-box {
+      background: var(--am-card);
+      border: 1px solid var(--am-border);
+      border-radius: 14px;
+      padding: 2rem;
+      max-width: 520px;
+    }
+
+    .am-input {
+      width: 100%;
+      background: rgba(0, 0, 0, 0.3);
+      border: 1px solid var(--am-border);
+      color: var(--am-text);
+      padding: 0.75rem 1rem;
+      border-radius: 8px;
+      font-size: 0.92rem;
+      margin-top: 0.4rem;
+      margin-bottom: 1.2rem;
+      outline: none;
+    }
+
+    .am-input:focus {
+      border-color: var(--am-accent);
+    }
+
+    .am-dropzone {
+      border: 2px dashed rgba(255, 255, 255, 0.18);
+      border-radius: 10px;
+      padding: 2.2rem 1rem;
+      text-align: center;
+      cursor: pointer;
+      margin-bottom: 1.2rem;
+      transition: border-color 0.2s, background 0.2s;
+    }
+
+    .am-dropzone:hover {
+      border-color: var(--am-accent);
+      background: rgba(250, 36, 60, 0.05);
+    }
+
+    /* Apple Music Glassmorphic Player Bar */
+    .am-player-bar {
+      height: 84px;
+      background: rgba(28, 28, 30, 0.88);
+      backdrop-filter: saturate(180%) blur(24px);
+      border-top: 1px solid var(--am-border);
+      display: grid;
+      grid-template-columns: 260px 1fr 240px;
+      align-items: center;
+      padding: 0 1.5rem;
+      gap: 1rem;
+      z-index: 200;
+    }
+
+    .transport-controls {
+      display: flex;
+      align-items: center;
+      gap: 1.1rem;
+    }
+
+    .ctrl-icon {
+      background: none;
+      border: none;
+      color: var(--am-text);
+      font-size: 1.15rem;
+      cursor: pointer;
+      opacity: 0.85;
+      transition: opacity 0.15s, transform 0.1s;
+    }
+
+    .ctrl-icon:hover {
+      opacity: 1;
+    }
+
+    .ctrl-icon.active-mode {
+      color: var(--am-accent);
+      opacity: 1;
+    }
+
+    .ctrl-play-big {
+      font-size: 1.65rem;
+      opacity: 1;
+    }
+
+    /* Center Apple Music LCD Now Playing Box */
+    .am-lcd {
+      display: flex;
+      align-items: center;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid var(--am-border);
+      border-radius: 10px;
+      height: 58px;
+      padding: 0 0.85rem 0 0.45rem;
+      gap: 0.85rem;
+      max-width: 680px;
+      width: 100%;
+      margin: 0 auto;
+    }
+
+    .lcd-cover {
+      width: 44px;
+      height: 44px;
+      border-radius: 6px;
+      object-fit: cover;
+      background: var(--am-card);
+      flex-shrink: 0;
+    }
+
+    .lcd-body {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+
+    .lcd-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 0.5rem;
+    }
+
+    .lcd-title {
+      font-size: 0.86rem;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .lcd-artist {
+      font-size: 0.75rem;
+      color: var(--am-subtext);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .lcd-time {
+      font-size: 0.68rem;
+      color: var(--am-subtext);
+      font-variant-numeric: tabular-nums;
+      flex-shrink: 0;
+    }
+
+    .am-scrubber {
+      width: 100%;
+      height: 4px;
+      accent-color: var(--am-accent);
+      cursor: pointer;
+      margin-top: 4px;
+    }
+
+    .right-controls {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 0.75rem;
+    }
+
+    .vol-slider {
+      width: 90px;
+      height: 4px;
+      accent-color: #fff;
+      cursor: pointer;
+    }
+
+    /* Modals (New Playlist & Add to Playlist) */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.65);
+      backdrop-filter: blur(6px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 500;
+    }
+
+    .modal-backdrop.open {
+      display: flex;
+    }
+
+    .modal-card {
+      background: #252528;
+      border: 1px solid var(--am-border);
+      border-radius: 14px;
+      padding: 1.5rem;
+      width: 90%;
+      max-width: 380px;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+    }
+
+    .modal-title {
+      font-size: 1.15rem;
+      font-weight: 700;
+      margin-bottom: 1rem;
+    }
+
+    /* Mobile Bottom Tab Bar */
+    .mobile-nav {
+      display: none;
+      background: rgba(24, 24, 26, 0.95);
+      backdrop-filter: blur(20px);
+      border-top: 1px solid var(--am-border);
+      justify-content: space-around;
+      padding: 0.45rem 0;
+      z-index: 190;
+    }
+
+    .mob-tab {
+      background: none;
+      border: none;
+      color: var(--am-subtext);
+      font-size: 0.68rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.2rem;
+      cursor: pointer;
+    }
+
+    .mob-tab.active {
+      color: var(--am-accent);
+    }
+
+    .mob-tab span:first-child {
+      font-size: 1.2rem;
+    }
+
+    @media (max-width: 768px) {
+      .sidebar {
+        display: none;
+      }
+      .app-shell {
+        height: calc(100vh - 138px);
+      }
+      .main-content {
+        padding: 1.25rem 1rem 3rem;
+      }
+      .track-row {
+        grid-template-columns: 28px 42px 1fr 75px;
+      }
+      .track-album {
+        display: none;
+      }
+      .am-player-bar {
+        grid-template-columns: 1fr auto;
+        height: 72px;
+        padding: 0 0.85rem;
+      }
+      .right-controls {
+        display: none;
+      }
+      .am-lcd {
+        order: -1;
+        background: transparent;
+        border: none;
+        padding: 0;
+      }
+      .mobile-nav {
+        display: flex;
+      }
+    }
   </style>
 </head>
 <body>
 
-  <header>
-    <div class="logo">♫ Musix Cloud</div>
-    <nav class="nav-tabs">
-      <button class="tab-btn active" onclick="switchTab('library')">My Drive Library</button>
-      <button class="tab-btn" onclick="switchTab('trending')">Weekly Trending</button>
-      <button class="tab-btn" onclick="switchTab('upload')">+ Upload Song</button>
-    </nav>
-  </header>
-
-  <main>
-    <section id="view-library" class="view-section active">
-      <div class="toolbar">
-        <input type="text" id="library-search" class="search-input" placeholder="Search songs..." oninput="renderLibrary()" />
-        <button class="btn-small" onclick="fetchLibrary()">↻ Refresh Drive</button>
+  <div class="app-shell">
+    <!-- APPLE MUSIC SIDEBAR -->
+    <aside class="sidebar">
+      <div class="brand">
+        <img src="/icon.svg" alt="Musix" />
+        <span>Music</span>
       </div>
-      <div id="library-list" class="song-list"><p>Loading your songs...</p></div>
-    </section>
 
-    <section id="view-trending" class="view-section">
-      <div class="toolbar">
-        <div class="nav-tabs">
-          <button id="btn-india" class="tab-btn active" onclick="setTrendingRegion('india')">India Top 25</button>
-          <button id="btn-global" class="tab-btn" onclick="setTrendingRegion('global')">Global Top 25</button>
+      <div class="search-box">
+        <span class="search-icon">🔍</span>
+        <input type="text" id="global-search" placeholder="Search Library" oninput="handleSearch(this.value)" />
+      </div>
+
+      <div class="nav-group">
+        <button class="nav-item active" id="nav-home" onclick="switchView('home')">
+          <span class="nav-icon">🏠</span> Home
+        </button>
+        <button class="nav-item" id="nav-browse" onclick="switchView('browse')">
+          <span class="nav-icon">🌐</span> New & Trending
+        </button>
+        <button class="nav-item" id="nav-upload" onclick="switchView('upload')">
+          <span class="nav-icon">☁️</span> Upload to Cloud
+        </button>
+      </div>
+
+      <div class="nav-group">
+        <div class="nav-group-label">Library</div>
+        <button class="nav-item" id="nav-liked" onclick="switchView('liked')">
+          <span class="nav-icon">❤️</span> Favorite Songs
+        </button>
+        <button class="nav-item" id="nav-songs" onclick="switchView('songs')">
+          <span class="nav-icon">🎵</span> Songs
+        </button>
+      </div>
+
+      <div class="nav-group">
+        <div class="nav-group-label">
+          <span>Playlists</span>
+          <button class="add-playlist-btn" onclick="openNewPlaylistModal()" title="New Playlist">＋</button>
         </div>
-        <button class="btn-small" onclick="fetchTrending()">↻ Check</button>
+        <div id="sidebar-playlists"></div>
       </div>
-      <div id="trending-list" class="song-list"><p>Fetching charts...</p></div>
-    </section>
+    </aside>
 
-    <section id="view-upload" class="view-section">
-      <div class="upload-card">
-        <h2>Upload Track</h2>
-        <form id="upload-form" onsubmit="handleUpload(event)">
-          <div class="form-group">
-            <input type="text" id="song-title" class="form-input" placeholder="Song Title & Artist" required />
+    <!-- MAIN VIEWPORT -->
+    <main class="main-content">
+
+      <!-- 1. HOME (LISTEN NOW) -->
+      <section id="view-home" class="view active">
+        <div class="page-header">
+          <div>
+            <h1 class="page-title">Home</h1>
+            <p class="page-subtitle">Personal Google Drive Cloud Streamer</p>
           </div>
-          <div class="form-group">
-            <div class="drop-zone" onclick="document.getElementById('audio-file').click()">
-              <p id="file-label">Click to choose an audio file</p>
-              <input type="file" id="audio-file" accept="audio/*" style="display: none;" onchange="handleFileSelect(event)" required />
+          <div class="header-actions">
+            <button class="btn-am" onclick="playAllLibrary(false)">▶ Play All</button>
+            <button class="btn-am-secondary" onclick="playAllLibrary(true)">⇄ Shuffle</button>
+          </div>
+        </div>
+
+        <div class="section-title">
+          <span>Recently Added to Drive</span>
+          <button class="btn-am-secondary" onclick="fetchLibrary()">↻ Sync Drive</button>
+        </div>
+        <div id="home-recent-grid" class="card-grid"></div>
+
+        <div class="section-title" style="margin-top:2.2rem;">
+          <span>Quick Picks</span>
+        </div>
+        <div id="home-quick-tracks" class="track-table"></div>
+      </section>
+
+      <!-- 2. BROWSE (WEEKLY TRENDING) -->
+      <section id="view-browse" class="view">
+        <div class="page-header">
+          <div>
+            <h1 class="page-title">New & Trending</h1>
+            <p class="page-subtitle">Live Apple Music Top Charts — Check missing hits & upload to your Drive</p>
+          </div>
+          <div class="header-actions">
+            <button id="reg-india" class="btn-am" onclick="setTrendingRegion('india')">India Top 25</button>
+            <button id="reg-global" class="btn-am-secondary" onclick="setTrendingRegion('global')">Global Top 25</button>
+          </div>
+        </div>
+        <div id="trending-container" class="track-table"></div>
+      </section>
+
+      <!-- 3. FAVORITE / LIKED SONGS -->
+      <section id="view-liked" class="view">
+        <div class="playlist-hero">
+          <div class="playlist-cover-box">❤️</div>
+          <div>
+            <p style="font-size:0.78rem; font-weight:700; text-transform:uppercase; color:var(--am-accent);">Playlist</p>
+            <h1 class="page-title" style="margin:0.2rem 0 0.4rem;">Favorite Songs</h1>
+            <p class="page-subtitle" id="liked-count-label">Songs you loved across your cloud library</p>
+            <div class="header-actions" style="margin-top:1rem;">
+              <button class="btn-am" onclick="playSongList(getLikedSongs(), false)">▶ Play</button>
+              <button class="btn-am-secondary" onclick="playSongList(getLikedSongs(), true)">⇄ Shuffle</button>
             </div>
           </div>
-          <button type="submit" id="upload-submit-btn" class="submit-btn">Upload to Drive</button>
-          <p id="upload-status" style="margin-top: 1rem; text-align: center;"></p>
-        </form>
-      </div>
-    </section>
-  </main>
+        </div>
+        <div id="liked-tracks-table" class="track-table"></div>
+      </section>
 
-  <footer class="player-bar">
-    <div>
-      <div id="now-title" style="font-weight:700">No track selected</div>
-      <div id="now-status" style="font-size:0.75rem; color:var(--accent)">Ready</div>
+      <!-- 4. ALL SONGS LIBRARY -->
+      <section id="view-songs" class="view">
+        <div class="page-header">
+          <div>
+            <h1 class="page-title">Songs</h1>
+            <p class="page-subtitle" id="total-songs-count">All tracks stored in your Google Drive</p>
+          </div>
+          <div class="header-actions">
+            <button class="btn-am" onclick="playAllLibrary(false)">▶ Play</button>
+            <button class="btn-am-secondary" onclick="playAllLibrary(true)">⇄ Shuffle</button>
+          </div>
+        </div>
+        <div id="all-songs-table" class="track-table"></div>
+      </section>
+
+      <!-- 5. CUSTOM PLAYLIST VIEW -->
+      <section id="view-playlist" class="view">
+        <div class="playlist-hero">
+          <div class="playlist-cover-box" id="pl-hero-cover">🎵</div>
+          <div>
+            <p style="font-size:0.78rem; font-weight:700; text-transform:uppercase; color:var(--am-accent);">Custom Playlist</p>
+            <h1 class="page-title" id="pl-hero-title" style="margin:0.2rem 0 0.4rem;">Playlist</h1>
+            <p class="page-subtitle" id="pl-hero-meta">0 Songs</p>
+            <div class="header-actions" style="margin-top:1rem;">
+              <button class="btn-am" onclick="playActivePlaylist(false)">▶ Play</button>
+              <button class="btn-am-secondary" onclick="playActivePlaylist(true)">⇄ Shuffle</button>
+              <button class="btn-am-secondary" onclick="deleteActivePlaylist()" style="color:#ff453a;">🗑 Delete</button>
+            </div>
+          </div>
+        </div>
+        <div id="playlist-tracks-table" class="track-table"></div>
+      </section>
+
+      <!-- 6. UPLOAD TO GOOGLE DRIVE -->
+      <section id="view-upload" class="view">
+        <div class="page-header">
+          <div>
+            <h1 class="page-title">Upload to Cloud</h1>
+            <p class="page-subtitle">Add MP3, M4A, WAV, or FLAC directly to your Google Drive server</p>
+          </div>
+        </div>
+
+        <div class="upload-box">
+          <form id="upload-form" onsubmit="handleUpload(event)">
+            <label style="font-size:0.85rem; font-weight:600; color:var(--am-subtext);">Song Title & Artist</label>
+            <input type="text" id="song-title" class="am-input" placeholder="e.g. Gehra Hua - Arijit Singh" required />
+
+            <div class="am-dropzone" onclick="document.getElementById('audio-file').click()">
+              <div style="font-size:2rem; margin-bottom:0.5rem;">☁️</div>
+              <p id="file-label" style="font-weight:600;">Click to select an audio file from your device</p>
+              <p style="font-size:0.78rem; color:var(--am-subtext); margin-top:0.3rem;">Streams across all your devices with automatic Apple Music cover art</p>
+              <input type="file" id="audio-file" accept="audio/*" style="display:none;" onchange="handleFileSelect(event)" required />
+            </div>
+
+            <button type="submit" id="upload-submit-btn" class="btn-am" style="width:100%; justify-content:center; padding:0.8rem;">
+              Upload to Google Drive
+            </button>
+            <p id="upload-status" style="margin-top:1rem; font-size:0.88rem; text-align:center;"></p>
+          </form>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- MOBILE BOTTOM NAVIGATION -->
+  <nav class="mobile-nav">
+    <button class="mob-tab active" id="mob-home" onclick="switchView('home')">
+      <span>🏠</span><span>Home</span>
+    </button>
+    <button class="mob-tab" id="mob-browse" onclick="switchView('browse')">
+      <span>🌐</span><span>Trending</span>
+    </button>
+    <button class="mob-tab" id="mob-liked" onclick="switchView('liked')">
+      <span>❤️</span><span>Favorites</span>
+    </button>
+    <button class="mob-tab" id="mob-songs" onclick="switchView('songs')">
+      <span>🎵</span><span>Library</span>
+    </button>
+    <button class="mob-tab" id="mob-upload" onclick="switchView('upload')">
+      <span>☁️</span><span>Upload</span>
+    </button>
+  </nav>
+
+  <!-- APPLE MUSIC GLASSMORPHIC PLAYER BAR -->
+  <footer class="am-player-bar">
+    <div class="transport-controls">
+      <button class="ctrl-icon" id="btn-shuffle" onclick="toggleShuffle()" title="Shuffle">⇄</button>
+      <button class="ctrl-icon" onclick="playPrevSong()" title="Previous">⏮</button>
+      <button class="ctrl-icon ctrl-play-big" id="play-pause-btn" onclick="togglePlay()">▶</button>
+      <button class="ctrl-icon" onclick="playNextSong()" title="Next">⏭</button>
+      <button class="ctrl-icon" id="btn-repeat" onclick="toggleRepeat()" title="Repeat">🔁</button>
     </div>
-    <div class="player-controls">
-      <div style="display:flex; gap:1.25rem;">
-        <button class="ctrl-btn" onclick="playPrevSong()">⏮</button>
-        <button id="play-pause-btn" class="ctrl-btn play-main" onclick="togglePlay()">▶</button>
-        <button class="ctrl-btn" onclick="playNextSong()">⏭</button>
+
+    <div class="am-lcd">
+      <img id="lcd-cover" src="/icon.svg" class="lcd-cover" alt="Cover" />
+      <div class="lcd-body">
+        <div class="lcd-top">
+          <div>
+            <span id="lcd-title" class="lcd-title">Not Playing</span>
+            <span id="lcd-artist" class="lcd-artist" style="margin-left:6px;">— Apple Music Cloud</span>
+          </div>
+          <span class="lcd-time"><span id="cur-time">0:00</span> / <span id="tot-time">0:00</span></span>
+        </div>
+        <input type="range" id="seek-bar" class="am-scrubber" value="0" min="0" max="100" oninput="seekAudio()" />
       </div>
+      <button class="icon-btn" id="lcd-like-btn" onclick="toggleCurrentLike()" title="Favorite">♡</button>
     </div>
-    <audio id="audio-player"></audio>
+
+    <div class="right-controls">
+      <span style="font-size:0.9rem; color:var(--am-subtext);">🔊</span>
+      <input type="range" id="vol-bar" class="vol-slider" value="100" min="0" max="100" oninput="changeVolume(this.value)" />
+      <button class="btn-am-secondary" style="padding:0.35rem 0.65rem; font-size:0.78rem;" onclick="openNewPlaylistModal()">＋ Playlist</button>
+    </div>
+
+    <audio id="audio-player" preload="metadata"></audio>
   </footer>
 
+  <!-- MODAL 1: CREATE NEW PLAYLIST -->
+  <div class="modal-backdrop" id="modal-new-playlist">
+    <div class="modal-card">
+      <div class="modal-title">New Playlist</div>
+      <input type="text" id="new-playlist-name" class="am-input" placeholder="Playlist Name (e.g. Gym Workout)" />
+      <div style="display:flex; justify-content:flex-end; gap:0.6rem;">
+        <button class="btn-am-secondary" onclick="closeModals()">Cancel</button>
+        <button class="btn-am" onclick="createPlaylist()">Create</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 2: ADD SONG TO PLAYLIST -->
+  <div class="modal-backdrop" id="modal-add-to-pl">
+    <div class="modal-card">
+      <div class="modal-title">Add to Playlist</div>
+      <div id="modal-pl-choices" style="display:flex; flex-direction:column; gap:0.45rem; max-height:240px; overflow-y:auto; margin-bottom:1rem;"></div>
+      <div style="display:flex; justify-content:space-between;">
+        <button class="btn-am-secondary" onclick="openNewPlaylistModal()">＋ New Playlist</button>
+        <button class="btn-am-secondary" onclick="closeModals()">Close</button>
+      </div>
+    </div>
+  </div>
+
   <script>
+    // State Management
     let driveSongs = [];
+    let currentQueue = [];
+    let currentIndex = -1;
+    let isShuffle = false;
+    let isRepeat = false;
     let trendingData = { indiaTrending: [], globalTrending: [] };
     let currentRegion = 'india';
-    let currentSongIndex = -1;
+    let activePlaylistId = null;
+    let songPendingPlaylistAdd = null;
+
+    // Persistent Local Storage for Likes, Playlists, and iTunes Artwork Cache
+    let likedIds = JSON.parse(localStorage.getItem('am_liked_ids') || '[]');
+    let playlists = JSON.parse(localStorage.getItem('am_playlists') || '[]');
+    let metaCache = JSON.parse(localStorage.getItem('am_meta_cache') || '{}');
+
     const audioPlayer = document.getElementById('audio-player');
     const playPauseBtn = document.getElementById('play-pause-btn');
+    const seekBar = document.getElementById('seek-bar');
 
-    function switchTab(tab) {
-      document.querySelectorAll('.view-section').forEach(s => s.classList.remove('active'));
-      document.querySelectorAll('header .tab-btn').forEach(b => b.classList.remove('active'));
-      document.getElementById(`view-${tab}`).classList.add('active');
-      const idx = tab === 'library' ? 0 : tab === 'trending' ? 1 : 2;
-      document.querySelectorAll('header .tab-btn')[idx].classList.add('active');
-      if (tab === 'trending' && trendingData.indiaTrending.length === 0) fetchTrending();
+    function saveUserData() {
+      localStorage.setItem('am_liked_ids', JSON.stringify(likedIds));
+      localStorage.setItem('am_playlists', JSON.stringify(playlists));
     }
 
+    // Clean raw filename into Title & Artist
+    function parseTrackName(rawName) {
+      const clean = rawName.replace(/\.(mp3|m4a|wav|flac|ogg)$/i, '');
+      const parts = clean.split(' - ');
+      if (parts.length >= 2) {
+        return { title: parts[0].trim(), artist: parts.slice(1).join(' - ').trim() };
+      }
+      return { title: clean.trim(), artist: 'Cloud Library' };
+    }
+
+    // Automatic iTunes Search API Artwork & Metadata Enricher
+    async function enrichSongMetadata(song) {
+      if (metaCache[song.id]) return metaCache[song.id];
+      const parsed = parseTrackName(song.name);
+      const fallback = {
+        title: parsed.title,
+        artist: parsed.artist,
+        album: 'Google Drive Cloud',
+        artwork: '/icon.svg'
+      };
+      try {
+        const query = encodeURIComponent(`${parsed.title} ${parsed.artist === 'Cloud Library' ? '' : parsed.artist}`.trim());
+        const res = await fetch(`https://itunes.apple.com/search?term=${query}&media=music&limit=1`);
+        const data = await res.json();
+        if (data.results && data.results.length > 0) {
+          const hit = data.results[0];
+          const enriched = {
+            title: parsed.title,
+            artist: hit.artistName || parsed.artist,
+            album: hit.collectionName || 'Single',
+            artwork: (hit.artworkUrl100 || '/icon.svg').replace('100x100bb', '600x600bb')
+          };
+          metaCache[song.id] = enriched;
+          localStorage.setItem('am_meta_cache', JSON.stringify(metaCache));
+          return enriched;
+        }
+      } catch (e) {}
+      metaCache[song.id] = fallback;
+      return fallback;
+    }
+
+    function getSongMeta(song) {
+      if (metaCache[song.id]) return metaCache[song.id];
+      const parsed = parseTrackName(song.name);
+      return { title: parsed.title, artist: parsed.artist, album: 'Cloud Drive', artwork: '/icon.svg' };
+    }
+
+    // Navigation
+    function switchView(viewName) {
+      document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+      document.querySelectorAll('.sidebar .nav-item').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.mobile-nav .mob-tab').forEach(b => b.classList.remove('active'));
+
+      const targetView = document.getElementById(`view-${viewName}`);
+      if (targetView) targetView.classList.add('active');
+
+      const navBtn = document.getElementById(`nav-${viewName}`);
+      if (navBtn) navBtn.classList.add('active');
+
+      const mobBtn = document.getElementById(`mob-${viewName}`);
+      if (mobBtn) mobBtn.classList.add('active');
+
+      if (viewName === 'browse' && trendingData.indiaTrending.length === 0) fetchTrending();
+      if (viewName === 'liked') renderLikedView();
+      if (viewName === 'songs') renderAllSongsView();
+      if (viewName === 'home') renderHomeView();
+    }
+
+    function handleSearch(query) {
+      switchView('songs');
+      renderAllSongsView(query);
+    }
+
+    // Fetch Songs from Backend
     async function fetchLibrary() {
       try {
         const res = await fetch('/api/songs');
         driveSongs = await res.json();
-        renderLibrary();
+        if (currentQueue.length === 0) currentQueue = [...driveSongs];
+        renderHomeView();
+        renderAllSongsView();
+        renderSidebarPlaylists();
+
+        // Background fetch Apple Music HD covers
+        for (const song of driveSongs) {
+          if (!metaCache[song.id]) {
+            await enrichSongMetadata(song);
+            renderHomeView();
+            renderAllSongsView();
+          }
+        }
       } catch (err) {
-        document.getElementById('library-list').innerHTML = `<p style="color:red">Failed to load Drive.</p>`;
+        console.error('Failed to load library:', err);
       }
     }
 
-    function renderLibrary() {
-      const container = document.getElementById('library-list');
-      const query = document.getElementById('library-search').value.toLowerCase();
-      const filtered = driveSongs.filter(s => s.name.toLowerCase().includes(query));
-      
-      container.innerHTML = filtered.map((song, idx) => `
-        <div class="song-item ${driveSongs[currentSongIndex]?.id === song.id ? 'playing' : ''}" onclick="playById('${song.id}')">
-          <div class="song-info">
-            <span style="width:24px">${idx + 1}</span>
-            <div>
-              <div class="song-title">${song.name}</div>
-              <div class="song-meta">Google Drive Stream</div>
+    // Render Home (Listen Now)
+    function renderHomeView() {
+      const grid = document.getElementById('home-recent-grid');
+      const quickTable = document.getElementById('home-quick-tracks');
+
+      if (driveSongs.length === 0) {
+        grid.innerHTML = `<p style="color:var(--am-subtext);">No songs in your Google Drive yet. Click "Upload to Cloud" to add your first track!</p>`;
+        quickTable.innerHTML = '';
+        return;
+      }
+
+      const recent = driveSongs.slice(0, 6);
+      grid.innerHTML = recent.map(song => {
+        const meta = getSongMeta(song);
+        return `
+          <div class="album-card" onclick="playSpecificSong('${song.id}')">
+            <div class="album-art-wrap">
+              <img src="${meta.artwork}" alt="${meta.title}" loading="lazy" />
+              <div class="card-play-overlay">
+                <div class="overlay-circle">▶</div>
+              </div>
+            </div>
+            <div class="card-title">${meta.title}</div>
+            <div class="card-sub">${meta.artist}</div>
+          </div>
+        `;
+      }).join('');
+
+      quickTable.innerHTML = renderTrackRows(driveSongs.slice(0, 10));
+    }
+
+    // Reusable Apple Music Track Rows Renderer
+    function renderTrackRows(songArray, playlistIdForRemoval = null) {
+      const currentPlayingId = currentQueue[currentIndex]?.id;
+      return songArray.map((song, idx) => {
+        const meta = getSongMeta(song);
+        const isLiked = likedIds.includes(song.id);
+        const isPlaying = currentPlayingId === song.id;
+
+        return `
+          <div class="track-row ${isPlaying ? 'playing' : ''}" onclick="playSpecificSong('${song.id}')">
+            <div class="track-num">${isPlaying ? '🔊' : idx + 1}</div>
+            <img src="${meta.artwork}" class="track-Thumb" alt="Art" loading="lazy" />
+            <div class="track-main">
+              <div class="track-name">${meta.title}</div>
+              <div class="track-artist">${meta.artist}</div>
+            </div>
+            <div class="track-album">${meta.album}</div>
+            <div class="track-actions" onclick="event.stopPropagation()">
+              <button class="icon-btn ${isLiked ? 'liked' : ''}" onclick="toggleLike('${song.id}')" title="Favorite">
+                ${isLiked ? '❤️' : '♡'}
+              </button>
+              <button class="icon-btn" onclick="openAddToPlaylistModal('${song.id}')" title="Add to Playlist">＋</button>
+              ${
+                playlistIdForRemoval
+                  ? `<button class="icon-btn" onclick="removeSongFromPlaylist('${playlistIdForRemoval}', '${song.id}')" title="Remove">✕</button>`
+                  : ''
+              }
             </div>
           </div>
-          <button class="btn-small">▶ Play</button>
-        </div>
+        `;
+      }).join('');
+    }
+
+    function renderAllSongsView(filterQuery = '') {
+      const q = filterQuery.toLowerCase().trim();
+      const filtered = driveSongs.filter(s => {
+        const m = getSongMeta(s);
+        return s.name.toLowerCase().includes(q) || m.title.toLowerCase().includes(q) || m.artist.toLowerCase().includes(q);
+      });
+      document.getElementById('total-songs-count').textContent = `${filtered.length} Songs in Google Drive`;
+      document.getElementById('all-songs-table').innerHTML =
+        filtered.length > 0
+          ? renderTrackRows(filtered)
+          : `<p style="color:var(--am-subtext); padding:1rem 0;">No matching songs found.</p>`;
+    }
+
+    // Likes / Favorites System
+    function getLikedSongs() {
+      return driveSongs.filter(s => likedIds.includes(s.id));
+    }
+
+    function toggleLike(songId) {
+      if (likedIds.includes(songId)) {
+        likedIds = likedIds.filter(id => id !== songId);
+      } else {
+        likedIds.push(songId);
+      }
+      saveUserData();
+      updateLcdLikeButton();
+      renderHomeView();
+      renderAllSongsView(document.getElementById('global-search').value);
+      renderLikedView();
+      if (activePlaylistId) renderCustomPlaylistView(activePlaylistId);
+    }
+
+    function toggleCurrentLike() {
+      const current = currentQueue[currentIndex];
+      if (current) toggleLike(current.id);
+    }
+
+    function updateLcdLikeButton() {
+      const current = currentQueue[currentIndex];
+      const btn = document.getElementById('lcd-like-btn');
+      if (current && likedIds.includes(current.id)) {
+        btn.textContent = '❤️';
+        btn.classList.add('liked');
+      } else {
+        btn.textContent = '♡';
+        btn.classList.remove('liked');
+      }
+    }
+
+    function renderLikedView() {
+      const liked = getLikedSongs();
+      document.getElementById('liked-count-label').textContent = `${liked.length} Favorite Songs`;
+      document.getElementById('liked-tracks-table').innerHTML =
+        liked.length > 0
+          ? renderTrackRows(liked)
+          : `<p style="color:var(--am-subtext); padding:1rem 0;">Tap the heart ♡ icon next to any song to add it to your Favorites.</p>`;
+    }
+
+    // Custom Playlists System
+    function renderSidebarPlaylists() {
+      const box = document.getElementById('sidebar-playlists');
+      if (playlists.length === 0) {
+        box.innerHTML = `<p style="font-size:0.78rem; color:var(--am-muted); padding:0.3rem 0.65rem;">No playlists yet</p>`;
+        return;
+      }
+      box.innerHTML = playlists.map(pl => `
+        <button class="nav-item ${activePlaylistId === pl.id ? 'active' : ''}" onclick="openPlaylist('${pl.id}')">
+          <span class="nav-icon">🎶</span>
+          <span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${pl.name}</span>
+        </button>
       `).join('');
     }
 
-    function playById(fileId) {
-      currentSongIndex = driveSongs.findIndex(s => s.id === fileId);
-      const song = driveSongs[currentSongIndex];
+    function openNewPlaylistModal() {
+      document.getElementById('modal-add-to-pl').classList.remove('open');
+      document.getElementById('modal-new-playlist').classList.add('open');
+      document.getElementById('new-playlist-name').focus();
+    }
+
+    function closeModals() {
+      document.querySelectorAll('.modal-backdrop').forEach(m => m.classList.remove('open'));
+    }
+
+    function createPlaylist() {
+      const input = document.getElementById('new-playlist-name');
+      const name = input.value.trim();
+      if (!name) return;
+
+      const newPl = {
+        id: 'pl_' + Date.now(),
+        name,
+        songIds: songPendingPlaylistAdd ? [songPendingPlaylistAdd] : []
+      };
+      playlists.push(newPl);
+      songPendingPlaylistAdd = null;
+      input.value = '';
+      saveUserData();
+      renderSidebarPlaylists();
+      closeModals();
+      openPlaylist(newPl.id);
+    }
+
+    function openPlaylist(plId) {
+      activePlaylistId = plId;
+      renderSidebarPlaylists();
+      switchView('playlist');
+      renderCustomPlaylistView(plId);
+    }
+
+    function renderCustomPlaylistView(plId) {
+      const pl = playlists.find(p => p.id === plId);
+      if (!pl) return;
+
+      const plSongs = pl.songIds.map(id => driveSongs.find(s => s.id === id)).filter(Boolean);
+      document.getElementById('pl-hero-title').textContent = pl.name;
+      document.getElementById('pl-hero-meta').textContent = `${plSongs.length} Songs`;
+
+      const coverBox = document.getElementById('pl-hero-cover');
+      if (plSongs.length > 0) {
+        const firstMeta = getSongMeta(plSongs[0]);
+        coverBox.innerHTML = `<img src="${firstMeta.artwork}" alt="${pl.name}" />`;
+      } else {
+        coverBox.innerHTML = '🎶';
+      }
+
+      document.getElementById('playlist-tracks-table').innerHTML =
+        plSongs.length > 0
+          ? renderTrackRows(plSongs, pl.id)
+          : `<p style="color:var(--am-subtext); padding:1rem 0;">This playlist is empty. Click the ＋ button on any song in your library to add tracks here.</p>`;
+    }
+
+    function openAddToPlaylistModal(songId) {
+      songPendingPlaylistAdd = songId;
+      const listContainer = document.getElementById('modal-pl-choices');
+      if (playlists.length === 0) {
+        listContainer.innerHTML = `<p style="color:var(--am-subtext); font-size:0.85rem;">You don't have any playlists yet. Create one below!</p>`;
+      } else {
+        listContainer.innerHTML = playlists.map(pl => `
+          <button class="nav-item" style="background:rgba(255,255,255,0.06);" onclick="addSongToPlaylist('${pl.id}', '${songId}')">
+            <span>🎶</span> <span>${pl.name}</span>
+          </button>
+        `).join('');
+      }
+      document.getElementById('modal-add-to-pl').classList.add('open');
+    }
+
+    function addSongToPlaylist(plId, songId) {
+      const pl = playlists.find(p => p.id === plId);
+      if (pl && !pl.songIds.includes(songId)) {
+        pl.songIds.push(songId);
+        saveUserData();
+      }
+      songPendingPlaylistAdd = null;
+      closeModals();
+      if (activePlaylistId === plId) renderCustomPlaylistView(plId);
+    }
+
+    function removeSongFromPlaylist(plId, songId) {
+      const pl = playlists.find(p => p.id === plId);
+      if (!pl) return;
+      pl.songIds = pl.songIds.filter(id => id !== songId);
+      saveUserData();
+      renderCustomPlaylistView(plId);
+    }
+
+    function deleteActivePlaylist() {
+      if (!activePlaylistId) return;
+      playlists = playlists.filter(p => p.id !== activePlaylistId);
+      activePlaylistId = null;
+      saveUserData();
+      renderSidebarPlaylists();
+      switchView('home');
+    }
+
+    function playActivePlaylist(shuffleMode) {
+      const pl = playlists.find(p => p.id === activePlaylistId);
+      if (!pl) return;
+      const plSongs = pl.songIds.map(id => driveSongs.find(s => s.id === id)).filter(Boolean);
+      playSongList(plSongs, shuffleMode);
+    }
+
+    // Audio Streaming & Playback Controls
+    function playSpecificSong(songId) {
+      if (currentQueue.length === 0) currentQueue = [...driveSongs];
+      let idx = currentQueue.findIndex(s => s.id === songId);
+      if (idx === -1) {
+        currentQueue = [...driveSongs];
+        idx = currentQueue.findIndex(s => s.id === songId);
+      }
+      if (idx !== -1) startPlaybackAtIndex(idx);
+    }
+
+    function playAllLibrary(shuffleMode) {
+      playSongList(driveSongs, shuffleMode);
+    }
+
+    function playSongList(list, shuffleMode) {
+      if (!list || list.length === 0) return;
+      isShuffle = shuffleMode;
+      document.getElementById('btn-shuffle').classList.toggle('active-mode', isShuffle);
+      currentQueue = [...list];
+      if (isShuffle) {
+        currentQueue.sort(() => Math.random() - 0.5);
+      }
+      startPlaybackAtIndex(0);
+    }
+
+    function startPlaybackAtIndex(idx) {
+      if (idx < 0 || idx >= currentQueue.length) return;
+      currentIndex = idx;
+      const song = currentQueue[currentIndex];
+      const meta = getSongMeta(song);
+
       audioPlayer.src = `/api/stream/${song.id}`;
       audioPlayer.play();
-      document.getElementById('now-title').textContent = song.name;
-      document.getElementById('now-status').textContent = 'Streaming';
+
+      document.getElementById('lcd-title').textContent = meta.title;
+      document.getElementById('lcd-artist').textContent = `— ${meta.artist}`;
+      document.getElementById('lcd-cover').src = meta.artwork;
       playPauseBtn.textContent = '⏸';
-      renderLibrary();
+      updateLcdLikeButton();
+
+      renderHomeView();
+      renderAllSongsView(document.getElementById('global-search').value);
+      renderLikedView();
+      if (activePlaylistId) renderCustomPlaylistView(activePlaylistId);
+
+      if ('mediaSession' in navigator) {
+        navigator.mediaSession.metadata = new MediaMetadata({
+          title: meta.title,
+          artist: meta.artist,
+          album: meta.album,
+          artwork: [{ src: meta.artwork, sizes: '512x512', type: 'image/png' }]
+        });
+        navigator.mediaSession.setActionHandler('play', () => audioPlayer.play());
+        navigator.mediaSession.setActionHandler('pause', () => audioPlayer.pause());
+        navigator.mediaSession.setActionHandler('previoustrack', playPrevSong);
+        navigator.mediaSession.setActionHandler('nexttrack', playNextSong);
+      }
     }
 
     function togglePlay() {
-      if (!audioPlayer.src && driveSongs.length > 0) return playById(driveSongs[0].id);
-      if (audioPlayer.paused) { audioPlayer.play(); playPauseBtn.textContent = '⏸'; }
-      else { audioPlayer.pause(); playPauseBtn.textContent = '▶'; }
+      if (!audioPlayer.src) {
+        if (driveSongs.length > 0) playAllLibrary(false);
+        return;
+      }
+      if (audioPlayer.paused) {
+        audioPlayer.play();
+        playPauseBtn.textContent = '⏸';
+      } else {
+        audioPlayer.pause();
+        playPauseBtn.textContent = '▶';
+      }
     }
 
     function playNextSong() {
-      if (driveSongs.length === 0) return;
-      playById(driveSongs[(currentSongIndex + 1) % driveSongs.length].id);
+      if (currentQueue.length === 0) return;
+      if (isRepeat) {
+        audioPlayer.currentTime = 0;
+        audioPlayer.play();
+        return;
+      }
+      const nextIdx = (currentIndex + 1) % currentQueue.length;
+      startPlaybackAtIndex(nextIdx);
     }
 
     function playPrevSong() {
-      if (driveSongs.length === 0) return;
-      playById(driveSongs[(currentSongIndex - 1 + driveSongs.length) % driveSongs.length].id);
+      if (currentQueue.length === 0) return;
+      if (audioPlayer.currentTime > 3) {
+        audioPlayer.currentTime = 0;
+        return;
+      }
+      const prevIdx = (currentIndex - 1 + currentQueue.length) % currentQueue.length;
+      startPlaybackAtIndex(prevIdx);
     }
+
+    function toggleShuffle() {
+      isShuffle = !isShuffle;
+      document.getElementById('btn-shuffle').classList.toggle('active-mode', isShuffle);
+    }
+
+    function toggleRepeat() {
+      isRepeat = !isRepeat;
+      document.getElementById('btn-repeat').classList.toggle('active-mode', isRepeat);
+    }
+
+    function changeVolume(val) {
+      audioPlayer.volume = val / 100;
+    }
+
+    audioPlayer.addEventListener('timeupdate', () => {
+      if (audioPlayer.duration) {
+        seekBar.value = (audioPlayer.currentTime / audioPlayer.duration) * 100;
+        document.getElementById('cur-time').textContent = formatTime(audioPlayer.currentTime);
+        document.getElementById('tot-time').textContent = formatTime(audioPlayer.duration);
+      }
+    });
 
     audioPlayer.addEventListener('ended', playNextSong);
 
+    function seekAudio() {
+      if (audioPlayer.duration) {
+        audioPlayer.currentTime = (seekBar.value / 100) * audioPlayer.duration;
+      }
+    }
+
+    function formatTime(sec) {
+      const m = Math.floor(sec / 60);
+      const s = Math.floor(sec % 60).toString().padStart(2, '0');
+      return `${m}:${s}`;
+    }
+
+    // Weekly Trending Charts
     async function fetchTrending() {
+      const box = document.getElementById('trending-container');
+      box.innerHTML = `<p style="color:var(--am-subtext);">Loading live Apple Music charts...</p>`;
       try {
         const res = await fetch('/api/trending');
         trendingData = await res.json();
         renderTrending();
       } catch (err) {
-        document.getElementById('trending-list').innerHTML = `<p style="color:red">Error fetching charts.</p>`;
+        box.innerHTML = `<p style="color:#ff453a;">Could not load trending charts.</p>`;
       }
     }
 
     function setTrendingRegion(region) {
       currentRegion = region;
-      document.getElementById('btn-india').classList.toggle('active', region === 'india');
-      document.getElementById('btn-global').classList.toggle('active', region === 'global');
+      document.getElementById('reg-india').className = region === 'india' ? 'btn-am' : 'btn-am-secondary';
+      document.getElementById('reg-global').className = region === 'global' ? 'btn-am' : 'btn-am-secondary';
       renderTrending();
     }
 
     function renderTrending() {
       const list = currentRegion === 'india' ? trendingData.indiaTrending : trendingData.globalTrending;
-      document.getElementById('trending-list').innerHTML = list.map(item => `
-        <div class="song-item">
-          <div class="song-info">
-            <span style="width:24px">#${item.rank}</span>
-            <div><div class="song-title">${item.title}</div><div class="song-meta">${item.artist}</div></div>
+      const box = document.getElementById('trending-container');
+      if (!list || list.length === 0) {
+        box.innerHTML = `<p style="color:var(--am-subtext);">No chart tracks found.</p>`;
+        return;
+      }
+
+      box.innerHTML = list.map(item => {
+        const safeName = `${item.title} - ${item.artist}`.replace(/'/g, "\\'");
+        return `
+          <div class="track-row" onclick="${item.alreadyInDrive ? '' : `prefillUpload('${safeName}')`}">
+            <div class="track-num">#${item.rank}</div>
+            <img src="${item.artwork}" class="track-Thumb" alt="${item.title}" />
+            <div class="track-main">
+              <div class="track-name">${item.title}</div>
+              <div class="track-artist">${item.artist}</div>
+            </div>
+            <div class="track-album">Released ${item.releaseDate || 'Recently'}</div>
+            <div class="track-actions">
+              ${
+                item.alreadyInDrive
+                  ? `<span class="badge-in-drive">✓ In Library</span>`
+                  : `<button class="btn-am" style="padding:0.35rem 0.75rem; font-size:0.78rem;" onclick="event.stopPropagation(); prefillUpload('${safeName}')">＋ Upload</button>`
+              }
+            </div>
           </div>
-        </div>
-      `).join('');
+        `;
+      }).join('');
     }
 
+    function prefillUpload(fullTitle) {
+      switchView('upload');
+      document.getElementById('song-title').value = `${fullTitle}.mp3`;
+      const status = document.getElementById('upload-status');
+      status.textContent = `Ready to upload "${fullTitle}". Choose your audio file below!`;
+      status.style.color = '#30d158';
+    }
+
+    // Upload Handler
     function handleFileSelect(event) {
       const file = event.target.files[0];
-      if (file) document.getElementById('file-label').textContent = file.name;
+      if (!file) return;
+      document.getElementById('file-label').textContent = `Selected: ${file.name}`;
+      const titleInput = document.getElementById('song-title');
+      if (!titleInput.value) titleInput.value = file.name;
     }
 
     async function handleUpload(event) {
@@ -227,26 +1587,32 @@
       formData.append('audio', fileInput.files[0]);
 
       btn.disabled = true;
-      btn.textContent = 'Uploading...';
-      status.textContent = 'Streaming to Google Drive...';
+      btn.textContent = 'Uploading to Google Drive...';
+      status.textContent = 'Streaming audio buffer to your Google Drive...';
+      status.style.color = '#94a3b8';
 
       try {
         const res = await fetch('/api/upload', { method: 'POST', body: formData });
         const data = await res.json();
-        if (!res.ok) throw new Error(data.error);
-        status.textContent = `✓ Uploaded!`;
-        status.style.color = '#34d399';
+        if (!res.ok) throw new Error(data.error || 'Upload failed');
+
+        status.textContent = `✓ Added "${data.name}" to your Apple Music Cloud!`;
+        status.style.color = '#30d158';
         document.getElementById('upload-form').reset();
+        document.getElementById('file-label').textContent = 'Click to select an audio file from your device';
+
         await fetchLibrary();
+        if (trendingData.indiaTrending.length > 0) await fetchTrending();
       } catch (err) {
         status.textContent = `Error: ${err.message}`;
-        status.style.color = '#ef4444';
+        status.style.color = '#ff453a';
       } finally {
         btn.disabled = false;
-        btn.textContent = 'Upload to Drive';
+        btn.textContent = 'Upload to Google Drive';
       }
     }
 
+    // Boot Application
     fetchLibrary();
   </script>
 </body>
