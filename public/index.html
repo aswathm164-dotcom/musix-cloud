@@ -45,16 +45,16 @@
 
     svg { display: block; flex-shrink: 0; }
 
-    /* SINGLE BEATING LOGO SPLASH SCREEN */
+    /* HEARTBEAT GLOWING ICON SPLASH SCREEN */
     #splash-screen {
       position: fixed;
       inset: 0;
-      background-color: #0d0d0f;
+      background: radial-gradient(circle at 50% 50%, #240d13 0%, #0d0d0f 70%);
       z-index: 9999;
       display: flex;
       align-items: center;
       justify-content: center;
-      transition: opacity 0.3s ease, visibility 0.3s ease;
+      transition: opacity 0.45s ease, visibility 0.45s ease;
     }
 
     #splash-screen.hidden {
@@ -64,32 +64,44 @@
     }
 
     .splash-logo-wrap {
-      width: 88px;
-      height: 88px;
-      border-radius: 22px;
-      background: linear-gradient(135deg, #ff5e76, #fa2038);
+      width: 96px;
+      height: 96px;
+      border-radius: 24px;
+      overflow: hidden;
       display: flex;
       align-items: center;
       justify-content: center;
+      background: linear-gradient(135deg, #fb5c74, #fa233b);
       animation: heartbeatGlow 1.15s infinite ease-in-out;
     }
 
+    .splash-logo-wrap img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      border-radius: 24px;
+    }
+
     @keyframes heartbeatGlow {
-      0%, 100% {
+      0% {
         transform: scale(1);
-        box-shadow: 0 0 22px rgba(250, 36, 60, 0.45), 0 0 48px rgba(250, 36, 60, 0.2);
+        box-shadow: 0 0 25px rgba(250, 36, 60, 0.45), 0 0 55px rgba(250, 36, 60, 0.2);
       }
       18% {
-        transform: scale(1.15);
-        box-shadow: 0 0 42px rgba(250, 36, 60, 0.95), 0 0 85px rgba(250, 36, 60, 0.55);
+        transform: scale(1.18);
+        box-shadow: 0 0 50px rgba(250, 36, 60, 0.95), 0 0 95px rgba(250, 36, 60, 0.65);
       }
       34% {
         transform: scale(1);
-        box-shadow: 0 0 24px rgba(250, 36, 60, 0.5);
+        box-shadow: 0 0 28px rgba(250, 36, 60, 0.5), 0 0 60px rgba(250, 36, 60, 0.25);
       }
-      50% {
-        transform: scale(1.09);
-        box-shadow: 0 0 36px rgba(250, 36, 60, 0.85), 0 0 70px rgba(250, 36, 60, 0.45);
+      52% {
+        transform: scale(1.12);
+        box-shadow: 0 0 42px rgba(250, 36, 60, 0.85), 0 0 80px rgba(250, 36, 60, 0.5);
+      }
+      75%, 100% {
+        transform: scale(1);
+        box-shadow: 0 0 25px rgba(250, 36, 60, 0.45), 0 0 55px rgba(250, 36, 60, 0.2);
       }
     }
 
@@ -127,7 +139,7 @@
     }
 
     body.player-active .app-shell {
-      height: calc(100dvh - 68px);
+      height: calc(100dvh - 64px);
     }
 
     .sidebar {
@@ -151,14 +163,11 @@
       letter-spacing: -0.4px;
     }
 
-    .brand-badge {
+    .brand img {
       width: 28px;
       height: 28px;
       border-radius: 7px;
-      background: linear-gradient(135deg, #ff5e76, #fa2038);
-      display: flex;
-      align-items: center;
-      justify-content: center;
+      object-fit: cover;
     }
 
     /* COMPACT TOP HEADER ABOVE HOME */
@@ -172,22 +181,19 @@
     .home-top-brand-left {
       display: flex;
       align-items: center;
-      gap: 0.45rem;
+      gap: 0.5rem;
     }
 
-    .home-top-brand-logo {
-      width: 26px;
-      height: 26px;
+    .home-top-brand-left img {
+      width: 28px;
+      height: 28px;
       border-radius: 7px;
-      background: linear-gradient(135deg, #ff5e76, #fa2038);
-      display: flex;
-      align-items: center;
-      justify-content: center;
+      object-fit: cover;
       box-shadow: 0 4px 12px rgba(250, 36, 60, 0.35);
     }
 
     .home-top-brand-name {
-      font-size: 1.1rem;
+      font-size: 1.12rem;
       font-weight: 800;
       letter-spacing: -0.4px;
       color: #ffffff;
@@ -334,7 +340,6 @@
       gap: 0.3rem;
     }
 
-    /* COMPACT SECTION HEADINGS */
     .section-title {
       font-size: 0.92rem;
       font-weight: 700;
@@ -376,10 +381,7 @@
       filter: blur(1px);
     }
 
-    .smart-card-top {
-      position: relative;
-      z-index: 2;
-    }
+    .smart-card-top { position: relative; z-index: 2; }
 
     .smart-pill {
       font-size: 0.55rem;
@@ -391,10 +393,7 @@
       color: #fff;
     }
 
-    .smart-card-bottom {
-      position: relative;
-      z-index: 2;
-    }
+    .smart-card-bottom { position: relative; z-index: 2; }
 
     .smart-card-title {
       font-size: 0.78rem;
@@ -414,7 +413,7 @@
       margin-top: 2px;
     }
 
-    /* COMPACT RECENTLY ADDED HORIZONTAL STRIP */
+    /* COMPACT RECENTLY ADDED STRIP */
     .recent-strip {
       display: flex;
       gap: 0.6rem;
@@ -426,15 +425,15 @@
     .recent-strip::-webkit-scrollbar { display: none; }
 
     .album-card {
-      width: 82px;
+      width: 80px;
       flex-shrink: 0;
       cursor: pointer;
     }
 
     .album-art-wrap {
       position: relative;
-      width: 82px;
-      height: 82px;
+      width: 80px;
+      height: 80px;
       border-radius: 10px;
       overflow: hidden;
       background: var(--am-card);
@@ -460,7 +459,7 @@
       text-overflow: ellipsis;
     }
 
-    /* TRENDING SEARCH & CLEAN LANGUAGE TEXT TABS (NO ICONS) */
+    /* TRENDING TABS & SEARCH */
     .trending-lang-tabs {
       display: flex;
       gap: 0.4rem;
@@ -536,7 +535,7 @@
 
     .trending-clear-btn.show { display: inline-flex; }
 
-    /* COMPACT TRACKLIST TABLE */
+    /* TRACKLIST TABLE */
     .track-table { width: 100%; }
 
     .track-row {
@@ -641,7 +640,6 @@
       cursor: pointer;
     }
 
-    /* COMPACT PLAYLIST HERO */
     .playlist-hero {
       display: flex;
       gap: 0.9rem;
@@ -911,7 +909,6 @@
       max-width: 340px;
     }
 
-    /* COMPACT SMARTPHONE BOTTOM NAV */
     .mobile-nav {
       display: none;
       height: 54px;
@@ -953,14 +950,10 @@
 </head>
 <body>
 
-  <!-- SINGLE BEATING LOGO ON STARTUP -->
+  <!-- BEATING APP ICON ON STARTUP (PLAYS FULL HEARTBEAT ANIMATION) -->
   <div id="splash-screen">
     <div class="splash-logo-wrap">
-      <svg width="46" height="46" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M9 18V5l12-2v13"></path>
-        <circle cx="6" cy="18" r="3" fill="#ffffff"></circle>
-        <circle cx="18" cy="16" r="3" fill="#ffffff"></circle>
-      </svg>
+      <img src="/icon-512.png" alt="Musix" />
     </div>
   </div>
 
@@ -969,13 +962,7 @@
   <div class="app-shell">
     <aside class="sidebar">
       <div class="brand">
-        <div class="brand-badge">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M9 18V5l12-2v13"></path>
-            <circle cx="6" cy="18" r="3" fill="#ffffff"></circle>
-            <circle cx="18" cy="16" r="3" fill="#ffffff"></circle>
-          </svg>
-        </div>
+        <img src="/icon-192.png" alt="Musix" />
         <span>Musix</span>
       </div>
 
@@ -1038,13 +1025,7 @@
       <section id="view-home" class="view active">
         <div class="home-top-brand">
           <div class="home-top-brand-left">
-            <div class="home-top-brand-logo">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M9 18V5l12-2v13"></path>
-                <circle cx="6" cy="18" r="3" fill="#ffffff"></circle>
-                <circle cx="18" cy="16" r="3" fill="#ffffff"></circle>
-              </svg>
-            </div>
+            <img src="/icon-192.png" alt="Musix" />
             <span class="home-top-brand-name">Musix</span>
           </div>
           <span id="net-status-badge" class="offline-status-pill" onclick="switchView('offline')" style="cursor:pointer;">Offline Ready</span>
@@ -1077,7 +1058,7 @@
         <div id="home-quick-tracks" class="track-table"></div>
       </section>
 
-      <!-- 2. SMART MIX (SQUARE LANGUAGE, VIBE & CLEAN ARTIST TILES WITHOUT PHOTOS) -->
+      <!-- 2. SMART MIX -->
       <section id="view-smart" class="view">
         <div class="page-header">
           <h1 class="page-title">Smart Mix</h1>
@@ -1108,7 +1089,7 @@
         <div id="offline-tracks-table" class="track-table"></div>
       </section>
 
-      <!-- 4. TRENDING (NO SQUARE LANGUAGE ICONS - CLEAN SEARCH & TEXT PILLS) -->
+      <!-- 4. TRENDING -->
       <section id="view-browse" class="view">
         <div class="page-header">
           <h1 class="page-title">Trending</h1>
@@ -1352,6 +1333,8 @@
 
   <script>
     const AUDIO_CACHE_NAME = 'musix-offline-audio-v1';
+    const SPLASH_START_TIME = Date.now();
+    const MIN_SPLASH_DURATION = 2800;
 
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('/sw.js').catch(function () {});
@@ -1383,18 +1366,22 @@
     let likedIds = JSON.parse(localStorage.getItem('am_liked_ids') || '[]');
     let offlineIds = JSON.parse(localStorage.getItem('am_offline_ids') || '[]');
     let playlists = JSON.parse(localStorage.getItem('am_playlists') || '[]');
-    // Bumped to v5 so old misclassified songs (like Saroja) re-classify into Malayalam immediately
     let metaCache = JSON.parse(localStorage.getItem('am_meta_cache_v5') || '{}');
 
     const audioPlayer = document.getElementById('audio-player');
     const nextPreloader = document.getElementById('next-audio-preloader');
 
+    // Guarantees the beating logo always beats for at least 2.8 seconds on launch
     function dismissSplash() {
-      const sp = document.getElementById('splash-screen');
-      if (sp) sp.classList.add('hidden');
+      const elapsed = Date.now() - SPLASH_START_TIME;
+      const remaining = Math.max(0, MIN_SPLASH_DURATION - elapsed);
+      setTimeout(function () {
+        const sp = document.getElementById('splash-screen');
+        if (sp) sp.classList.add('hidden');
+      }, remaining);
     }
 
-    setTimeout(dismissSplash, 750);
+    setTimeout(dismissSplash, MIN_SPLASH_DURATION);
 
     function updateNetBadge() {
       const b = document.getElementById('net-status-badge');
@@ -1462,7 +1449,6 @@
       return { title: clean.trim(), artist: 'Cloud Artist' };
     }
 
-    // Strict Language & Vibe Classifier (Fixes Saroja & Varnajaalam into Malayalam)
     function classifyLanguageAndVibe(title, artist, album, genre) {
       const g = (genre || '').toLowerCase();
       const blob = (title + ' ' + artist + ' ' + album + ' ' + genre).toLowerCase();
@@ -1555,7 +1541,6 @@
       };
     }
 
-    // OFFLINE DOWNLOAD ENGINE (Saves Audio Stream + Artwork into Device Cache Storage)
     function getOfflineSongs() {
       return driveSongs.filter(function (s) { return offlineIds.includes(s.id); });
     }
@@ -1668,7 +1653,6 @@
     async function fetchLibrary(force) {
       updateNetBadge();
       if (driveSongs.length > 0) {
-        dismissSplash();
         refreshAllViews();
       }
 
@@ -1759,7 +1743,6 @@
       const groups = buildSmartGroups();
       document.getElementById('smart-lang-grid').innerHTML = renderSquareSmartCardsHTML(groups.languages, 'Language', true);
       document.getElementById('smart-vibe-grid').innerHTML = renderSquareSmartCardsHTML(groups.vibes, 'Vibe', true);
-      // Clean square Artist cards without photos
       document.getElementById('smart-artist-grid').innerHTML = renderSquareSmartCardsHTML(groups.artists, 'Artist', false);
     }
 
@@ -2166,7 +2149,6 @@
         currentBlobUrl = null;
       }
 
-      // Check Offline Cache first for instant zero-buffer offline playback
       let playedFromOfflineCache = false;
       try {
         const cache = await caches.open(AUDIO_CACHE_NAME);
@@ -2314,7 +2296,6 @@
       return m + ':' + s;
     }
 
-    // STRICT LANGUAGE FILTER FOR CLIENT-SIDE TRENDING FALLBACK
     function isStrictClientLangMatch(item, lang) {
       const genre = (item.primaryGenreName || '').toLowerCase();
       const text = ((item.trackName || '') + ' ' + (item.collectionName || '') + ' ' + (item.artistName || '')).toLowerCase();

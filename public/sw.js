@@ -1,4 +1,4 @@
-const SHELL_CACHE = 'musix-shell-v9';
+const SHELL_CACHE = 'musix-shell-v11';
 const AUDIO_CACHE = 'musix-offline-audio-v1';
 const ASSETS = [
   '/',
@@ -36,7 +36,6 @@ self.addEventListener('activate', function (e) {
 self.addEventListener('fetch', function (e) {
   const url = new URL(e.request.url);
 
-  // Serve downloaded songs from Offline Audio Cache first
   if (url.pathname.indexOf('/api/stream/') === 0) {
     e.respondWith(
       caches.open(AUDIO_CACHE).then(function (cache) {
@@ -49,15 +48,16 @@ self.addEventListener('fetch', function (e) {
     return;
   }
 
-  // Cache song list API for offline startup
   if (url.pathname === '/api/songs') {
     e.respondWith(
       fetch(e.request)
         .then(function (res) {
-          const clone = res.clone();
-          caches.open(SHELL_CACHE).then(function (cache) {
-            cache.put('/api/songs', clone);
-          });
+          if (res && res.status === 200) {
+            const clone = res.clone();
+            caches.open(SHELL_CACHE).then(function (cache) {
+              cache.put('/api/songs', clone);
+            });
+          }
           return res;
         })
         .catch(function () {
@@ -72,10 +72,12 @@ self.addEventListener('fetch', function (e) {
   e.respondWith(
     fetch(e.request)
       .then(function (res) {
-        const clone = res.clone();
-        caches.open(SHELL_CACHE).then(function (cache) {
-          cache.put(e.request, clone);
-        });
+        if (res && res.status === 200) {
+          const clone = res.clone();
+          caches.open(SHELL_CACHE).then(function (cache) {
+            cache.put(e.request, clone);
+          });
+        }
         return res;
       })
       .catch(function () {
