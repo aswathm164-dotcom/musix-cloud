@@ -28,7 +28,6 @@ let songsCache = null;
 let lastCacheTime = 0;
 const fileMetaCache = {};
 const trendingCache = {};
-const artistPhotoCache = {};
 
 async function getDriveSongs(forceRefresh = false) {
   if (!forceRefresh && songsCache && Date.now() - lastCacheTime < 30000) {
@@ -94,11 +93,12 @@ app.get('/api/songs', async (req, res) => {
   }
 });
 
-// 3. Fast Zero-Buffer Audio Stream with In-Memory Metadata & Cache Headers
+// 3. Stream & Offline Download Endpoint
 app.get('/api/stream/:fileId', async (req, res) => {
   try {
     const fileId = req.params.fileId;
     const range = req.headers.range;
+    const isDownload = req.query.download === '1';
 
     let meta = fileMetaCache[fileId];
     if (!meta) {
@@ -116,7 +116,7 @@ app.get('/api/stream/:fileId', async (req, res) => {
     const fileSize = meta.size;
     const mimeType = meta.mimeType;
 
-    if (range) {
+    if (range && !isDownload) {
       const parts = range.replace(/bytes=/, '').split('-');
       const start = parseInt(parts[0], 10);
       const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
@@ -158,58 +158,57 @@ app.get('/api/stream/:fileId', async (req, res) => {
   }
 });
 
-// 4. Real Artist Face Photo Resolver (Deezer Artist API)
-app.get('/api/artist-image', async (req, res) => {
-  const name = (req.query.name || '').trim();
-  if (!name) return res.json({ image: '/icon-512.png' });
+// Strict Language Filter for Trending Tracks
+function isStrictLanguageMatch(item, lang) {
+  const genre = (item.primaryGenreName || '').toLowerCase();
+  const text = ((item.trackName || '') + ' ' + (item.collectionName || '') + ' ' + (item.artistName || '')).toLowerCase();
 
-  const key = name.toLowerCase();
-  if (artistPhotoCache[key]) {
-    return res.json({ image: artistPhotoCache[key] });
+  if (lang === 'malayalam') {
+    if (/tamil|telugu|kannada|hindi|bollywood|kollywood|tollywood/.test(genre + ' ' + text)) return false;
+    return genre.indexOf('malayalam') !== -1 || /malayalam|mollywood|sushin|jakes bejoy|vishnu vijay|vineeth|shaan rahman|rex vijayan|gopi sundar|dabzee|govind vasantha|fejo/.test(text);
   }
+  if (lang === 'tamil') {
+    if (/malayalam|mollywood|telugu|tollywood|kannada|hindi|bollywood|sushin|vishnu vijay|jakes bejoy|vineeth sreenivasan|shaan rahman|dabzee|rex vijayan|gopi sundar|govind vasantha|varnajaalam|farhash/.test(genre + ' ' + text)) return false;
+    return genre.indexOf('tamil') !== -1 || /tamil|kollywood|anirudh|yuvan|harris jayaraj|gv prakash|santhosh narayanan|ilayaraja|sai abhyankkar|pradeep kumar|sean roldan/.test(text);
+  }
+  if (lang === 'hindi') {
+    if (/malayalam|tamil|telugu|kannada|mollywood|kollywood|tollywood/.test(genre + ' ' + text)) return false;
+    return genre.indexOf('hindi') !== -1 || genre.indexOf('bollywood') !== -1 || /hindi|bollywood|arijit|pritam|vishal mishra|sachin-jigar|shreya ghoshal|atif aslam|jubin nautiyal/.test(text);
+  }
+  if (lang === 'english') {
+    if (/malayalam|tamil|telugu|kannada|hindi|bollywood|punjabi|spanish|latin/.test(genre + ' ' + text)) return false;
+    return true;
+  }
+  return true;
+}
 
-  try {
-    const url = 'https://api.deezer.com/search/artist?q=' + encodeURIComponent(name) + '&limit=1';
-    const response = await axios.get(url, { timeout: 4500 });
-    const list = (response.data && response.data.data) || [];
-    if (list.length > 0) {
-      const pic = list[0].picture_big || list[0].picture_medium || list[0].picture_xl;
-      if (pic && pic.indexOf('/images/artist//') === -1) {
-        artistPhotoCache[key] = pic;
-        return res.json({ image: pic });
-      }
-    }
-  } catch (e) {}
-
-  return res.json({ image: '' });
-});
-
-// Helper: Fetch 100+ Songs per Language
 async function fetchLanguageTrending(lang) {
   const queriesByLang = {
     malayalam: [
-      'malayalam hits 2025 2026',
-      'sushin shyam jakes bejoy vishnu vijay',
-      'malayalam songs vineeth sreenivasan shaan rahman',
-      'mollywood hits dabzee rex vijayan gopi sundar'
+      'malayalam songs 2025 2026',
+      'sushin shyam malayalam',
+      'jakes bejoy vishnu vijay malayalam',
+      'vineeth sreenivasan shaan rahman malayalam',
+      'dabzee rex vijayan govind vasantha malayalam'
     ],
     tamil: [
-      'tamil hits 2025 2026',
-      'anirudh ravichander sai abhyankkar tamil',
-      'ar rahman yuvan shankar raja gv prakash tamil',
-      'kollywood hits santhosh narayanan harris jayaraj'
+      'tamil songs 2025 2026',
+      'anirudh ravichander tamil',
+      'yuvan shankar raja harris jayaraj tamil',
+      'gv prakash santhosh narayanan tamil',
+      'ar rahman sai abhyankkar tamil'
     ],
     hindi: [
-      'hindi hits 2025 2026',
-      'arijit singh pritam sachin jigar hindi',
-      'bollywood hits vishal mishra shreya ghoshal',
-      'hindi top songs diljit dosanjh karan aujla'
+      'hindi songs 2025 2026',
+      'arijit singh pritam hindi',
+      'sachin jigar vishal mishra hindi',
+      'bollywood hits shreya ghoshal jubin nautiyal'
     ],
     english: [
       'pop hits 2025 2026',
-      'the weeknd bruno mars taylor swift billie eilish',
-      'global hits sabrina carpenter kendrick lamar',
-      'english top songs post malone dua lipa coldplay'
+      'the weeknd bruno mars billie eilish',
+      'taylor swift sabrina carpenter post malone',
+      'dua lipa coldplay kendrick lamar'
     ]
   };
 
@@ -222,7 +221,7 @@ async function fetchLanguageTrending(lang) {
       encodeURIComponent(term) +
       '&country=' +
       country +
-      '&media=music&entity=song&limit=60';
+      '&media=music&entity=song&limit=65';
     return axios
       .get(url, { timeout: 8000 })
       .then(function (r) {
@@ -240,6 +239,8 @@ async function fetchLanguageTrending(lang) {
   for (const arr of resultsArrays) {
     for (const item of arr) {
       if (!item.trackId || !item.trackName) continue;
+      if (!isStrictLanguageMatch(item, lang)) continue;
+
       const key =
         item.trackName.toLowerCase().trim() +
         '_' +
@@ -266,7 +267,7 @@ async function fetchLanguageTrending(lang) {
   return merged;
 }
 
-// 5. Trending Songs Endpoint
+// 4. Trending Songs Endpoint
 app.get('/api/trending', async (req, res) => {
   try {
     const lang = (req.query.lang || 'malayalam').toLowerCase();
@@ -284,7 +285,7 @@ app.get('/api/trending', async (req, res) => {
   }
 });
 
-// 6. Direct Downloadable Song Link Resolver
+// 5. Direct Downloadable Song Link Resolver
 app.get('/api/song-link', async (req, res) => {
   const trackId = req.query.trackId || '';
   const trackUrl = req.query.trackUrl || '';
