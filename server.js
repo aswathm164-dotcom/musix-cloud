@@ -11,7 +11,7 @@ const upload = multer({ storage: multer.memoryStorage() });
 
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Authenticate with Google Drive using OAuth2 Refresh Token
+// Authenticate with Google Drive using OAuth2 Refresh Token (No JSON file required)
 const auth = new google.auth.OAuth2(
   process.env.GOOGLE_CLIENT_ID,
   process.env.GOOGLE_CLIENT_SECRET,
