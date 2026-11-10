@@ -1,35 +1,35 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>Musix — Apple Music Web Player</title>
+  <title>Musix — Apple Music Cloud</title>
   <link rel="manifest" href="/manifest.json" />
-  <link rel="icon" type="image/svg+xml" href="/icon.svg" />
-  <link rel="apple-touch-icon" href="/icon.svg" />
-  <meta name="theme-color" content="#161616" />
+  <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png" />
+  <link rel="apple-touch-icon" href="/icon-192.png" />
+  <meta name="theme-color" content="#0d0d0f" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <style>
     :root {
-      --am-bg: #1f1f1f;
-      --am-canvas: #161616;
-      --am-sidebar: #1c1c1e;
-      --am-card: #262629;
+      --am-canvas: #0d0d0f;
+      --am-sidebar: #141417;
+      --am-card: #1c1c21;
       --am-hover: rgba(255, 255, 255, 0.07);
       --am-border: rgba(255, 255, 255, 0.08);
       --am-accent: #fa243c;
       --am-accent-hover: #ff3b52;
+      --am-spotify: #1ed760;
       --am-text: #ffffff;
-      --am-subtext: rgba(235, 235, 245, 0.6);
-      --am-muted: rgba(235, 235, 245, 0.35);
+      --am-subtext: rgba(235, 235, 245, 0.62);
+      --am-muted: rgba(235, 235, 245, 0.38);
     }
 
     * {
       box-sizing: border-box;
       margin: 0;
       padding: 0;
-      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Segoe UI", Roboto, Helvetica, sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", "Segoe UI", Roboto, sans-serif;
       -webkit-tap-highlight-color: transparent;
     }
 
@@ -43,7 +43,107 @@
       user-select: none;
     }
 
-    /* App Layout */
+    svg {
+      display: block;
+      flex-shrink: 0;
+    }
+
+    /* CUSTOM MUSIX LOGO SPLASH SCREEN */
+    #splash-screen {
+      position: fixed;
+      inset: 0;
+      background: radial-gradient(circle at 50% 35%, #2b1118 0%, #0d0d0f 70%);
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      transition: opacity 0.45s ease, visibility 0.45s ease;
+    }
+
+    #splash-screen.hidden {
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+    }
+
+    .splash-logo-wrap {
+      position: relative;
+      width: 96px;
+      height: 96px;
+      border-radius: 24px;
+      background: linear-gradient(135deg, #fb5c74, #fa233b);
+      box-shadow: 0 18px 45px rgba(250, 36, 60, 0.45);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      animation: pulseLogo 2s infinite ease-in-out;
+    }
+
+    @keyframes pulseLogo {
+      0%, 100% { transform: scale(1); box-shadow: 0 18px 45px rgba(250, 36, 60, 0.45); }
+      50% { transform: scale(1.06); box-shadow: 0 24px 60px rgba(250, 36, 60, 0.7); }
+    }
+
+    .splash-title {
+      margin-top: 1.4rem;
+      font-size: 1.65rem;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+    }
+
+    .splash-sub {
+      margin-top: 0.4rem;
+      font-size: 0.88rem;
+      color: var(--am-subtext);
+    }
+
+    .splash-loader {
+      margin-top: 1.5rem;
+      width: 160px;
+      height: 4px;
+      background: rgba(255, 255, 255, 0.12);
+      border-radius: 99px;
+      overflow: hidden;
+    }
+
+    .splash-loader-bar {
+      width: 45%;
+      height: 100%;
+      background: var(--am-accent);
+      border-radius: 99px;
+      animation: slideBar 1.2s infinite ease-in-out;
+    }
+
+    @keyframes slideBar {
+      0% { transform: translateX(-100%); }
+      100% { transform: translateX(250%); }
+    }
+
+    /* TOAST NOTIFICATION */
+    #toast-box {
+      position: fixed;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%) translateY(-80px);
+      background: rgba(30, 30, 36, 0.95);
+      backdrop-filter: blur(16px);
+      border: 1px solid rgba(255,255,255,0.14);
+      color: #fff;
+      padding: 0.65rem 1.2rem;
+      border-radius: 99px;
+      font-size: 0.86rem;
+      font-weight: 600;
+      box-shadow: 0 12px 30px rgba(0,0,0,0.45);
+      z-index: 9000;
+      transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    #toast-box.show {
+      transform: translateX(-50%) translateY(0);
+    }
+
+    /* APP LAYOUT */
     .app-shell {
       display: flex;
       flex: 1;
@@ -51,14 +151,13 @@
       overflow: hidden;
     }
 
-    /* Left Sidebar (Apple Music Style) */
     .sidebar {
-      width: 260px;
+      width: 265px;
       background-color: var(--am-sidebar);
       border-right: 1px solid var(--am-border);
       display: flex;
       flex-direction: column;
-      padding: 1.2rem 0.85rem;
+      padding: 1.25rem 0.85rem;
       overflow-y: auto;
       flex-shrink: 0;
     }
@@ -67,16 +166,16 @@
       display: flex;
       align-items: center;
       gap: 0.65rem;
-      padding: 0 0.65rem 1.1rem;
+      padding: 0 0.65rem 1.15rem;
       font-size: 1.35rem;
-      font-weight: 700;
+      font-weight: 800;
       letter-spacing: -0.5px;
     }
 
     .brand img {
-      width: 30px;
-      height: 30px;
-      border-radius: 7px;
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
     }
 
     .search-box {
@@ -86,10 +185,10 @@
 
     .search-box input {
       width: 100%;
-      background: rgba(255, 255, 255, 0.08);
+      background: rgba(255, 255, 255, 0.07);
       border: 1px solid var(--am-border);
-      border-radius: 8px;
-      padding: 0.55rem 0.75rem 0.55rem 2.1rem;
+      border-radius: 9px;
+      padding: 0.6rem 0.75rem 0.6rem 2.25rem;
       color: var(--am-text);
       font-size: 0.88rem;
       outline: none;
@@ -97,28 +196,27 @@
 
     .search-box input:focus {
       border-color: var(--am-accent);
-      background: rgba(255, 255, 255, 0.12);
+      background: rgba(255, 255, 255, 0.11);
     }
 
     .search-icon {
       position: absolute;
-      left: 0.65rem;
+      left: 0.7rem;
       top: 50%;
       transform: translateY(-50%);
       color: var(--am-subtext);
-      font-size: 0.85rem;
     }
 
     .nav-group {
-      margin-bottom: 1.4rem;
+      margin-bottom: 1.35rem;
     }
 
     .nav-group-label {
-      font-size: 0.72rem;
+      font-size: 0.7rem;
       font-weight: 700;
       text-transform: uppercase;
-      letter-spacing: 0.06em;
-      color: var(--am-subtext);
+      letter-spacing: 0.08em;
+      color: var(--am-muted);
       padding: 0 0.65rem 0.45rem;
       display: flex;
       justify-content: space-between;
@@ -130,16 +228,22 @@
       align-items: center;
       gap: 0.75rem;
       width: 100%;
-      padding: 0.55rem 0.65rem;
+      padding: 0.58rem 0.7rem;
       border: none;
       background: transparent;
       color: var(--am-text);
-      font-size: 0.92rem;
+      font-size: 0.9rem;
       font-weight: 500;
-      border-radius: 8px;
+      border-radius: 9px;
       cursor: pointer;
       text-align: left;
-      transition: background 0.15s;
+      transition: all 0.15s;
+    }
+
+    .nav-item svg {
+      color: var(--am-accent);
+      width: 19px;
+      height: 19px;
     }
 
     .nav-item:hover {
@@ -148,33 +252,16 @@
 
     .nav-item.active {
       background: rgba(250, 36, 60, 0.18);
-      color: var(--am-accent);
+      color: #fff;
       font-weight: 600;
     }
 
-    .nav-icon {
-      color: var(--am-accent);
-      font-size: 1.05rem;
-      width: 20px;
-      text-align: center;
-    }
-
-    .add-playlist-btn {
-      background: none;
-      border: none;
-      color: var(--am-accent);
-      font-size: 1.1rem;
-      font-weight: 700;
-      cursor: pointer;
-      line-height: 1;
-    }
-
-    /* Main Viewport */
+    /* MAIN CONTENT */
     .main-content {
       flex: 1;
       overflow-y: auto;
-      padding: 2rem 2.5rem 4rem;
-      background: linear-gradient(180deg, #25161a 0%, var(--am-canvas) 260px);
+      padding: 2rem 2.5rem 5rem;
+      background: linear-gradient(180deg, #221217 0%, var(--am-canvas) 280px);
     }
 
     .view {
@@ -187,11 +274,10 @@
     }
 
     @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(4px); }
+      from { opacity: 0; transform: translateY(5px); }
       to { opacity: 1; transform: translateY(0); }
     }
 
-    /* Page Headers */
     .page-header {
       display: flex;
       justify-content: space-between;
@@ -211,24 +297,25 @@
 
     .page-subtitle {
       color: var(--am-subtext);
-      font-size: 0.9rem;
+      font-size: 0.88rem;
       margin-top: 0.25rem;
     }
 
     .header-actions {
       display: flex;
-      gap: 0.65rem;
+      gap: 0.6rem;
       align-items: center;
+      flex-wrap: wrap;
     }
 
     .btn-am {
       background: var(--am-accent);
       color: #fff;
       border: none;
-      padding: 0.55rem 1.15rem;
-      border-radius: 8px;
+      padding: 0.55rem 1.1rem;
+      border-radius: 9px;
       font-weight: 600;
-      font-size: 0.88rem;
+      font-size: 0.86rem;
       cursor: pointer;
       display: inline-flex;
       align-items: center;
@@ -236,22 +323,17 @@
       transition: background 0.15s, transform 0.1s;
     }
 
-    .btn-am:hover {
-      background: var(--am-accent-hover);
-    }
-
-    .btn-am:active {
-      transform: scale(0.97);
-    }
+    .btn-am:hover { background: var(--am-accent-hover); }
+    .btn-am:active { transform: scale(0.97); }
 
     .btn-am-secondary {
-      background: rgba(255, 255, 255, 0.1);
+      background: rgba(255, 255, 255, 0.09);
       color: var(--am-text);
       border: 1px solid var(--am-border);
-      padding: 0.55rem 1.1rem;
-      border-radius: 8px;
+      padding: 0.55rem 1rem;
+      border-radius: 9px;
       font-weight: 600;
-      font-size: 0.88rem;
+      font-size: 0.86rem;
       cursor: pointer;
       display: inline-flex;
       align-items: center;
@@ -259,12 +341,72 @@
     }
 
     .btn-am-secondary:hover {
-      background: rgba(255, 255, 255, 0.16);
+      background: rgba(255, 255, 255, 0.15);
     }
 
-    /* Hero Cards Grid (Home / Listen Now) */
+    .btn-spotify {
+      background: rgba(30, 215, 96, 0.14);
+      color: var(--am-spotify);
+      border: 1px solid rgba(30, 215, 96, 0.3);
+      padding: 0.38rem 0.7rem;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 0.76rem;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      text-decoration: none;
+    }
+
+    .btn-spotify:hover {
+      background: rgba(30, 215, 96, 0.25);
+    }
+
+    /* SMART AUTO-PLAYLIST CARDS */
+    .smart-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+
+    .smart-card {
+      position: relative;
+      border-radius: 14px;
+      padding: 1.2rem;
+      min-height: 115px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      cursor: pointer;
+      overflow: hidden;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+    .smart-card:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 12px 26px rgba(0, 0, 0, 0.45);
+    }
+
+    .smart-card-title {
+      font-size: 1.12rem;
+      font-weight: 800;
+      letter-spacing: -0.3px;
+      z-index: 2;
+    }
+
+    .smart-card-count {
+      font-size: 0.78rem;
+      color: rgba(255, 255, 255, 0.8);
+      font-weight: 600;
+      z-index: 2;
+    }
+
+    /* ALBUM GRID */
     .section-title {
-      font-size: 1.3rem;
+      font-size: 1.25rem;
       font-weight: 700;
       margin: 1.5rem 0 0.9rem;
       letter-spacing: -0.3px;
@@ -275,8 +417,8 @@
 
     .card-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(165px, 1fr));
-      gap: 1.25rem;
+      grid-template-columns: repeat(auto-fill, minmax(155px, 1fr));
+      gap: 1.2rem;
     }
 
     .album-card {
@@ -284,15 +426,13 @@
       transition: transform 0.2s;
     }
 
-    .album-card:hover {
-      transform: translateY(-3px);
-    }
+    .album-card:hover { transform: translateY(-3px); }
 
     .album-art-wrap {
       position: relative;
       width: 100%;
       aspect-ratio: 1 / 1;
-      border-radius: 10px;
+      border-radius: 11px;
       overflow: hidden;
       background: var(--am-card);
       box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
@@ -316,9 +456,7 @@
       transition: opacity 0.2s;
     }
 
-    .album-card:hover .card-play-overlay {
-      opacity: 1;
-    }
+    .album-card:hover .card-play-overlay { opacity: 1; }
 
     .overlay-circle {
       width: 44px;
@@ -329,12 +467,10 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 1.1rem;
-      backdrop-filter: blur(8px);
     }
 
     .card-title {
-      font-size: 0.9rem;
+      font-size: 0.88rem;
       font-weight: 600;
       white-space: nowrap;
       overflow: hidden;
@@ -342,7 +478,7 @@
     }
 
     .card-sub {
-      font-size: 0.8rem;
+      font-size: 0.78rem;
       color: var(--am-subtext);
       white-space: nowrap;
       overflow: hidden;
@@ -350,73 +486,76 @@
       margin-top: 2px;
     }
 
-    /* Apple Music Tracklist Table */
+    /* TRACKLIST TABLE */
     .track-table {
       width: 100%;
-      border-collapse: collapse;
     }
 
     .track-row {
       display: grid;
-      grid-template-columns: 36px 48px 1fr 180px 110px;
+      grid-template-columns: 32px 46px 1fr 170px auto;
       align-items: center;
       gap: 0.85rem;
-      padding: 0.5rem 0.75rem;
-      border-radius: 8px;
+      padding: 0.52rem 0.75rem;
+      border-radius: 9px;
       border-bottom: 1px solid rgba(255, 255, 255, 0.04);
       cursor: pointer;
       transition: background 0.12s;
     }
 
-    .track-row:hover {
-      background: var(--am-hover);
-    }
-
-    .track-row.playing {
-      background: rgba(250, 36, 60, 0.14);
-    }
-
-    .track-row.playing .track-name {
-      color: var(--am-accent);
-    }
+    .track-row:hover { background: var(--am-hover); }
+    .track-row.playing { background: rgba(250, 36, 60, 0.15); }
+    .track-row.playing .track-name { color: var(--am-accent); font-weight: 700; }
 
     .track-num {
       color: var(--am-subtext);
-      font-size: 0.85rem;
+      font-size: 0.82rem;
       text-align: center;
+      font-variant-numeric: tabular-nums;
     }
 
-    .track-Thumb {
+    .track-thumb {
       width: 42px;
       height: 42px;
-      border-radius: 6px;
+      border-radius: 7px;
       object-fit: cover;
       background: var(--am-card);
     }
 
-    .track-main {
-      min-width: 0;
-    }
+    .track-main { min-width: 0; }
 
     .track-name {
       font-weight: 500;
-      font-size: 0.93rem;
+      font-size: 0.92rem;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
     }
 
     .track-artist {
-      font-size: 0.8rem;
+      font-size: 0.78rem;
       color: var(--am-subtext);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
       margin-top: 2px;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    .tag-pill {
+      display: inline-block;
+      font-size: 0.65rem;
+      font-weight: 600;
+      padding: 0.1rem 0.45rem;
+      border-radius: 99px;
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--am-subtext);
     }
 
     .track-album {
-      font-size: 0.84rem;
+      font-size: 0.8rem;
       color: var(--am-subtext);
       white-space: nowrap;
       overflow: hidden;
@@ -427,17 +566,19 @@
       display: flex;
       align-items: center;
       justify-content: flex-end;
-      gap: 0.55rem;
+      gap: 0.45rem;
     }
 
     .icon-btn {
       background: none;
       border: none;
       color: var(--am-subtext);
-      font-size: 1rem;
       cursor: pointer;
-      padding: 0.3rem;
-      border-radius: 6px;
+      padding: 0.38rem;
+      border-radius: 7px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
       transition: color 0.15s, background 0.15s;
     }
 
@@ -446,30 +587,27 @@
       background: rgba(255, 255, 255, 0.1);
     }
 
-    .icon-btn.liked {
-      color: var(--am-accent);
-    }
+    .icon-btn.liked { color: var(--am-accent); }
 
-    /* Playlist Banner */
+    /* PLAYLIST HERO */
     .playlist-hero {
       display: flex;
-      gap: 1.75rem;
+      gap: 1.6rem;
       align-items: flex-end;
-      margin-bottom: 2rem;
-      padding-bottom: 1.5rem;
+      margin-bottom: 1.8rem;
+      padding-bottom: 1.4rem;
       border-bottom: 1px solid var(--am-border);
       flex-wrap: wrap;
     }
 
     .playlist-cover-box {
-      width: 190px;
-      height: 190px;
-      border-radius: 12px;
+      width: 175px;
+      height: 175px;
+      border-radius: 14px;
       background: linear-gradient(135deg, #fa243c, #7928ca);
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 4rem;
       box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
       flex-shrink: 0;
       overflow: hidden;
@@ -481,50 +619,37 @@
       object-fit: cover;
     }
 
-    /* Status Badges for Weekly Trending */
-    .badge-in-drive {
-      font-size: 0.72rem;
-      font-weight: 700;
-      color: #30d158;
-      background: rgba(48, 209, 88, 0.15);
-      padding: 0.25rem 0.55rem;
-      border-radius: 6px;
-    }
-
-    /* Upload Card */
+    /* UPLOAD BOX */
     .upload-box {
       background: var(--am-card);
       border: 1px solid var(--am-border);
       border-radius: 14px;
-      padding: 2rem;
+      padding: 1.8rem;
       max-width: 520px;
     }
 
     .am-input {
       width: 100%;
-      background: rgba(0, 0, 0, 0.3);
+      background: rgba(0, 0, 0, 0.35);
       border: 1px solid var(--am-border);
       color: var(--am-text);
       padding: 0.75rem 1rem;
-      border-radius: 8px;
-      font-size: 0.92rem;
+      border-radius: 9px;
+      font-size: 0.9rem;
       margin-top: 0.4rem;
-      margin-bottom: 1.2rem;
+      margin-bottom: 1.1rem;
       outline: none;
     }
 
-    .am-input:focus {
-      border-color: var(--am-accent);
-    }
+    .am-input:focus { border-color: var(--am-accent); }
 
     .am-dropzone {
       border: 2px dashed rgba(255, 255, 255, 0.18);
-      border-radius: 10px;
-      padding: 2.2rem 1rem;
+      border-radius: 12px;
+      padding: 2rem 1rem;
       text-align: center;
       cursor: pointer;
-      margin-bottom: 1.2rem;
-      transition: border-color 0.2s, background 0.2s;
+      margin-bottom: 1.1rem;
     }
 
     .am-dropzone:hover {
@@ -532,69 +657,66 @@
       background: rgba(250, 36, 60, 0.05);
     }
 
-    /* Apple Music Glassmorphic Player Bar */
+    /* BOTTOM MINI PLAYER BAR (CLICK TO EXPAND FULLSCREEN) */
     .am-player-bar {
       height: 84px;
-      background: rgba(28, 28, 30, 0.88);
-      backdrop-filter: saturate(180%) blur(24px);
+      background: rgba(22, 22, 26, 0.92);
+      backdrop-filter: saturate(180%) blur(25px);
       border-top: 1px solid var(--am-border);
       display: grid;
-      grid-template-columns: 260px 1fr 240px;
+      grid-template-columns: 240px 1fr 240px;
       align-items: center;
-      padding: 0 1.5rem;
+      padding: 0 1.4rem;
       gap: 1rem;
       z-index: 200;
+      cursor: pointer;
     }
 
     .transport-controls {
       display: flex;
       align-items: center;
-      gap: 1.1rem;
+      gap: 0.85rem;
     }
 
     .ctrl-icon {
       background: none;
       border: none;
       color: var(--am-text);
-      font-size: 1.15rem;
       cursor: pointer;
       opacity: 0.85;
-      transition: opacity 0.15s, transform 0.1s;
+      padding: 0.35rem;
+      border-radius: 8px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
     }
 
-    .ctrl-icon:hover {
-      opacity: 1;
-    }
+    .ctrl-icon:hover { opacity: 1; background: rgba(255,255,255,0.08); }
+    .ctrl-icon.active-mode { color: var(--am-accent); opacity: 1; }
 
-    .ctrl-icon.active-mode {
-      color: var(--am-accent);
-      opacity: 1;
-    }
-
-    .ctrl-play-big {
-      font-size: 1.65rem;
-      opacity: 1;
-    }
-
-    /* Center Apple Music LCD Now Playing Box */
     .am-lcd {
       display: flex;
       align-items: center;
       background: rgba(255, 255, 255, 0.06);
       border: 1px solid var(--am-border);
-      border-radius: 10px;
+      border-radius: 11px;
       height: 58px;
-      padding: 0 0.85rem 0 0.45rem;
+      padding: 0 0.85rem 0 0.5rem;
       gap: 0.85rem;
       max-width: 680px;
       width: 100%;
       margin: 0 auto;
+      transition: background 0.15s;
+    }
+
+    .am-lcd:hover {
+      background: rgba(255, 255, 255, 0.1);
     }
 
     .lcd-cover {
       width: 44px;
       height: 44px;
-      border-radius: 6px;
+      border-radius: 7px;
       object-fit: cover;
       background: var(--am-card);
       flex-shrink: 0;
@@ -650,17 +772,182 @@
       display: flex;
       align-items: center;
       justify-content: flex-end;
-      gap: 0.75rem;
+      gap: 0.7rem;
     }
 
     .vol-slider {
-      width: 90px;
+      width: 85px;
       height: 4px;
       accent-color: #fff;
       cursor: pointer;
     }
 
-    /* Modals (New Playlist & Add to Playlist) */
+    /* FULL-SCREEN EXPANDABLE APPLE MUSIC NOW PLAYING MODAL */
+    #fullscreen-player {
+      position: fixed;
+      inset: 0;
+      background: #101014;
+      z-index: 1000;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 1.5rem 2rem 2.4rem;
+      transform: translateY(105%);
+      transition: transform 0.42s cubic-bezier(0.22, 1, 0.36, 1);
+      overflow: hidden;
+    }
+
+    #fullscreen-player.open {
+      transform: translateY(0);
+    }
+
+    .fs-bg-blur {
+      position: absolute;
+      inset: -25%;
+      background-size: cover;
+      background-position: center;
+      filter: blur(85px) saturate(210%) brightness(0.42);
+      z-index: 0;
+      transition: background-image 0.5s ease;
+    }
+
+    .fs-top-bar {
+      position: relative;
+      z-index: 2;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      max-width: 500px;
+      width: 100%;
+      margin: 0 auto;
+    }
+
+    .fs-pill-handle {
+      width: 42px;
+      height: 5px;
+      border-radius: 99px;
+      background: rgba(255, 255, 255, 0.3);
+      cursor: pointer;
+    }
+
+    .fs-main {
+      position: relative;
+      z-index: 2;
+      max-width: 420px;
+      width: 100%;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 1.4rem;
+    }
+
+    .fs-art-container {
+      width: min(72vw, 330px);
+      height: min(72vw, 330px);
+      border-radius: 18px;
+      overflow: hidden;
+      box-shadow: 0 28px 65px rgba(0, 0, 0, 0.65);
+      transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    .fs-art-container.paused {
+      transform: scale(0.88);
+    }
+
+    .fs-art-container img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .fs-meta-row {
+      width: 100%;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .fs-title {
+      font-size: 1.4rem;
+      font-weight: 800;
+      letter-spacing: -0.4px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .fs-artist {
+      font-size: 1rem;
+      color: rgba(255, 255, 255, 0.72);
+      margin-top: 3px;
+    }
+
+    .fs-badges {
+      display: flex;
+      gap: 0.45rem;
+      margin-top: 0.45rem;
+    }
+
+    .fs-progress-wrap {
+      width: 100%;
+    }
+
+    .fs-scrubber {
+      width: 100%;
+      height: 6px;
+      accent-color: #fff;
+      cursor: pointer;
+    }
+
+    .fs-time-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.75rem;
+      color: rgba(255, 255, 255, 0.6);
+      margin-top: 0.4rem;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .fs-controls {
+      width: 100%;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.3rem 0.5rem;
+    }
+
+    .fs-play-btn {
+      width: 68px;
+      height: 68px;
+      border-radius: 50%;
+      background: #fff;
+      color: #000;
+      border: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.35);
+    }
+
+    .fs-vol-row {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      gap: 0.85rem;
+      color: rgba(255, 255, 255, 0.65);
+    }
+
+    .fs-vol-slider {
+      flex: 1;
+      height: 5px;
+      accent-color: #fff;
+      cursor: pointer;
+    }
+
+    /* MODALS */
     .modal-backdrop {
       position: fixed;
       inset: 0;
@@ -669,33 +956,24 @@
       display: none;
       align-items: center;
       justify-content: center;
-      z-index: 500;
+      z-index: 1200;
     }
 
-    .modal-backdrop.open {
-      display: flex;
-    }
+    .modal-backdrop.open { display: flex; }
 
     .modal-card {
-      background: #252528;
+      background: #202026;
       border: 1px solid var(--am-border);
-      border-radius: 14px;
+      border-radius: 16px;
       padding: 1.5rem;
       width: 90%;
       max-width: 380px;
-      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
     }
 
-    .modal-title {
-      font-size: 1.15rem;
-      font-weight: 700;
-      margin-bottom: 1rem;
-    }
-
-    /* Mobile Bottom Tab Bar */
+    /* MOBILE NAVIGATION */
     .mobile-nav {
       display: none;
-      background: rgba(24, 24, 26, 0.95);
+      background: rgba(18, 18, 22, 0.96);
       backdrop-filter: blur(20px);
       border-top: 1px solid var(--am-border);
       justify-content: space-around;
@@ -707,123 +985,141 @@
       background: none;
       border: none;
       color: var(--am-subtext);
-      font-size: 0.68rem;
+      font-size: 0.67rem;
+      font-weight: 600;
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 0.2rem;
+      gap: 0.22rem;
       cursor: pointer;
     }
 
-    .mob-tab.active {
-      color: var(--am-accent);
-    }
-
-    .mob-tab span:first-child {
-      font-size: 1.2rem;
-    }
+    .mob-tab.active { color: var(--am-accent); }
 
     @media (max-width: 768px) {
-      .sidebar {
-        display: none;
-      }
-      .app-shell {
-        height: calc(100vh - 138px);
-      }
-      .main-content {
-        padding: 1.25rem 1rem 3rem;
-      }
-      .track-row {
-        grid-template-columns: 28px 42px 1fr 75px;
-      }
-      .track-album {
-        display: none;
-      }
+      .sidebar { display: none; }
+      .app-shell { height: calc(100vh - 134px); }
+      .main-content { padding: 1.2rem 1rem 4rem; }
+      .track-row { grid-template-columns: 26px 42px 1fr auto; }
+      .track-album { display: none; }
       .am-player-bar {
         grid-template-columns: 1fr auto;
-        height: 72px;
+        height: 70px;
         padding: 0 0.85rem;
       }
-      .right-controls {
-        display: none;
-      }
+      .right-controls { display: none; }
       .am-lcd {
         order: -1;
         background: transparent;
         border: none;
         padding: 0;
       }
-      .mobile-nav {
-        display: flex;
-      }
+      .mobile-nav { display: flex; }
     }
   </style>
 </head>
 <body>
 
+  <!-- CUSTOM MUSIX LOGO SPLASH SCREEN -->
+  <div id="splash-screen">
+    <div class="splash-logo-wrap">
+      <svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M9 18V5l12-2v13"></path>
+        <circle cx="6" cy="18" r="3" fill="#ffffff"></circle>
+        <circle cx="18" cy="16" r="3" fill="#ffffff"></circle>
+      </svg>
+    </div>
+    <div class="splash-title">Musix</div>
+    <div class="splash-sub" id="splash-status">Connecting to your Cloud Library...</div>
+    <div class="splash-loader"><div class="splash-loader-bar"></div></div>
+    <button class="btn-am-secondary" style="margin-top:1.8rem; font-size:0.78rem;" onclick="dismissSplash()">Enter App Immediately</button>
+  </div>
+
+  <!-- TOAST -->
+  <div id="toast-box">Copied to clipboard!</div>
+
   <div class="app-shell">
-    <!-- APPLE MUSIC SIDEBAR -->
+    <!-- SIDEBAR -->
     <aside class="sidebar">
       <div class="brand">
-        <img src="/icon.svg" alt="Musix" />
-        <span>Music</span>
+        <img src="/icon-192.png" alt="Musix" />
+        <span>Musix</span>
       </div>
 
       <div class="search-box">
-        <span class="search-icon">🔍</span>
-        <input type="text" id="global-search" placeholder="Search Library" oninput="handleSearch(this.value)" />
+        <span class="search-icon">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+        </span>
+        <input type="text" id="global-search" placeholder="Search songs, artists, vibe..." oninput="handleSearch(this.value)" />
       </div>
 
       <div class="nav-group">
         <button class="nav-item active" id="nav-home" onclick="switchView('home')">
-          <span class="nav-icon">🏠</span> Home
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+          <span>Home</span>
+        </button>
+        <button class="nav-item" id="nav-smart" onclick="switchView('smart')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+          <span>Smart Auto-Playlists</span>
         </button>
         <button class="nav-item" id="nav-browse" onclick="switchView('browse')">
-          <span class="nav-icon">🌐</span> New & Trending
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+          <span>Weekly Trending</span>
         </button>
         <button class="nav-item" id="nav-upload" onclick="switchView('upload')">
-          <span class="nav-icon">☁️</span> Upload to Cloud
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          <span>Upload to Cloud</span>
         </button>
       </div>
 
       <div class="nav-group">
         <div class="nav-group-label">Library</div>
         <button class="nav-item" id="nav-liked" onclick="switchView('liked')">
-          <span class="nav-icon">❤️</span> Favorite Songs
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>
+          <span>Favorite Songs</span>
         </button>
         <button class="nav-item" id="nav-songs" onclick="switchView('songs')">
-          <span class="nav-icon">🎵</span> Songs
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+          <span>All Songs</span>
         </button>
       </div>
 
       <div class="nav-group">
         <div class="nav-group-label">
-          <span>Playlists</span>
-          <button class="add-playlist-btn" onclick="openNewPlaylistModal()" title="New Playlist">＋</button>
+          <span>Custom Playlists</span>
+          <button class="icon-btn" style="color:var(--am-accent);" onclick="openNewPlaylistModal()" title="New Playlist">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          </button>
         </div>
         <div id="sidebar-playlists"></div>
       </div>
     </aside>
 
-    <!-- MAIN VIEWPORT -->
+    <!-- MAIN CONTENT -->
     <main class="main-content">
 
-      <!-- 1. HOME (LISTEN NOW) -->
+      <!-- 1. HOME -->
       <section id="view-home" class="view active">
         <div class="page-header">
           <div>
             <h1 class="page-title">Home</h1>
-            <p class="page-subtitle">Personal Google Drive Cloud Streamer</p>
+            <p class="page-subtitle">Personal Cloud Streamer • Auto-Organized Library</p>
           </div>
           <div class="header-actions">
-            <button class="btn-am" onclick="playAllLibrary(false)">▶ Play All</button>
-            <button class="btn-am-secondary" onclick="playAllLibrary(true)">⇄ Shuffle</button>
+            <button class="btn-am" onclick="playAllLibrary(false)">Play All</button>
+            <button class="btn-am-secondary" onclick="playAllLibrary(true)">Shuffle</button>
+            <button class="btn-am-secondary" onclick="fetchLibrary(true)">Sync Drive</button>
           </div>
         </div>
 
         <div class="section-title">
-          <span>Recently Added to Drive</span>
-          <button class="btn-am-secondary" onclick="fetchLibrary()">↻ Sync Drive</button>
+          <span>Smart Vibe & Language Mixes</span>
+          <button class="btn-am-secondary" style="font-size:0.78rem; padding:0.35rem 0.75rem;" onclick="switchView('smart')">See All Mixes</button>
+        </div>
+        <div id="home-smart-preview" class="smart-grid"></div>
+
+        <div class="section-title">
+          <span>Recently Added</span>
         </div>
         <div id="home-recent-grid" class="card-grid"></div>
 
@@ -833,96 +1129,118 @@
         <div id="home-quick-tracks" class="track-table"></div>
       </section>
 
-      <!-- 2. BROWSE (WEEKLY TRENDING) -->
+      <!-- 2. SMART AUTO-PLAYLISTS (LANGUAGE, VIBE, ARTIST) -->
+      <section id="view-smart" class="view">
+        <div class="page-header">
+          <div>
+            <h1 class="page-title">Smart Playlists</h1>
+            <p class="page-subtitle">Automatically aligned by Language, Vibe & Artist</p>
+          </div>
+        </div>
+
+        <div class="section-title"><span>By Language</span></div>
+        <div id="smart-lang-grid" class="smart-grid"></div>
+
+        <div class="section-title"><span>By Vibe & Mood</span></div>
+        <div id="smart-vibe-grid" class="smart-grid"></div>
+
+        <div class="section-title"><span>By Artist</span></div>
+        <div id="smart-artist-grid" class="smart-grid"></div>
+      </section>
+
+      <!-- 3. WEEKLY TRENDING (INDIA & GLOBAL + SPOTIFY LINKS) -->
       <section id="view-browse" class="view">
         <div class="page-header">
           <div>
-            <h1 class="page-title">New & Trending</h1>
-            <p class="page-subtitle">Live Apple Music Top Charts — Check missing hits & upload to your Drive</p>
+            <h1 class="page-title">Weekly Trending</h1>
+            <p class="page-subtitle">Live Top 25 Charts with 1-Click Spotify Link Copy & Direct Open</p>
           </div>
           <div class="header-actions">
             <button id="reg-india" class="btn-am" onclick="setTrendingRegion('india')">India Top 25</button>
             <button id="reg-global" class="btn-am-secondary" onclick="setTrendingRegion('global')">Global Top 25</button>
+            <button class="btn-am-secondary" onclick="fetchTrending(true)">Refresh</button>
           </div>
         </div>
         <div id="trending-container" class="track-table"></div>
       </section>
 
-      <!-- 3. FAVORITE / LIKED SONGS -->
+      <!-- 4. FAVORITES -->
       <section id="view-liked" class="view">
         <div class="playlist-hero">
-          <div class="playlist-cover-box">❤️</div>
+          <div class="playlist-cover-box">
+            <svg width="68" height="68" viewBox="0 0 24 24" fill="#ffffff" stroke="#ffffff" stroke-width="1.5"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>
+          </div>
           <div>
-            <p style="font-size:0.78rem; font-weight:700; text-transform:uppercase; color:var(--am-accent);">Playlist</p>
+            <p style="font-size:0.75rem; font-weight:700; text-transform:uppercase; color:var(--am-accent);">Collection</p>
             <h1 class="page-title" style="margin:0.2rem 0 0.4rem;">Favorite Songs</h1>
-            <p class="page-subtitle" id="liked-count-label">Songs you loved across your cloud library</p>
+            <p class="page-subtitle" id="liked-count-label">0 Songs</p>
             <div class="header-actions" style="margin-top:1rem;">
-              <button class="btn-am" onclick="playSongList(getLikedSongs(), false)">▶ Play</button>
-              <button class="btn-am-secondary" onclick="playSongList(getLikedSongs(), true)">⇄ Shuffle</button>
+              <button class="btn-am" onclick="playSongList(getLikedSongs(), false)">Play</button>
+              <button class="btn-am-secondary" onclick="playSongList(getLikedSongs(), true)">Shuffle</button>
             </div>
           </div>
         </div>
         <div id="liked-tracks-table" class="track-table"></div>
       </section>
 
-      <!-- 4. ALL SONGS LIBRARY -->
+      <!-- 5. ALL SONGS -->
       <section id="view-songs" class="view">
         <div class="page-header">
           <div>
-            <h1 class="page-title">Songs</h1>
-            <p class="page-subtitle" id="total-songs-count">All tracks stored in your Google Drive</p>
+            <h1 class="page-title">All Songs</h1>
+            <p class="page-subtitle" id="total-songs-count">Cloud Library</p>
           </div>
           <div class="header-actions">
-            <button class="btn-am" onclick="playAllLibrary(false)">▶ Play</button>
-            <button class="btn-am-secondary" onclick="playAllLibrary(true)">⇄ Shuffle</button>
+            <button class="btn-am" onclick="playAllLibrary(false)">Play</button>
+            <button class="btn-am-secondary" onclick="playAllLibrary(true)">Shuffle</button>
           </div>
         </div>
         <div id="all-songs-table" class="track-table"></div>
       </section>
 
-      <!-- 5. CUSTOM PLAYLIST VIEW -->
+      <!-- 6. DYNAMIC / CUSTOM PLAYLIST VIEW -->
       <section id="view-playlist" class="view">
         <div class="playlist-hero">
-          <div class="playlist-cover-box" id="pl-hero-cover">🎵</div>
+          <div class="playlist-cover-box" id="pl-hero-cover"></div>
           <div>
-            <p style="font-size:0.78rem; font-weight:700; text-transform:uppercase; color:var(--am-accent);">Custom Playlist</p>
+            <p style="font-size:0.75rem; font-weight:700; text-transform:uppercase; color:var(--am-accent);" id="pl-hero-type">Playlist</p>
             <h1 class="page-title" id="pl-hero-title" style="margin:0.2rem 0 0.4rem;">Playlist</h1>
             <p class="page-subtitle" id="pl-hero-meta">0 Songs</p>
             <div class="header-actions" style="margin-top:1rem;">
-              <button class="btn-am" onclick="playActivePlaylist(false)">▶ Play</button>
-              <button class="btn-am-secondary" onclick="playActivePlaylist(true)">⇄ Shuffle</button>
-              <button class="btn-am-secondary" onclick="deleteActivePlaylist()" style="color:#ff453a;">🗑 Delete</button>
+              <button class="btn-am" onclick="playActivePlaylist(false)">Play</button>
+              <button class="btn-am-secondary" onclick="playActivePlaylist(true)">Shuffle</button>
+              <button class="btn-am-secondary" id="pl-delete-btn" onclick="deleteActivePlaylist()" style="color:#ff453a;">Delete</button>
             </div>
           </div>
         </div>
         <div id="playlist-tracks-table" class="track-table"></div>
       </section>
 
-      <!-- 6. UPLOAD TO GOOGLE DRIVE -->
+      <!-- 7. UPLOAD -->
       <section id="view-upload" class="view">
         <div class="page-header">
           <div>
             <h1 class="page-title">Upload to Cloud</h1>
-            <p class="page-subtitle">Add MP3, M4A, WAV, or FLAC directly to your Google Drive server</p>
+            <p class="page-subtitle">Add MP3, M4A, WAV, or FLAC directly to your Google Drive</p>
           </div>
         </div>
 
         <div class="upload-box">
           <form id="upload-form" onsubmit="handleUpload(event)">
-            <label style="font-size:0.85rem; font-weight:600; color:var(--am-subtext);">Song Title & Artist</label>
-            <input type="text" id="song-title" class="am-input" placeholder="e.g. Gehra Hua - Arijit Singh" required />
+            <label style="font-size:0.84rem; font-weight:600; color:var(--am-subtext);">Song Title & Artist (e.g. Illuminati - Sushin Shyam)</label>
+            <input type="text" id="song-title" class="am-input" placeholder="Title - Artist" required />
 
             <div class="am-dropzone" onclick="document.getElementById('audio-file').click()">
-              <div style="font-size:2rem; margin-bottom:0.5rem;">☁️</div>
-              <p id="file-label" style="font-weight:600;">Click to select an audio file from your device</p>
-              <p style="font-size:0.78rem; color:var(--am-subtext); margin-top:0.3rem;">Streams across all your devices with automatic Apple Music cover art</p>
+              <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#fa243c" stroke-width="2" style="margin:0 auto 0.6rem;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              <p id="file-label" style="font-weight:600;">Tap to select an audio file</p>
+              <p style="font-size:0.78rem; color:var(--am-subtext); margin-top:0.3rem;">Auto-detects Artwork, Language, Artist & Vibe</p>
               <input type="file" id="audio-file" accept="audio/*" style="display:none;" onchange="handleFileSelect(event)" required />
             </div>
 
             <button type="submit" id="upload-submit-btn" class="btn-am" style="width:100%; justify-content:center; padding:0.8rem;">
               Upload to Google Drive
             </button>
-            <p id="upload-status" style="margin-top:1rem; font-size:0.88rem; text-align:center;"></p>
+            <p id="upload-status" style="margin-top:1rem; font-size:0.86rem; text-align:center;"></p>
           </form>
         </div>
       </section>
@@ -933,61 +1251,148 @@
   <!-- MOBILE BOTTOM NAVIGATION -->
   <nav class="mobile-nav">
     <button class="mob-tab active" id="mob-home" onclick="switchView('home')">
-      <span>🏠</span><span>Home</span>
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+      <span>Home</span>
+    </button>
+    <button class="mob-tab" id="mob-smart" onclick="switchView('smart')">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4"/></svg>
+      <span>Smart Mix</span>
     </button>
     <button class="mob-tab" id="mob-browse" onclick="switchView('browse')">
-      <span>🌐</span><span>Trending</span>
-    </button>
-    <button class="mob-tab" id="mob-liked" onclick="switchView('liked')">
-      <span>❤️</span><span>Favorites</span>
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+      <span>Trending</span>
     </button>
     <button class="mob-tab" id="mob-songs" onclick="switchView('songs')">
-      <span>🎵</span><span>Library</span>
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+      <span>Library</span>
     </button>
     <button class="mob-tab" id="mob-upload" onclick="switchView('upload')">
-      <span>☁️</span><span>Upload</span>
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      <span>Upload</span>
     </button>
   </nav>
 
-  <!-- APPLE MUSIC GLASSMORPHIC PLAYER BAR -->
-  <footer class="am-player-bar">
-    <div class="transport-controls">
-      <button class="ctrl-icon" id="btn-shuffle" onclick="toggleShuffle()" title="Shuffle">⇄</button>
-      <button class="ctrl-icon" onclick="playPrevSong()" title="Previous">⏮</button>
-      <button class="ctrl-icon ctrl-play-big" id="play-pause-btn" onclick="togglePlay()">▶</button>
-      <button class="ctrl-icon" onclick="playNextSong()" title="Next">⏭</button>
-      <button class="ctrl-icon" id="btn-repeat" onclick="toggleRepeat()" title="Repeat">🔁</button>
+  <!-- BOTTOM MINI PLAYER (CLICK TO OPEN FULLSCREEN PLAYER) -->
+  <footer class="am-player-bar" onclick="openFullscreenPlayer(event)">
+    <div class="transport-controls" onclick="event.stopPropagation()">
+      <button class="ctrl-icon" id="btn-shuffle" onclick="toggleShuffle()" title="Shuffle">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>
+      </button>
+      <button class="ctrl-icon" onclick="playPrevSong()" title="Previous">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><polygon points="19 20 9 12 19 4 19 20"/><line x1="5" y1="19" x2="5" y2="5" stroke="currentColor" stroke-width="2.5"/></svg>
+      </button>
+      <button class="ctrl-icon" id="play-pause-btn" onclick="togglePlay()" title="Play/Pause">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 4 20 12 6 20 6 4"/></svg>
+      </button>
+      <button class="ctrl-icon" onclick="playNextSong()" title="Next">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19" stroke="currentColor" stroke-width="2.5"/></svg>
+      </button>
+      <button class="ctrl-icon" id="btn-repeat" onclick="toggleRepeat()" title="Repeat">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+      </button>
     </div>
 
     <div class="am-lcd">
-      <img id="lcd-cover" src="/icon.svg" class="lcd-cover" alt="Cover" />
+      <img id="lcd-cover" src="/icon-192.png" class="lcd-cover" alt="Cover" />
       <div class="lcd-body">
         <div class="lcd-top">
-          <div>
-            <span id="lcd-title" class="lcd-title">Not Playing</span>
-            <span id="lcd-artist" class="lcd-artist" style="margin-left:6px;">— Apple Music Cloud</span>
+          <div style="min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+            <span id="lcd-title" class="lcd-title">Tap a song to play</span>
+            <span id="lcd-artist" class="lcd-artist" style="margin-left:6px;">— Tap bar to expand player</span>
           </div>
           <span class="lcd-time"><span id="cur-time">0:00</span> / <span id="tot-time">0:00</span></span>
         </div>
-        <input type="range" id="seek-bar" class="am-scrubber" value="0" min="0" max="100" oninput="seekAudio()" />
+        <input type="range" id="seek-bar" class="am-scrubber" value="0" min="0" max="100" onclick="event.stopPropagation()" oninput="seekAudio(this.value)" />
       </div>
-      <button class="icon-btn" id="lcd-like-btn" onclick="toggleCurrentLike()" title="Favorite">♡</button>
+      <button class="icon-btn" id="lcd-like-btn" onclick="event.stopPropagation(); toggleCurrentLike()" title="Favorite">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>
+      </button>
     </div>
 
-    <div class="right-controls">
-      <span style="font-size:0.9rem; color:var(--am-subtext);">🔊</span>
+    <div class="right-controls" onclick="event.stopPropagation()">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
       <input type="range" id="vol-bar" class="vol-slider" value="100" min="0" max="100" oninput="changeVolume(this.value)" />
-      <button class="btn-am-secondary" style="padding:0.35rem 0.65rem; font-size:0.78rem;" onclick="openNewPlaylistModal()">＋ Playlist</button>
+      <button class="icon-btn" onclick="openFullscreenPlayer()" title="Expand Player">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="18 15 12 9 6 15"/></svg>
+      </button>
     </div>
 
     <audio id="audio-player" preload="metadata"></audio>
   </footer>
 
-  <!-- MODAL 1: CREATE NEW PLAYLIST -->
+  <!-- EXPANDABLE FULLSCREEN APPLE MUSIC NOW PLAYING MODAL -->
+  <div id="fullscreen-player">
+    <div class="fs-bg-blur" id="fs-bg"></div>
+
+    <div class="fs-top-bar">
+      <button class="icon-btn" style="color:#fff;" onclick="closeFullscreenPlayer()">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <div class="fs-pill-handle" onclick="closeFullscreenPlayer()"></div>
+      <button class="icon-btn" style="color:#fff;" onclick="openCurrentAddToPl()">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      </button>
+    </div>
+
+    <div class="fs-main">
+      <div class="fs-art-container paused" id="fs-art-box">
+        <img id="fs-cover" src="/icon-512.png" alt="Album Cover" />
+      </div>
+
+      <div class="fs-meta-row">
+        <div style="min-width:0;">
+          <div class="fs-title" id="fs-title">Not Playing</div>
+          <div class="fs-artist" id="fs-artist">Select a song</div>
+          <div class="fs-badges" id="fs-badges"></div>
+        </div>
+        <button class="icon-btn" id="fs-like-btn" onclick="toggleCurrentLike()" style="color:#fff;">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>
+        </button>
+      </div>
+
+      <div class="fs-progress-wrap">
+        <input type="range" id="fs-seek-bar" class="fs-scrubber" value="0" min="0" max="100" oninput="seekAudio(this.value)" />
+        <div class="fs-time-row">
+          <span id="fs-cur-time">0:00</span>
+          <span id="fs-tot-time">0:00</span>
+        </div>
+      </div>
+
+      <div class="fs-controls">
+        <button class="ctrl-icon" id="fs-btn-shuffle" onclick="toggleShuffle()">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>
+        </button>
+        <button class="ctrl-icon" onclick="playPrevSong()">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor"><polygon points="19 20 9 12 19 4 19 20"/><line x1="5" y1="19" x2="5" y2="5" stroke="currentColor" stroke-width="2.5"/></svg>
+        </button>
+        <button class="fs-play-btn" id="fs-play-pause-btn" onclick="togglePlay()">
+          <svg width="30" height="30" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 4 20 12 6 20 6 4"/></svg>
+        </button>
+        <button class="ctrl-icon" onclick="playNextSong()">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19" stroke="currentColor" stroke-width="2.5"/></svg>
+        </button>
+        <button class="ctrl-icon" id="fs-btn-repeat" onclick="toggleRepeat()">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+        </button>
+      </div>
+
+      <div class="fs-vol-row">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/></svg>
+        <input type="range" id="fs-vol-bar" class="fs-vol-slider" value="100" min="0" max="100" oninput="changeVolume(this.value)" />
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+      </div>
+    </div>
+
+    <div style="position:relative; z-index:2; text-align:center; font-size:0.75rem; color:rgba(255,255,255,0.45);">
+      Musix Cloud Streamer • Direct Google Drive Audio
+    </div>
+  </div>
+
+  <!-- MODAL: CREATE NEW PLAYLIST -->
   <div class="modal-backdrop" id="modal-new-playlist">
     <div class="modal-card">
-      <div class="modal-title">New Playlist</div>
-      <input type="text" id="new-playlist-name" class="am-input" placeholder="Playlist Name (e.g. Gym Workout)" />
+      <h3 style="margin-bottom:0.9rem;">New Custom Playlist</h3>
+      <input type="text" id="new-playlist-name" class="am-input" placeholder="Playlist Name" />
       <div style="display:flex; justify-content:flex-end; gap:0.6rem;">
         <button class="btn-am-secondary" onclick="closeModals()">Cancel</button>
         <button class="btn-am" onclick="createPlaylist()">Create</button>
@@ -995,20 +1400,29 @@
     </div>
   </div>
 
-  <!-- MODAL 2: ADD SONG TO PLAYLIST -->
+  <!-- MODAL: ADD SONG TO PLAYLIST -->
   <div class="modal-backdrop" id="modal-add-to-pl">
     <div class="modal-card">
-      <div class="modal-title">Add to Playlist</div>
-      <div id="modal-pl-choices" style="display:flex; flex-direction:column; gap:0.45rem; max-height:240px; overflow-y:auto; margin-bottom:1rem;"></div>
+      <h3 style="margin-bottom:0.9rem;">Add to Playlist</h3>
+      <div id="modal-pl-choices" style="display:flex; flex-direction:column; gap:0.45rem; max-height:220px; overflow-y:auto; margin-bottom:1rem;"></div>
       <div style="display:flex; justify-content:space-between;">
-        <button class="btn-am-secondary" onclick="openNewPlaylistModal()">＋ New Playlist</button>
+        <button class="btn-am-secondary" onclick="openNewPlaylistModal()">+ New Playlist</button>
         <button class="btn-am-secondary" onclick="closeModals()">Close</button>
       </div>
     </div>
   </div>
 
   <script>
-    // State Management
+    // Register Service Worker for instant logo splash screen
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch(() => {});
+    }
+
+    const SVG_PLAY = `<svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 4 20 12 6 20 6 4"/></svg>`;
+    const SVG_PAUSE = `<svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>`;
+    const SVG_HEART_OUTLINE = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>`;
+    const SVG_HEART_SOLID = `<svg width="18" height="18" viewBox="0 0 24 24" fill="#fa243c" stroke="#fa243c" stroke-width="2"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>`;
+
     let driveSongs = [];
     let currentQueue = [];
     let currentIndex = -1;
@@ -1017,56 +1431,111 @@
     let trendingData = { indiaTrending: [], globalTrending: [] };
     let currentRegion = 'india';
     let activePlaylistId = null;
+    let activeSmartSongs = [];
     let songPendingPlaylistAdd = null;
 
-    // Persistent Local Storage for Likes, Playlists, and iTunes Artwork Cache
     let likedIds = JSON.parse(localStorage.getItem('am_liked_ids') || '[]');
     let playlists = JSON.parse(localStorage.getItem('am_playlists') || '[]');
-    let metaCache = JSON.parse(localStorage.getItem('am_meta_cache') || '{}');
+    let metaCache = JSON.parse(localStorage.getItem('am_meta_cache_v2') || '{}');
 
     const audioPlayer = document.getElementById('audio-player');
-    const playPauseBtn = document.getElementById('play-pause-btn');
-    const seekBar = document.getElementById('seek-bar');
+
+    function dismissSplash() {
+      document.getElementById('splash-screen').classList.add('hidden');
+    }
+
+    function showToast(msg) {
+      const t = document.getElementById('toast-box');
+      t.textContent = msg;
+      t.classList.add('show');
+      setTimeout(() => t.classList.remove('show'), 2400);
+    }
 
     function saveUserData() {
       localStorage.setItem('am_liked_ids', JSON.stringify(likedIds));
       localStorage.setItem('am_playlists', JSON.stringify(playlists));
     }
 
-    // Clean raw filename into Title & Artist
     function parseTrackName(rawName) {
       const clean = rawName.replace(/\.(mp3|m4a|wav|flac|ogg)$/i, '');
       const parts = clean.split(' - ');
       if (parts.length >= 2) {
         return { title: parts[0].trim(), artist: parts.slice(1).join(' - ').trim() };
       }
-      return { title: clean.trim(), artist: 'Cloud Library' };
+      return { title: clean.trim(), artist: 'Cloud Artist' };
     }
 
-    // Automatic iTunes Search API Artwork & Metadata Enricher
+    // Smart Language & Vibe Classifier
+    function classifyLanguageAndVibe(title, artist, album, genre) {
+      const blob = `${title} ${artist} ${album} ${genre}`.toLowerCase();
+
+      // 1. Detect Language
+      let language = 'English / Global';
+      if (/malayalam|mollywood|sushin|jakes bejoy|vineeth|shaan rahman|gopi sundar|rex vijayan|dabzee|fejo|govind vasantha|vishnu vijay|aavesham|premalu|manjummel|kumbalangi|hridayam|sithara|harisankar/.test(blob)) {
+        language = 'Malayalam';
+      } else if (/tamil|kollywood|anirudh|rahman|yuvan|harris jayaraj|gv prakash|santhosh narayanan|sid sriram|ilayaraja|dhanush|lokesh|leo|jailer|vikram|saroja/.test(blob)) {
+        language = 'Tamil';
+      } else if (/hindi|bollywood|arijit|pritam|vishal|shreya ghoshal|atif|jubin|badshah|diljit|amit trivedi|sachin-jigar|ap dhillon|kk|sonu nigam|ranbir/.test(blob)) {
+        language = 'Hindi';
+      } else if (/telugu|tollywood|devi sri|thaman|allu arjun|pushpa|rrr|keeravani/.test(blob)) {
+        language = 'Telugu';
+      } else if (/kannada|sandalwood|ravi basrur|kgf|kantara|charan raj/.test(blob)) {
+        language = 'Kannada';
+      } else if (/indian|desi|punjabi|carnatic/.test(blob)) {
+        language = 'Indian Mix';
+      }
+
+      // 2. Detect Vibe / Mood
+      let vibe = 'Feel Good & Vibe';
+      if (/hip-hop|rap|electronic|dance|phonk|rock|workout|gym|bass|mass|kuthu|illuminati|hukum|power|beast|bada|party|club|remix/.test(blob)) {
+        vibe = 'High Energy & Workout';
+      } else if (/r&b|soul|lofi|lo-fi|chill|slowed|reverb|acoustic|unplugged|indie|night|sleep|ambient/.test(blob)) {
+        vibe = 'Late Night & Chill';
+      } else if (/love|romantic|melody|ballad|gehra|ishq|dil|pyaar|kaadhal|kanave|uyire|nenje|premam|heart/.test(blob)) {
+        vibe = 'Melody & Romantic';
+      }
+
+      const primaryArtist = artist.split(/,|&|feat\.|ft\./i)[0].trim() || 'Cloud Artist';
+      return { language, vibe, primaryArtist };
+    }
+
     async function enrichSongMetadata(song) {
       if (metaCache[song.id]) return metaCache[song.id];
       const parsed = parseTrackName(song.name);
+      const baseClass = classifyLanguageAndVibe(parsed.title, parsed.artist, '', '');
       const fallback = {
         title: parsed.title,
         artist: parsed.artist,
-        album: 'Google Drive Cloud',
-        artwork: '/icon.svg'
+        primaryArtist: baseClass.primaryArtist,
+        album: 'Cloud Drive',
+        genre: 'Music',
+        language: baseClass.language,
+        vibe: baseClass.vibe,
+        artwork: '/icon-512.png'
       };
       try {
-        const query = encodeURIComponent(`${parsed.title} ${parsed.artist === 'Cloud Library' ? '' : parsed.artist}`.trim());
+        const query = encodeURIComponent(`${parsed.title} ${parsed.artist === 'Cloud Artist' ? '' : parsed.artist}`.trim());
         const res = await fetch(`https://itunes.apple.com/search?term=${query}&media=music&limit=1`);
         const data = await res.json();
         if (data.results && data.results.length > 0) {
           const hit = data.results[0];
+          const artistName = hit.artistName || parsed.artist;
+          const albumName = hit.collectionName || 'Single';
+          const genreName = hit.primaryGenreName || 'Music';
+          const tags = classifyLanguageAndVibe(parsed.title, artistName, albumName, genreName);
+
           const enriched = {
             title: parsed.title,
-            artist: hit.artistName || parsed.artist,
-            album: hit.collectionName || 'Single',
-            artwork: (hit.artworkUrl100 || '/icon.svg').replace('100x100bb', '600x600bb')
+            artist: artistName,
+            primaryArtist: tags.primaryArtist,
+            album: albumName,
+            genre: genreName,
+            language: tags.language,
+            vibe: tags.vibe,
+            artwork: (hit.artworkUrl100 || '/icon-512.png').replace('100x100bb', '600x600bb')
           };
           metaCache[song.id] = enriched;
-          localStorage.setItem('am_meta_cache', JSON.stringify(metaCache));
+          localStorage.setItem('am_meta_cache_v2', JSON.stringify(metaCache));
           return enriched;
         }
       } catch (e) {}
@@ -1077,10 +1546,18 @@
     function getSongMeta(song) {
       if (metaCache[song.id]) return metaCache[song.id];
       const parsed = parseTrackName(song.name);
-      return { title: parsed.title, artist: parsed.artist, album: 'Cloud Drive', artwork: '/icon.svg' };
+      const tags = classifyLanguageAndVibe(parsed.title, parsed.artist, '', '');
+      return {
+        title: parsed.title,
+        artist: parsed.artist,
+        primaryArtist: tags.primaryArtist,
+        album: 'Cloud Drive',
+        language: tags.language,
+        vibe: tags.vibe,
+        artwork: '/icon-512.png'
+      };
     }
 
-    // Navigation
     function switchView(viewName) {
       document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
       document.querySelectorAll('.sidebar .nav-item').forEach(b => b.classList.remove('active'));
@@ -1098,6 +1575,7 @@
       if (viewName === 'browse' && trendingData.indiaTrending.length === 0) fetchTrending();
       if (viewName === 'liked') renderLikedView();
       if (viewName === 'songs') renderAllSongsView();
+      if (viewName === 'smart') renderSmartPlaylistsView();
       if (viewName === 'home') renderHomeView();
     }
 
@@ -1106,49 +1584,157 @@
       renderAllSongsView(query);
     }
 
-    // Fetch Songs from Backend
-    async function fetchLibrary() {
+    async function fetchLibrary(force = false) {
       try {
-        const res = await fetch('/api/songs');
+        const res = await fetch(force ? '/api/songs?refresh=1' : '/api/songs');
+        if (!res.ok) throw new Error('Server waking up');
         driveSongs = await res.json();
         if (currentQueue.length === 0) currentQueue = [...driveSongs];
+        dismissSplash();
         renderHomeView();
         renderAllSongsView();
+        renderSmartPlaylistsView();
         renderSidebarPlaylists();
 
-        // Background fetch Apple Music HD covers
         for (const song of driveSongs) {
           if (!metaCache[song.id]) {
             await enrichSongMetadata(song);
-            renderHomeView();
-            renderAllSongsView();
           }
         }
+        renderHomeView();
+        renderAllSongsView();
+        renderSmartPlaylistsView();
       } catch (err) {
-        console.error('Failed to load library:', err);
+        document.getElementById('splash-status').textContent = 'Waking up Render cloud server... almost ready!';
+        setTimeout(() => fetchLibrary(force), 3500);
       }
     }
 
-    // Render Home (Listen Now)
+    // Build Smart Auto-Playlists by Language, Vibe, and Artist
+    function buildSmartGroups() {
+      const languages = {};
+      const vibes = {};
+      const artists = {};
+
+      driveSongs.forEach(song => {
+        const m = getSongMeta(song);
+        if (!languages[m.language]) languages[m.language] = [];
+        languages[m.language].push(song);
+
+        if (!vibes[m.vibe]) vibes[m.vibe] = [];
+        vibes[m.vibe].push(song);
+
+        if (!artists[m.primaryArtist]) artists[m.primaryArtist] = [];
+        artists[m.primaryArtist].push(song);
+      });
+
+      return { languages, vibes, artists };
+    }
+
+    const GRADIENTS = [
+      'linear-gradient(135deg, #fa243c, #ff7b54)',
+      'linear-gradient(135deg, #6366f1, #a855f7)',
+      'linear-gradient(135deg, #0ea5e9, #2563eb)',
+      'linear-gradient(135deg, #10b981, #059669)',
+      'linear-gradient(135deg, #f59e0b, #ef4444)',
+      'linear-gradient(135deg, #ec4899, #8b5cf6)'
+    ];
+
+    function renderSmartCardsHTML(groupObj, categoryLabel) {
+      const entries = Object.entries(groupObj).sort((a, b) => b[1].length - a[1].length);
+      if (entries.length === 0) {
+        return `<p style="color:var(--am-subtext); font-size:0.86rem;">Upload songs to auto-generate ${categoryLabel} playlists.</p>`;
+      }
+      return entries.map(([name, list], i) => {
+        const bg = GRADIENTS[i % GRADIENTS.length];
+        const safeName = name.replace(/'/g, "\\'");
+        return `
+          <div class="smart-card" style="background:${bg};" onclick="openSmartPlaylist('${categoryLabel}', '${safeName}')">
+            <div class="smart-card-count">${categoryLabel}</div>
+            <div>
+              <div class="smart-card-title">${name}</div>
+              <div class="smart-card-count" style="margin-top:3px;">${list.length} ${list.length === 1 ? 'Song' : 'Songs'}</div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function renderSmartPlaylistsView() {
+      const { languages, vibes, artists } = buildSmartGroups();
+      document.getElementById('smart-lang-grid').innerHTML = renderSmartCardsHTML(languages, 'Language');
+      document.getElementById('smart-vibe-grid').innerHTML = renderSmartCardsHTML(vibes, 'Vibe Mix');
+      document.getElementById('smart-artist-grid').innerHTML = renderSmartCardsHTML(artists, 'Artist');
+    }
+
+    function openSmartPlaylist(category, name) {
+      const { languages, vibes, artists } = buildSmartGroups();
+      let list = [];
+      if (category === 'Language') list = languages[name] || [];
+      else if (category === 'Vibe Mix') list = vibes[name] || [];
+      else if (category === 'Artist') list = artists[name] || [];
+
+      activePlaylistId = null;
+      activeSmartSongs = list;
+      switchView('playlist');
+
+      document.getElementById('pl-hero-type').textContent = `Auto ${category} Playlist`;
+      document.getElementById('pl-hero-title').textContent = name;
+      document.getElementById('pl-hero-meta').textContent = `${list.length} Songs • Automatically aligned`;
+      document.getElementById('pl-delete-btn').style.display = 'none';
+
+      const coverBox = document.getElementById('pl-hero-cover');
+      if (list.length > 0) {
+        coverBox.innerHTML = `<img src="${getSongMeta(list[0]).artwork}" alt="${name}" />`;
+      } else {
+        coverBox.innerHTML = '';
+      }
+
+      document.getElementById('playlist-tracks-table').innerHTML = renderTrackRows(list);
+    }
+
     function renderHomeView() {
       const grid = document.getElementById('home-recent-grid');
       const quickTable = document.getElementById('home-quick-tracks');
+      const smartPreview = document.getElementById('home-smart-preview');
+
+      const { languages, vibes } = buildSmartGroups();
+      const combinedPreview = { ...vibes, ...languages };
+      const previewEntries = Object.entries(combinedPreview).slice(0, 4);
+
+      if (previewEntries.length > 0) {
+        smartPreview.innerHTML = previewEntries.map(([name, list], idx) => {
+          const isLang = Boolean(languages[name]);
+          const cat = isLang ? 'Language' : 'Vibe Mix';
+          const safeName = name.replace(/'/g, "\\'");
+          return `
+            <div class="smart-card" style="background:${GRADIENTS[idx % GRADIENTS.length]};" onclick="openSmartPlaylist('${cat}', '${safeName}')">
+              <div class="smart-card-count">${cat}</div>
+              <div>
+                <div class="smart-card-title">${name}</div>
+                <div class="smart-card-count">${list.length} Songs</div>
+              </div>
+            </div>
+          `;
+        }).join('');
+      } else {
+        smartPreview.innerHTML = `<p style="color:var(--am-subtext); font-size:0.86rem;">Your smart mixes will appear here as soon as you upload songs.</p>`;
+      }
 
       if (driveSongs.length === 0) {
-        grid.innerHTML = `<p style="color:var(--am-subtext);">No songs in your Google Drive yet. Click "Upload to Cloud" to add your first track!</p>`;
+        grid.innerHTML = `<p style="color:var(--am-subtext);">No songs in your Google Drive yet. Tap "Upload to Cloud" to add tracks.</p>`;
         quickTable.innerHTML = '';
         return;
       }
 
-      const recent = driveSongs.slice(0, 6);
-      grid.innerHTML = recent.map(song => {
+      grid.innerHTML = driveSongs.slice(0, 6).map(song => {
         const meta = getSongMeta(song);
         return `
           <div class="album-card" onclick="playSpecificSong('${song.id}')">
             <div class="album-art-wrap">
               <img src="${meta.artwork}" alt="${meta.title}" loading="lazy" />
               <div class="card-play-overlay">
-                <div class="overlay-circle">▶</div>
+                <div class="overlay-circle">${SVG_PLAY}</div>
               </div>
             </div>
             <div class="card-title">${meta.title}</div>
@@ -1157,10 +1743,9 @@
         `;
       }).join('');
 
-      quickTable.innerHTML = renderTrackRows(driveSongs.slice(0, 10));
+      quickTable.innerHTML = renderTrackRows(driveSongs.slice(0, 12));
     }
 
-    // Reusable Apple Music Track Rows Renderer
     function renderTrackRows(songArray, playlistIdForRemoval = null) {
       const currentPlayingId = currentQueue[currentIndex]?.id;
       return songArray.map((song, idx) => {
@@ -1170,18 +1755,24 @@
 
         return `
           <div class="track-row ${isPlaying ? 'playing' : ''}" onclick="playSpecificSong('${song.id}')">
-            <div class="track-num">${isPlaying ? '🔊' : idx + 1}</div>
-            <img src="${meta.artwork}" class="track-Thumb" alt="Art" loading="lazy" />
+            <div class="track-num">${isPlaying ? '▶' : idx + 1}</div>
+            <img src="${meta.artwork}" class="track-thumb" alt="Art" loading="lazy" />
             <div class="track-main">
               <div class="track-name">${meta.title}</div>
-              <div class="track-artist">${meta.artist}</div>
+              <div class="track-artist">
+                <span>${meta.artist}</span>
+                <span class="tag-pill">${meta.language}</span>
+                <span class="tag-pill">${meta.vibe}</span>
+              </div>
             </div>
             <div class="track-album">${meta.album}</div>
             <div class="track-actions" onclick="event.stopPropagation()">
               <button class="icon-btn ${isLiked ? 'liked' : ''}" onclick="toggleLike('${song.id}')" title="Favorite">
-                ${isLiked ? '❤️' : '♡'}
+                ${isLiked ? SVG_HEART_SOLID : SVG_HEART_OUTLINE}
               </button>
-              <button class="icon-btn" onclick="openAddToPlaylistModal('${song.id}')" title="Add to Playlist">＋</button>
+              <button class="icon-btn" onclick="openAddToPlaylistModal('${song.id}')" title="Add to Playlist">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              </button>
               ${
                 playlistIdForRemoval
                   ? `<button class="icon-btn" onclick="removeSongFromPlaylist('${playlistIdForRemoval}', '${song.id}')" title="Remove">✕</button>`
@@ -1197,16 +1788,22 @@
       const q = filterQuery.toLowerCase().trim();
       const filtered = driveSongs.filter(s => {
         const m = getSongMeta(s);
-        return s.name.toLowerCase().includes(q) || m.title.toLowerCase().includes(q) || m.artist.toLowerCase().includes(q);
+        return (
+          s.name.toLowerCase().includes(q) ||
+          m.title.toLowerCase().includes(q) ||
+          m.artist.toLowerCase().includes(q) ||
+          m.language.toLowerCase().includes(q) ||
+          m.vibe.toLowerCase().includes(q)
+        );
       });
-      document.getElementById('total-songs-count').textContent = `${filtered.length} Songs in Google Drive`;
+      document.getElementById('total-songs-count').textContent = `${filtered.length} Songs in Cloud Library`;
       document.getElementById('all-songs-table').innerHTML =
         filtered.length > 0
           ? renderTrackRows(filtered)
           : `<p style="color:var(--am-subtext); padding:1rem 0;">No matching songs found.</p>`;
     }
 
-    // Likes / Favorites System
+    // Favorites
     function getLikedSongs() {
       return driveSongs.filter(s => likedIds.includes(s.id));
     }
@@ -1218,11 +1815,10 @@
         likedIds.push(songId);
       }
       saveUserData();
-      updateLcdLikeButton();
+      updateLikeButtons();
       renderHomeView();
       renderAllSongsView(document.getElementById('global-search').value);
       renderLikedView();
-      if (activePlaylistId) renderCustomPlaylistView(activePlaylistId);
     }
 
     function toggleCurrentLike() {
@@ -1230,16 +1826,11 @@
       if (current) toggleLike(current.id);
     }
 
-    function updateLcdLikeButton() {
+    function updateLikeButtons() {
       const current = currentQueue[currentIndex];
-      const btn = document.getElementById('lcd-like-btn');
-      if (current && likedIds.includes(current.id)) {
-        btn.textContent = '❤️';
-        btn.classList.add('liked');
-      } else {
-        btn.textContent = '♡';
-        btn.classList.remove('liked');
-      }
+      const liked = current && likedIds.includes(current.id);
+      document.getElementById('lcd-like-btn').innerHTML = liked ? SVG_HEART_SOLID : SVG_HEART_OUTLINE;
+      document.getElementById('fs-like-btn').innerHTML = liked ? SVG_HEART_SOLID : SVG_HEART_OUTLINE;
     }
 
     function renderLikedView() {
@@ -1248,19 +1839,19 @@
       document.getElementById('liked-tracks-table').innerHTML =
         liked.length > 0
           ? renderTrackRows(liked)
-          : `<p style="color:var(--am-subtext); padding:1rem 0;">Tap the heart ♡ icon next to any song to add it to your Favorites.</p>`;
+          : `<p style="color:var(--am-subtext); padding:1rem 0;">Tap the heart icon on any song to save it here.</p>`;
     }
 
-    // Custom Playlists System
+    // Custom Playlists
     function renderSidebarPlaylists() {
       const box = document.getElementById('sidebar-playlists');
       if (playlists.length === 0) {
-        box.innerHTML = `<p style="font-size:0.78rem; color:var(--am-muted); padding:0.3rem 0.65rem;">No playlists yet</p>`;
+        box.innerHTML = `<p style="font-size:0.76rem; color:var(--am-muted); padding:0.3rem 0.65rem;">No custom playlists</p>`;
         return;
       }
       box.innerHTML = playlists.map(pl => `
         <button class="nav-item ${activePlaylistId === pl.id ? 'active' : ''}" onclick="openPlaylist('${pl.id}')">
-          <span class="nav-icon">🎶</span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
           <span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${pl.name}</span>
         </button>
       `).join('');
@@ -1307,36 +1898,42 @@
       if (!pl) return;
 
       const plSongs = pl.songIds.map(id => driveSongs.find(s => s.id === id)).filter(Boolean);
+      document.getElementById('pl-hero-type').textContent = 'Custom Playlist';
       document.getElementById('pl-hero-title').textContent = pl.name;
       document.getElementById('pl-hero-meta').textContent = `${plSongs.length} Songs`;
+      document.getElementById('pl-delete-btn').style.display = 'inline-flex';
 
       const coverBox = document.getElementById('pl-hero-cover');
       if (plSongs.length > 0) {
-        const firstMeta = getSongMeta(plSongs[0]);
-        coverBox.innerHTML = `<img src="${firstMeta.artwork}" alt="${pl.name}" />`;
+        coverBox.innerHTML = `<img src="${getSongMeta(plSongs[0]).artwork}" alt="${pl.name}" />`;
       } else {
-        coverBox.innerHTML = '🎶';
+        coverBox.innerHTML = '';
       }
 
       document.getElementById('playlist-tracks-table').innerHTML =
         plSongs.length > 0
           ? renderTrackRows(plSongs, pl.id)
-          : `<p style="color:var(--am-subtext); padding:1rem 0;">This playlist is empty. Click the ＋ button on any song in your library to add tracks here.</p>`;
+          : `<p style="color:var(--am-subtext); padding:1rem 0;">Empty playlist. Tap + on any track to add songs.</p>`;
     }
 
     function openAddToPlaylistModal(songId) {
       songPendingPlaylistAdd = songId;
       const listContainer = document.getElementById('modal-pl-choices');
       if (playlists.length === 0) {
-        listContainer.innerHTML = `<p style="color:var(--am-subtext); font-size:0.85rem;">You don't have any playlists yet. Create one below!</p>`;
+        listContainer.innerHTML = `<p style="color:var(--am-subtext); font-size:0.85rem;">No custom playlists yet. Create one below!</p>`;
       } else {
         listContainer.innerHTML = playlists.map(pl => `
           <button class="nav-item" style="background:rgba(255,255,255,0.06);" onclick="addSongToPlaylist('${pl.id}', '${songId}')">
-            <span>🎶</span> <span>${pl.name}</span>
+            <span>${pl.name}</span>
           </button>
         `).join('');
       }
       document.getElementById('modal-add-to-pl').classList.add('open');
+    }
+
+    function openCurrentAddToPl() {
+      const current = currentQueue[currentIndex];
+      if (current) openAddToPlaylistModal(current.id);
     }
 
     function addSongToPlaylist(plId, songId) {
@@ -1344,6 +1941,7 @@
       if (pl && !pl.songIds.includes(songId)) {
         pl.songIds.push(songId);
         saveUserData();
+        showToast(`Added to ${pl.name}`);
       }
       songPendingPlaylistAdd = null;
       closeModals();
@@ -1368,13 +1966,26 @@
     }
 
     function playActivePlaylist(shuffleMode) {
-      const pl = playlists.find(p => p.id === activePlaylistId);
-      if (!pl) return;
-      const plSongs = pl.songIds.map(id => driveSongs.find(s => s.id === id)).filter(Boolean);
-      playSongList(plSongs, shuffleMode);
+      if (activePlaylistId) {
+        const pl = playlists.find(p => p.id === activePlaylistId);
+        if (!pl) return;
+        const plSongs = pl.songIds.map(id => driveSongs.find(s => s.id === id)).filter(Boolean);
+        playSongList(plSongs, shuffleMode);
+      } else if (activeSmartSongs.length > 0) {
+        playSongList(activeSmartSongs, shuffleMode);
+      }
     }
 
-    // Audio Streaming & Playback Controls
+    // Fullscreen Expandable Player Drawer
+    function openFullscreenPlayer(e) {
+      document.getElementById('fullscreen-player').classList.add('open');
+    }
+
+    function closeFullscreenPlayer() {
+      document.getElementById('fullscreen-player').classList.remove('open');
+    }
+
+    // Playback Engine
     function playSpecificSong(songId) {
       if (currentQueue.length === 0) currentQueue = [...driveSongs];
       let idx = currentQueue.findIndex(s => s.id === songId);
@@ -1392,11 +2003,9 @@
     function playSongList(list, shuffleMode) {
       if (!list || list.length === 0) return;
       isShuffle = shuffleMode;
-      document.getElementById('btn-shuffle').classList.toggle('active-mode', isShuffle);
+      updateModeButtons();
       currentQueue = [...list];
-      if (isShuffle) {
-        currentQueue.sort(() => Math.random() - 0.5);
-      }
+      if (isShuffle) currentQueue.sort(() => Math.random() - 0.5);
       startPlaybackAtIndex(0);
     }
 
@@ -1409,16 +2018,25 @@
       audioPlayer.src = `/api/stream/${song.id}`;
       audioPlayer.play();
 
+      // Mini player UI
       document.getElementById('lcd-title').textContent = meta.title;
       document.getElementById('lcd-artist').textContent = `— ${meta.artist}`;
       document.getElementById('lcd-cover').src = meta.artwork;
-      playPauseBtn.textContent = '⏸';
-      updateLcdLikeButton();
 
+      // Fullscreen player UI
+      document.getElementById('fs-title').textContent = meta.title;
+      document.getElementById('fs-artist').textContent = `${meta.artist} — ${meta.album}`;
+      document.getElementById('fs-cover').src = meta.artwork;
+      document.getElementById('fs-bg').style.backgroundImage = `url('${meta.artwork}')`;
+      document.getElementById('fs-badges').innerHTML = `
+        <span class="tag-pill" style="background:rgba(255,255,255,0.16); color:#fff;">${meta.language}</span>
+        <span class="tag-pill" style="background:rgba(255,255,255,0.16); color:#fff;">${meta.vibe}</span>
+      `;
+
+      setPlayStateUI(true);
+      updateLikeButtons();
       renderHomeView();
       renderAllSongsView(document.getElementById('global-search').value);
-      renderLikedView();
-      if (activePlaylistId) renderCustomPlaylistView(activePlaylistId);
 
       if ('mediaSession' in navigator) {
         navigator.mediaSession.metadata = new MediaMetadata({
@@ -1434,6 +2052,12 @@
       }
     }
 
+    function setPlayStateUI(playing) {
+      document.getElementById('play-pause-btn').innerHTML = playing ? SVG_PAUSE : SVG_PLAY;
+      document.getElementById('fs-play-pause-btn').innerHTML = playing ? SVG_PAUSE : SVG_PLAY;
+      document.getElementById('fs-art-box').classList.toggle('paused', !playing);
+    }
+
     function togglePlay() {
       if (!audioPlayer.src) {
         if (driveSongs.length > 0) playAllLibrary(false);
@@ -1441,12 +2065,15 @@
       }
       if (audioPlayer.paused) {
         audioPlayer.play();
-        playPauseBtn.textContent = '⏸';
+        setPlayStateUI(true);
       } else {
         audioPlayer.pause();
-        playPauseBtn.textContent = '▶';
+        setPlayStateUI(false);
       }
     }
+
+    audioPlayer.addEventListener('play', () => setPlayStateUI(true));
+    audioPlayer.addEventListener('pause', () => setPlayStateUI(false));
 
     function playNextSong() {
       if (currentQueue.length === 0) return;
@@ -1455,8 +2082,7 @@
         audioPlayer.play();
         return;
       }
-      const nextIdx = (currentIndex + 1) % currentQueue.length;
-      startPlaybackAtIndex(nextIdx);
+      startPlaybackAtIndex((currentIndex + 1) % currentQueue.length);
     }
 
     function playPrevSong() {
@@ -1465,37 +2091,51 @@
         audioPlayer.currentTime = 0;
         return;
       }
-      const prevIdx = (currentIndex - 1 + currentQueue.length) % currentQueue.length;
-      startPlaybackAtIndex(prevIdx);
+      startPlaybackAtIndex((currentIndex - 1 + currentQueue.length) % currentQueue.length);
+    }
+
+    function updateModeButtons() {
+      document.getElementById('btn-shuffle').classList.toggle('active-mode', isShuffle);
+      document.getElementById('fs-btn-shuffle').classList.toggle('active-mode', isShuffle);
+      document.getElementById('btn-repeat').classList.toggle('active-mode', isRepeat);
+      document.getElementById('fs-btn-repeat').classList.toggle('active-mode', isRepeat);
     }
 
     function toggleShuffle() {
       isShuffle = !isShuffle;
-      document.getElementById('btn-shuffle').classList.toggle('active-mode', isShuffle);
+      updateModeButtons();
     }
 
     function toggleRepeat() {
       isRepeat = !isRepeat;
-      document.getElementById('btn-repeat').classList.toggle('active-mode', isRepeat);
+      updateModeButtons();
     }
 
     function changeVolume(val) {
       audioPlayer.volume = val / 100;
+      document.getElementById('vol-bar').value = val;
+      document.getElementById('fs-vol-bar').value = val;
     }
 
     audioPlayer.addEventListener('timeupdate', () => {
       if (audioPlayer.duration) {
-        seekBar.value = (audioPlayer.currentTime / audioPlayer.duration) * 100;
-        document.getElementById('cur-time').textContent = formatTime(audioPlayer.currentTime);
-        document.getElementById('tot-time').textContent = formatTime(audioPlayer.duration);
+        const pct = (audioPlayer.currentTime / audioPlayer.duration) * 100;
+        document.getElementById('seek-bar').value = pct;
+        document.getElementById('fs-seek-bar').value = pct;
+        const cur = formatTime(audioPlayer.currentTime);
+        const tot = formatTime(audioPlayer.duration);
+        document.getElementById('cur-time').textContent = cur;
+        document.getElementById('tot-time').textContent = tot;
+        document.getElementById('fs-cur-time').textContent = cur;
+        document.getElementById('fs-tot-time').textContent = tot;
       }
     });
 
     audioPlayer.addEventListener('ended', playNextSong);
 
-    function seekAudio() {
+    function seekAudio(val) {
       if (audioPlayer.duration) {
-        audioPlayer.currentTime = (seekBar.value / 100) * audioPlayer.duration;
+        audioPlayer.currentTime = (val / 100) * audioPlayer.duration;
       }
     }
 
@@ -1505,16 +2145,52 @@
       return `${m}:${s}`;
     }
 
-    // Weekly Trending Charts
+    // Weekly Trending with Direct Browser Fallback + Spotify Copy/Open Links
+    async function fetchDirectItunesRss(country) {
+      const res = await fetch(`https://itunes.apple.com/${country}/rss/topsongs/limit=25/json`);
+      const data = await res.json();
+      const uploadedNames = driveSongs.map(f => f.name.toLowerCase());
+      return (data?.feed?.entry || []).map((entry, idx) => {
+        const title = entry['im:name']?.label || 'Unknown';
+        const artist = entry['im:artist']?.label || 'Unknown';
+        const images = entry['im:image'] || [];
+        const artwork = (images[images.length - 1]?.label || '/icon-192.png').replace('170x170bb', '600x600bb');
+        const genre = entry.category?.attributes?.label || 'Trending';
+        const spotifyUrl = `https://open.spotify.com/search/${encodeURIComponent(title + ' ' + artist)}`;
+        return {
+          rank: idx + 1,
+          title,
+          artist,
+          genre,
+          artwork,
+          spotifyUrl,
+          alreadyInDrive: uploadedNames.some(n => n.includes(title.toLowerCase()))
+        };
+      });
+    }
+
     async function fetchTrending() {
       const box = document.getElementById('trending-container');
-      box.innerHTML = `<p style="color:var(--am-subtext);">Loading live Apple Music charts...</p>`;
+      box.innerHTML = `<p style="color:var(--am-subtext);">Loading live Top 25 charts...</p>`;
       try {
         const res = await fetch('/api/trending');
-        trendingData = await res.json();
+        if (!res.ok) throw new Error('Fallback to direct RSS');
+        const json = await res.json();
+        if (!json.indiaTrending || json.indiaTrending.length === 0) throw new Error('Empty');
+        trendingData = json;
         renderTrending();
-      } catch (err) {
-        box.innerHTML = `<p style="color:#ff453a;">Could not load trending charts.</p>`;
+      } catch (e) {
+        // Direct client-side fallback so India & Global Top 25 ALWAYS load
+        try {
+          const [indiaTrending, globalTrending] = await Promise.all([
+            fetchDirectItunesRss('in'),
+            fetchDirectItunesRss('us')
+          ]);
+          trendingData = { indiaTrending, globalTrending };
+          renderTrending();
+        } catch (err) {
+          box.innerHTML = `<p style="color:#ff453a;">Could not load trending charts. Check your internet connection.</p>`;
+        }
       }
     }
 
@@ -1523,6 +2199,11 @@
       document.getElementById('reg-india').className = region === 'india' ? 'btn-am' : 'btn-am-secondary';
       document.getElementById('reg-global').className = region === 'global' ? 'btn-am' : 'btn-am-secondary';
       renderTrending();
+    }
+
+    function copySpotifyLink(url, title) {
+      navigator.clipboard.writeText(url);
+      showToast(`Copied Spotify link for "${title}"!`);
     }
 
     function renderTrending() {
@@ -1535,20 +2216,32 @@
 
       box.innerHTML = list.map(item => {
         const safeName = `${item.title} - ${item.artist}`.replace(/'/g, "\\'");
+        const safeTitle = item.title.replace(/'/g, "\\'");
+        const spotifyUrl = item.spotifyUrl || `https://open.spotify.com/search/${encodeURIComponent(item.title + ' ' + item.artist)}`;
         return `
-          <div class="track-row" onclick="${item.alreadyInDrive ? '' : `prefillUpload('${safeName}')`}">
+          <div class="track-row" onclick="window.open('${spotifyUrl}', '_blank')">
             <div class="track-num">#${item.rank}</div>
-            <img src="${item.artwork}" class="track-Thumb" alt="${item.title}" />
+            <img src="${item.artwork}" class="track-thumb" alt="${item.title}" loading="lazy" />
             <div class="track-main">
               <div class="track-name">${item.title}</div>
-              <div class="track-artist">${item.artist}</div>
+              <div class="track-artist">
+                <span>${item.artist}</span>
+                <span class="tag-pill">${item.genre || 'Chart'}</span>
+              </div>
             </div>
-            <div class="track-album">Released ${item.releaseDate || 'Recently'}</div>
-            <div class="track-actions">
+            <div class="track-album">Spotify 320kbps Ready</div>
+            <div class="track-actions" onclick="event.stopPropagation()">
+              <button class="btn-spotify" onclick="copySpotifyLink('${spotifyUrl}', '${safeTitle}')" title="Copy Spotify Link">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                <span>Copy Link</span>
+              </button>
+              <a href="${spotifyUrl}" target="_blank" class="btn-spotify" title="Open in Spotify">
+                <span>Spotify ↗</span>
+              </a>
               ${
                 item.alreadyInDrive
-                  ? `<span class="badge-in-drive">✓ In Library</span>`
-                  : `<button class="btn-am" style="padding:0.35rem 0.75rem; font-size:0.78rem;" onclick="event.stopPropagation(); prefillUpload('${safeName}')">＋ Upload</button>`
+                  ? `<span class="tag-pill" style="color:#30d158; background:rgba(48,209,88,0.15);">✓ In Drive</span>`
+                  : `<button class="btn-am" style="padding:0.38rem 0.7rem; font-size:0.76rem;" onclick="prefillUpload('${safeName}')">+ Upload</button>`
               }
             </div>
           </div>
@@ -1560,11 +2253,10 @@
       switchView('upload');
       document.getElementById('song-title').value = `${fullTitle}.mp3`;
       const status = document.getElementById('upload-status');
-      status.textContent = `Ready to upload "${fullTitle}". Choose your audio file below!`;
+      status.textContent = `Ready to upload "${fullTitle}". Select your audio file below!`;
       status.style.color = '#30d158';
     }
 
-    // Upload Handler
     function handleFileSelect(event) {
       const file = event.target.files[0];
       if (!file) return;
@@ -1596,13 +2288,12 @@
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Upload failed');
 
-        status.textContent = `✓ Added "${data.name}" to your Apple Music Cloud!`;
+        status.textContent = `✓ Added "${data.name}" & auto-aligned into Smart Playlists!`;
         status.style.color = '#30d158';
         document.getElementById('upload-form').reset();
-        document.getElementById('file-label').textContent = 'Click to select an audio file from your device';
+        document.getElementById('file-label').textContent = 'Tap to select an audio file';
 
-        await fetchLibrary();
-        if (trendingData.indiaTrending.length > 0) await fetchTrending();
+        await fetchLibrary(true);
       } catch (err) {
         status.textContent = `Error: ${err.message}`;
         status.style.color = '#ff453a';
@@ -1612,7 +2303,6 @@
       }
     }
 
-    // Boot Application
     fetchLibrary();
   </script>
 </body>
