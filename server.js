@@ -1,4 +1,4 @@
-require('dotenv').config();
+﻿require('dotenv').config();
 const express = require('express');
 const multer = require('multer');
 const { google } = require('googleapis');
@@ -9,21 +9,19 @@ const path = require('path');
 const app = express();
 const upload = multer({ storage: multer.memoryStorage() });
 
-// Serve static frontend files from the public directory
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Authenticate with Google Drive (uses env variable on Render, or local JSON file on PC)
-const authConfig = process.env.GOOGLE_CREDENTIALS_JSON
-  ? {
-      credentials: JSON.parse(process.env.GOOGLE_CREDENTIALS_JSON),
-      scopes: ['https://www.googleapis.com/auth/drive'],
-    }
-  : {
-      keyFile: path.join(__dirname, 'service-account.json'),
-      scopes: ['https://www.googleapis.com/auth/drive'],
-    };
+// Authenticate with Google Drive using OAuth2 Refresh Token
+const auth = new google.auth.OAuth2(
+  process.env.GOOGLE_CLIENT_ID,
+  process.env.GOOGLE_CLIENT_SECRET,
+  'https://developers.google.com/oauthplayground'
+);
 
-const auth = new google.auth.GoogleAuth(authConfig);
+auth.setCredentials({
+  refresh_token: process.env.GOOGLE_REFRESH_TOKEN,
+});
+
 const drive = google.drive({ version: 'v3', auth });
 const DRIVE_FOLDER_ID = process.env.DRIVE_FOLDER_ID;
 
