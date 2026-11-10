@@ -33,7 +33,7 @@ async function getDriveSongs(forceRefresh = false) {
     return songsCache;
   }
   const response = await drive.files.list({
-    q: `'${DRIVE_FOLDER_ID}' in parents and trashed = false`,
+    q: "'" + DRIVE_FOLDER_ID + "' in parents and trashed = false",
     fields: 'files(id, name, size, createdTime)',
     orderBy: 'createdTime desc',
     pageSize: 500,
@@ -107,7 +107,12 @@ app.get('/api/stream/:fileId', async (req, res) => {
         { fileId, alt: 'media' },
         {
           responseType: 'stream',
-          headers: { Range: `bytes=${start}-${end}` }, } );  res.writeHead(206, { 'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+          headers: { Range: 'bytes=' + start + '-' + end },
+        }
+      );
+
+      res.writeHead(206, {
+        'Content-Range': 'bytes ' + start + '-' + end + '/' + fileSize,
         'Accept-Ranges': 'bytes',
         'Content-Length': chunkSize,
         'Content-Type': mimeType,
@@ -131,7 +136,7 @@ app.get('/api/stream/:fileId', async (req, res) => {
   }
 });
 
-// Helper: Fetch & Deduplicate 100+ Songs per Language from iTunes API
+// Helper: Fetch 100+ Songs per Language from iTunes API
 async function fetchLanguageTrending(lang) {
   const queriesByLang = {
     malayalam: [
@@ -163,12 +168,22 @@ async function fetchLanguageTrending(lang) {
   const terms = queriesByLang[lang] || queriesByLang.malayalam;
   const country = lang === 'english' ? 'us' : 'in';
 
-  const requests = terms.map(term =>
-    axios
-      .get(`https://itunes.apple.com/search?term=${encodeURIComponent(term)}&country=${country}&media=music&entity=song&limit=60`, { timeout: 8000 })
-      .then(r => r.data?.results || [])
-      .catch(() => [])
-  );
+  const requests = terms.map(function (term) {
+    const url =
+      'https://itunes.apple.com/search?term=' +
+      encodeURIComponent(term) +
+      '&country=' +
+      country +
+      '&media=music&entity=song&limit=60';
+    return axios
+      .get(url, { timeout: 8000 })
+      .then(function (r) {
+        return (r.data && r.data.results) || [];
+      })
+      .catch(function () {
+        return [];
+      });
+  });
 
   const resultsArrays = await Promise.all(requests);
   const seen = new Set();
@@ -177,7 +192,10 @@ async function fetchLanguageTrending(lang) {
   for (const arr of resultsArrays) {
     for (const item of arr) {
       if (!item.trackId || !item.trackName) continue;
-      const key = `${item.trackName.toLowerCase().trim()}_${(item.artistName || '').toLowerCase().trim()}`;
+      const key =
+        item.trackName.toLowerCase().trim() +
+        '_' +
+        (item.artistName || '').toLowerCase().trim();
       if (seen.has(item.trackId) || seen.has(key)) continue;
       seen.add(item.trackId);
       seen.add(key);
@@ -200,7 +218,7 @@ async function fetchLanguageTrending(lang) {
   return merged;
 }
 
-// 4. Trending 100+ Songs Endpoint (Malayalam, Tamil, English, Hindi)
+// 4. Trending 100+ Songs Endpoint
 app.get('/api/trending', async (req, res) => {
   try {
     const lang = (req.query.lang || 'malayalam').toLowerCase();
@@ -211,49 +229,65 @@ app.get('/api/trending', async (req, res) => {
     }
 
     const songs = await fetchLanguageTrending(lang);
-    trendingCache[lang] = { time: Date.now(), songs };
-    res.json({ songs });
+    trendingCache[lang] = { time: Date.now(), songs: songs };
+    res.json({ songs: songs });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// 5. Direct Downloadable Song Link Resolver (Spotify Track URL / YouTube Watch URL / Apple Music URL)
+// 5. Direct Downloadable Song Link Resolver
 app.get('/api/song-link', async (req, res) => {
-  const { trackId, trackUrl, title, artist } = req.query;
+  const trackId = req.query.trackId || '';
+  const trackUrl = req.query.trackUrl || '';
+  const title = req.query.title || '';
+  const artist = req.query.artist || '';
 
-  // Step A: Try Odesli / Songlink API to get direct Spotify Track URL or YouTube Watch URL
+  // Step A: Odesli / Songlink API for direct Spotify Track URL or YouTube Watch URL
   try {
-    const lookupUrl = trackUrl || `https://music.apple.com/in/song/${trackId}`; const odesliRes = await axios.get( `https://api.song.link/v1-alpha.1/links?url=${encodeURIComponent(lookupUrl)}&userCountry=IN`,
-      { timeout: 4500 }
-    );
-    const platforms = odesliRes.data?.linksByPlatform || {};
-    if (platforms.spotify?.url) {
+    const lookupUrl = trackUrl || ('https://music.apple.com/in/song/' + trackId);
+    const odesliUrl =
+      'https://api.song.link/v1-alpha.1/links?url=' +
+      encodeURIComponent(lookupUrl) +
+      '&userCountry=IN';
+    const odesliRes = await axios.get(odesliUrl, { timeout: 4500 });
+    const platforms = (odesliRes.data && odesliRes.data.linksByPlatform) || {};
+    if (platforms.spotify && platforms.spotify.url) {
       return res.json({ url: platforms.spotify.url, source: 'Spotify Track' });
     }
-    if (platforms.youtube?.url) {
+    if (platforms.youtube && platforms.youtube.url) {
       return res.json({ url: platforms.youtube.url, source: 'YouTube' });
     }
-    if (platforms.youtubeMusic?.url) {
+    if (platforms.youtubeMusic && platforms.youtubeMusic.url) {
       return res.json({ url: platforms.youtubeMusic.url, source: 'YouTube Music' });
     }
   } catch (e) {}
 
-  // Step B: Fallback to direct YouTube video watch URL (works in almost all MP3 downloaders)
+  // Step B: Fallback to direct YouTube video watch URL
   try {
-    const q = encodeURIComponent(`${title \vert{}\vert{} ''}${artist || ''} official audio`.trim());
-    const ytRes = await axios.get(`https://www.youtube.com/results?search_query=${q}`, {
+    const rawSearch = (title + ' ' + artist + ' official audio').trim();
+    const ytUrl = 'https://www.youtube.com/results?search_query=' + encodeURIComponent(rawSearch);
+    const ytRes = await axios.get(ytUrl, {
       timeout: 4500,
       headers: { 'User-Agent': 'Mozilla/5.0' }
     });
     const match = ytRes.data.match(/"videoId":"([a-zA-Z0-9_-]{11})"/);
     if (match && match[1]) {
-      return res.json({ url: `https://www.youtube.com/watch?v=${match[1]}`, source: 'YouTube' }); } } catch (e) {}  // Step C: Fallback to direct Apple Music song link return res.json({ url: trackUrl \vert{}\vert{} `https://music.apple.com/in/song/${trackId}`,
+      return res.json({
+        url: 'https://www.youtube.com/watch?v=' + match[1],
+        source: 'YouTube'
+      });
+    }
+  } catch (e) {}
+
+  // Step C: Fallback to direct Apple Music song link
+  return res.json({
+    url: trackUrl || ('https://music.apple.com/in/song/' + trackId),
     source: 'Apple Music'
   });
 });
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`Musix server running on http://localhost:${PORT}`);
+  console.log('Musix server running on http://localhost:' + PORT);
 });

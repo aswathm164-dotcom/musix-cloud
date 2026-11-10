@@ -1,4 +1,4 @@
-﻿const CACHE_NAME = 'musix-shell-v4';
+﻿const CACHE_NAME = 'musix-shell-v5';
 const ASSETS = [
   '/',
   '/index.html',
