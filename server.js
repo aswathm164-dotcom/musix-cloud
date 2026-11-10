@@ -24,9 +24,9 @@ auth.setCredentials({
 const drive = google.drive({ version: 'v3', auth });
 const DRIVE_FOLDER_ID = process.env.DRIVE_FOLDER_ID;
 
-// Memory cache so library loads fast
 let songsCache = null;
 let lastCacheTime = 0;
+const trendingCache = {};
 
 async function getDriveSongs(forceRefresh = false) {
   if (!forceRefresh && songsCache && Date.now() - lastCacheTime < 25000) {
@@ -43,7 +43,6 @@ async function getDriveSongs(forceRefresh = false) {
   return songsCache;
 }
 
-// Health check endpoint
 app.get('/api/ping', (req, res) => res.json({ status: 'awake' }));
 
 // 1. Upload Audio File to Google Drive
@@ -67,7 +66,7 @@ app.post('/api/upload', upload.single('audio'), async (req, res) => {
       fields: 'id, name, size',
     });
 
-    songsCache = null; // Clear cache so new song appears immediately
+    songsCache = null;
     res.status(200).json(response.data);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -108,12 +107,7 @@ app.get('/api/stream/:fileId', async (req, res) => {
         { fileId, alt: 'media' },
         {
           responseType: 'stream',
-          headers: { Range: `bytes=${start}-${end}` },
-        }
-      );
-
-      res.writeHead(206, {
-        'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+          headers: { Range: `bytes=${start}-${end}` }, } );  res.writeHead(206, { 'Content-Range': `bytes ${start}-${end}/${fileSize}`,
         'Accept-Ranges': 'bytes',
         'Content-Length': chunkSize,
         'Content-Type': mimeType,
@@ -137,55 +131,126 @@ app.get('/api/stream/:fileId', async (req, res) => {
   }
 });
 
-// 4. Weekly Trending Songs (Official iTunes RSS JSON API + Spotify Links)
+// Helper: Fetch & Deduplicate 100+ Songs per Language from iTunes API
+async function fetchLanguageTrending(lang) {
+  const queriesByLang = {
+    malayalam: [
+      'malayalam hits 2025 2026',
+      'sushin shyam jakes bejoy vishnu vijay',
+      'malayalam songs vineeth sreenivasan shaan rahman',
+      'mollywood hits dabzee rex vijayan gopi sundar'
+    ],
+    tamil: [
+      'tamil hits 2025 2026',
+      'anirudh ravichander sai abhyankkar tamil',
+      'ar rahman yuvan shankar raja gv prakash tamil',
+      'kollywood hits santhosh narayanan harris jayaraj'
+    ],
+    hindi: [
+      'hindi hits 2025 2026',
+      'arijit singh pritam sachin jigar hindi',
+      'bollywood hits vishal mishra shreya ghoshal',
+      'hindi top songs diljit dosanjh karan aujla'
+    ],
+    english: [
+      'pop hits 2025 2026',
+      'the weeknd bruno mars taylor swift billie eilish',
+      'global hits sabrina carpenter kendrick lamar',
+      'english top songs post malone dua lipa coldplay'
+    ]
+  };
+
+  const terms = queriesByLang[lang] || queriesByLang.malayalam;
+  const country = lang === 'english' ? 'us' : 'in';
+
+  const requests = terms.map(term =>
+    axios
+      .get(`https://itunes.apple.com/search?term=${encodeURIComponent(term)}&country=${country}&media=music&entity=song&limit=60`, { timeout: 8000 })
+      .then(r => r.data?.results || [])
+      .catch(() => [])
+  );
+
+  const resultsArrays = await Promise.all(requests);
+  const seen = new Set();
+  const merged = [];
+
+  for (const arr of resultsArrays) {
+    for (const item of arr) {
+      if (!item.trackId || !item.trackName) continue;
+      const key = `${item.trackName.toLowerCase().trim()}_${(item.artistName || '').toLowerCase().trim()}`;
+      if (seen.has(item.trackId) || seen.has(key)) continue;
+      seen.add(item.trackId);
+      seen.add(key);
+
+      merged.push({
+        rank: merged.length + 1,
+        trackId: item.trackId,
+        title: item.trackName,
+        artist: item.artistName || 'Unknown Artist',
+        album: item.collectionName || 'Single',
+        genre: item.primaryGenreName || 'Music',
+        artwork: (item.artworkUrl100 || '/icon-192.png').replace('100x100bb', '600x600bb'),
+        trackViewUrl: item.trackViewUrl || ''
+      });
+      if (merged.length >= 120) break;
+    }
+    if (merged.length >= 120) break;
+  }
+
+  return merged;
+}
+
+// 4. Trending 100+ Songs Endpoint (Malayalam, Tamil, English, Hindi)
 app.get('/api/trending', async (req, res) => {
   try {
-    const indiaUrl = 'https://itunes.apple.com/in/rss/topsongs/limit=25/json';
-    const globalUrl = 'https://itunes.apple.com/us/rss/topsongs/limit=25/json';
+    const lang = (req.query.lang || 'malayalam').toLowerCase();
+    const force = req.query.refresh === '1';
 
-    const [indiaRes, globalRes, driveFiles] = await Promise.all([
-      axios.get(indiaUrl, { timeout: 8000 }),
-      axios.get(globalUrl, { timeout: 8000 }),
-      getDriveSongs().catch(() => []),
-    ]);
+    if (!force && trendingCache[lang] && Date.now() - trendingCache[lang].time < 600000) {
+      return res.json({ songs: trendingCache[lang].songs });
+    }
 
-    const uploadedNames = (driveFiles || []).map((f) => f.name.toLowerCase());
-
-    const parseItunesFeed = (feedData) => {
-      const entries = feedData?.feed?.entry || [];
-      return entries.map((entry, idx) => {
-        const title = entry['im:name']?.label || 'Unknown Title';
-        const artist = entry['im:artist']?.label || 'Unknown Artist';
-        const images = entry['im:image'] || [];
-        const rawArt = images[images.length - 1]?.label || '/icon.svg';
-        const artwork = rawArt.replace('170x170bb', '600x600bb');
-        const releaseDate = entry['im:releaseDate']?.attributes?.label || '';
-        const genre = entry.category?.attributes?.label || 'Music';
-        const spotifyQuery = encodeURIComponent(`${title} ${artist}`);
-        const spotifyUrl = `https://open.spotify.com/search/${spotifyQuery}`;
-
-        return {
-          rank: idx + 1,
-          title,
-          artist,
-          genre,
-          artwork,
-          releaseDate,
-          spotifyUrl,
-          alreadyInDrive: uploadedNames.some((name) =>
-            name.includes(title.toLowerCase())
-          ),
-        };
-      });
-    };
-
-    res.json({
-      indiaTrending: parseItunesFeed(indiaRes.data),
-      globalTrending: parseItunesFeed(globalRes.data),
-    });
+    const songs = await fetchLanguageTrending(lang);
+    trendingCache[lang] = { time: Date.now(), songs };
+    res.json({ songs });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
+});
+
+// 5. Direct Downloadable Song Link Resolver (Spotify Track URL / YouTube Watch URL / Apple Music URL)
+app.get('/api/song-link', async (req, res) => {
+  const { trackId, trackUrl, title, artist } = req.query;
+
+  // Step A: Try Odesli / Songlink API to get direct Spotify Track URL or YouTube Watch URL
+  try {
+    const lookupUrl = trackUrl || `https://music.apple.com/in/song/${trackId}`; const odesliRes = await axios.get( `https://api.song.link/v1-alpha.1/links?url=${encodeURIComponent(lookupUrl)}&userCountry=IN`,
+      { timeout: 4500 }
+    );
+    const platforms = odesliRes.data?.linksByPlatform || {};
+    if (platforms.spotify?.url) {
+      return res.json({ url: platforms.spotify.url, source: 'Spotify Track' });
+    }
+    if (platforms.youtube?.url) {
+      return res.json({ url: platforms.youtube.url, source: 'YouTube' });
+    }
+    if (platforms.youtubeMusic?.url) {
+      return res.json({ url: platforms.youtubeMusic.url, source: 'YouTube Music' });
+    }
+  } catch (e) {}
+
+  // Step B: Fallback to direct YouTube video watch URL (works in almost all MP3 downloaders)
+  try {
+    const q = encodeURIComponent(`${title \vert{}\vert{} ''}${artist || ''} official audio`.trim());
+    const ytRes = await axios.get(`https://www.youtube.com/results?search_query=${q}`, {
+      timeout: 4500,
+      headers: { 'User-Agent': 'Mozilla/5.0' }
+    });
+    const match = ytRes.data.match(/"videoId":"([a-zA-Z0-9_-]{11})"/);
+    if (match && match[1]) {
+      return res.json({ url: `https://www.youtube.com/watch?v=${match[1]}`, source: 'YouTube' }); } } catch (e) {}  // Step C: Fallback to direct Apple Music song link return res.json({ url: trackUrl \vert{}\vert{} `https://music.apple.com/in/song/${trackId}`,
+    source: 'Apple Music'
+  });
 });
 
 const PORT = process.env.PORT || 3000;

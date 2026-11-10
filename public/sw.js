@@ -1,9 +1,8 @@
-﻿const CACHE_NAME = 'musix-shell-v3';
+﻿const CACHE_NAME = 'musix-shell-v4';
 const ASSETS = [
   '/',
   '/index.html',
   '/manifest.json',
-  '/icon.svg',
   '/icon-192.png',
   '/icon-512.png'
 ];

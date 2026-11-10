@@ -19,7 +19,6 @@
       --am-border: rgba(255, 255, 255, 0.08);
       --am-accent: #fa243c;
       --am-accent-hover: #ff3b52;
-      --am-spotify: #1ed760;
       --am-text: #ffffff;
       --am-subtext: rgba(235, 235, 245, 0.62);
       --am-muted: rgba(235, 235, 245, 0.38);
@@ -43,10 +42,7 @@
       user-select: none;
     }
 
-    svg {
-      display: block;
-      flex-shrink: 0;
-    }
+    svg { display: block; flex-shrink: 0; }
 
     /* CUSTOM MUSIX LOGO SPLASH SCREEN */
     #splash-screen {
@@ -68,7 +64,6 @@
     }
 
     .splash-logo-wrap {
-      position: relative;
       width: 96px;
       height: 96px;
       border-radius: 24px;
@@ -81,8 +76,8 @@
     }
 
     @keyframes pulseLogo {
-      0%, 100% { transform: scale(1); box-shadow: 0 18px 45px rgba(250, 36, 60, 0.45); }
-      50% { transform: scale(1.06); box-shadow: 0 24px 60px rgba(250, 36, 60, 0.7); }
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.06); }
     }
 
     .splash-title {
@@ -125,18 +120,22 @@
       position: fixed;
       top: 20px;
       left: 50%;
-      transform: translateX(-50%) translateY(-80px);
-      background: rgba(30, 30, 36, 0.95);
+      transform: translateX(-50%) translateY(-90px);
+      background: rgba(28, 28, 34, 0.96);
       backdrop-filter: blur(16px);
-      border: 1px solid rgba(255,255,255,0.14);
+      border: 1px solid rgba(255,255,255,0.15);
       color: #fff;
-      padding: 0.65rem 1.2rem;
+      padding: 0.68rem 1.25rem;
       border-radius: 99px;
       font-size: 0.86rem;
       font-weight: 600;
-      box-shadow: 0 12px 30px rgba(0,0,0,0.45);
-      z-index: 9000;
+      box-shadow: 0 12px 30px rgba(0,0,0,0.5);
+      z-index: 9500;
       transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+      max-width: 92vw;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     #toast-box.show {
@@ -207,9 +206,7 @@
       color: var(--am-subtext);
     }
 
-    .nav-group {
-      margin-bottom: 1.35rem;
-    }
+    .nav-group { margin-bottom: 1.35rem; }
 
     .nav-group-label {
       font-size: 0.7rem;
@@ -246,10 +243,7 @@
       height: 19px;
     }
 
-    .nav-item:hover {
-      background: var(--am-hover);
-    }
-
+    .nav-item:hover { background: var(--am-hover); }
     .nav-item.active {
       background: rgba(250, 36, 60, 0.18);
       color: #fff;
@@ -264,10 +258,7 @@
       background: linear-gradient(180deg, #221217 0%, var(--am-canvas) 280px);
     }
 
-    .view {
-      display: none;
-    }
-
+    .view { display: none; }
     .view.active {
       display: block;
       animation: fadeIn 0.2s ease;
@@ -303,7 +294,7 @@
 
     .header-actions {
       display: flex;
-      gap: 0.6rem;
+      gap: 0.55rem;
       align-items: center;
       flex-wrap: wrap;
     }
@@ -312,10 +303,10 @@
       background: var(--am-accent);
       color: #fff;
       border: none;
-      padding: 0.55rem 1.1rem;
+      padding: 0.55rem 1.05rem;
       border-radius: 9px;
       font-weight: 600;
-      font-size: 0.86rem;
+      font-size: 0.85rem;
       cursor: pointer;
       display: inline-flex;
       align-items: center;
@@ -330,38 +321,17 @@
       background: rgba(255, 255, 255, 0.09);
       color: var(--am-text);
       border: 1px solid var(--am-border);
-      padding: 0.55rem 1rem;
+      padding: 0.55rem 0.95rem;
       border-radius: 9px;
       font-weight: 600;
-      font-size: 0.86rem;
+      font-size: 0.85rem;
       cursor: pointer;
       display: inline-flex;
       align-items: center;
       gap: 0.4rem;
     }
 
-    .btn-am-secondary:hover {
-      background: rgba(255, 255, 255, 0.15);
-    }
-
-    .btn-spotify {
-      background: rgba(30, 215, 96, 0.14);
-      color: var(--am-spotify);
-      border: 1px solid rgba(30, 215, 96, 0.3);
-      padding: 0.38rem 0.7rem;
-      border-radius: 8px;
-      font-weight: 600;
-      font-size: 0.76rem;
-      cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-      gap: 0.35rem;
-      text-decoration: none;
-    }
-
-    .btn-spotify:hover {
-      background: rgba(30, 215, 96, 0.25);
-    }
+    .btn-am-secondary:hover { background: rgba(255, 255, 255, 0.15); }
 
     /* SMART AUTO-PLAYLIST CARDS */
     .smart-grid {
@@ -394,14 +364,12 @@
       font-size: 1.12rem;
       font-weight: 800;
       letter-spacing: -0.3px;
-      z-index: 2;
     }
 
     .smart-card-count {
       font-size: 0.78rem;
-      color: rgba(255, 255, 255, 0.8);
+      color: rgba(255, 255, 255, 0.82);
       font-weight: 600;
-      z-index: 2;
     }
 
     /* ALBUM GRID */
@@ -487,13 +455,11 @@
     }
 
     /* TRACKLIST TABLE */
-    .track-table {
-      width: 100%;
-    }
+    .track-table { width: 100%; }
 
     .track-row {
       display: grid;
-      grid-template-columns: 32px 46px 1fr 170px auto;
+      grid-template-columns: 36px 46px 1fr 180px auto;
       align-items: center;
       gap: 0.85rem;
       padding: 0.52rem 0.75rem;
@@ -574,8 +540,8 @@
       border: none;
       color: var(--am-subtext);
       cursor: pointer;
-      padding: 0.38rem;
-      border-radius: 7px;
+      padding: 0.42rem;
+      border-radius: 8px;
       display: inline-flex;
       align-items: center;
       justify-content: center;
@@ -584,10 +550,34 @@
 
     .icon-btn:hover {
       color: var(--am-text);
-      background: rgba(255, 255, 255, 0.1);
+      background: rgba(255, 255, 255, 0.12);
     }
 
     .icon-btn.liked { color: var(--am-accent); }
+
+    /* 3-DOTS MORE BUTTON */
+    .dots-btn {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: var(--am-text);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: background 0.15s, transform 0.1s;
+    }
+
+    .dots-btn:hover {
+      background: rgba(250, 36, 60, 0.25);
+      border-color: var(--am-accent);
+    }
+
+    .dots-btn:active {
+      transform: scale(0.92);
+    }
 
     /* PLAYLIST HERO */
     .playlist-hero {
@@ -657,7 +647,7 @@
       background: rgba(250, 36, 60, 0.05);
     }
 
-    /* BOTTOM MINI PLAYER BAR (CLICK TO EXPAND FULLSCREEN) */
+    /* BOTTOM MINI PLAYER BAR */
     .am-player-bar {
       height: 84px;
       background: rgba(22, 22, 26, 0.92);
@@ -706,11 +696,6 @@
       max-width: 680px;
       width: 100%;
       margin: 0 auto;
-      transition: background 0.15s;
-    }
-
-    .am-lcd:hover {
-      background: rgba(255, 255, 255, 0.1);
     }
 
     .lcd-cover {
@@ -782,7 +767,7 @@
       cursor: pointer;
     }
 
-    /* FULL-SCREEN EXPANDABLE APPLE MUSIC NOW PLAYING MODAL */
+    /* FULL-SCREEN EXPANDABLE PLAYER */
     #fullscreen-player {
       position: fixed;
       inset: 0;
@@ -797,9 +782,7 @@
       overflow: hidden;
     }
 
-    #fullscreen-player.open {
-      transform: translateY(0);
-    }
+    #fullscreen-player.open { transform: translateY(0); }
 
     .fs-bg-blur {
       position: absolute;
@@ -851,15 +834,8 @@
       transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1);
     }
 
-    .fs-art-container.paused {
-      transform: scale(0.88);
-    }
-
-    .fs-art-container img {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-    }
+    .fs-art-container.paused { transform: scale(0.88); }
+    .fs-art-container img { width: 100%; height: 100%; object-fit: cover; }
 
     .fs-meta-row {
       width: 100%;
@@ -884,22 +860,9 @@
       margin-top: 3px;
     }
 
-    .fs-badges {
-      display: flex;
-      gap: 0.45rem;
-      margin-top: 0.45rem;
-    }
-
-    .fs-progress-wrap {
-      width: 100%;
-    }
-
-    .fs-scrubber {
-      width: 100%;
-      height: 6px;
-      accent-color: #fff;
-      cursor: pointer;
-    }
+    .fs-badges { display: flex; gap: 0.45rem; margin-top: 0.45rem; }
+    .fs-progress-wrap { width: 100%; }
+    .fs-scrubber { width: 100%; height: 6px; accent-color: #fff; cursor: pointer; }
 
     .fs-time-row {
       display: flex;
@@ -940,12 +903,7 @@
       color: rgba(255, 255, 255, 0.65);
     }
 
-    .fs-vol-slider {
-      flex: 1;
-      height: 5px;
-      accent-color: #fff;
-      cursor: pointer;
-    }
+    .fs-vol-slider { flex: 1; height: 5px; accent-color: #fff; cursor: pointer; }
 
     /* MODALS */
     .modal-backdrop {
@@ -1000,7 +958,7 @@
       .sidebar { display: none; }
       .app-shell { height: calc(100vh - 134px); }
       .main-content { padding: 1.2rem 1rem 4rem; }
-      .track-row { grid-template-columns: 26px 42px 1fr auto; }
+      .track-row { grid-template-columns: 30px 42px 1fr auto; }
       .track-album { display: none; }
       .am-player-bar {
         grid-template-columns: 1fr auto;
@@ -1036,7 +994,7 @@
   </div>
 
   <!-- TOAST -->
-  <div id="toast-box">Copied to clipboard!</div>
+  <div id="toast-box">Copied song link!</div>
 
   <div class="app-shell">
     <!-- SIDEBAR -->
@@ -1118,18 +1076,14 @@
         </div>
         <div id="home-smart-preview" class="smart-grid"></div>
 
-        <div class="section-title">
-          <span>Recently Added</span>
-        </div>
+        <div class="section-title"><span>Recently Added</span></div>
         <div id="home-recent-grid" class="card-grid"></div>
 
-        <div class="section-title" style="margin-top:2.2rem;">
-          <span>Quick Picks</span>
-        </div>
+        <div class="section-title" style="margin-top:2.2rem;"><span>Quick Picks</span></div>
         <div id="home-quick-tracks" class="track-table"></div>
       </section>
 
-      <!-- 2. SMART AUTO-PLAYLISTS (LANGUAGE, VIBE, ARTIST) -->
+      <!-- 2. SMART AUTO-PLAYLISTS -->
       <section id="view-smart" class="view">
         <div class="page-header">
           <div>
@@ -1148,17 +1102,18 @@
         <div id="smart-artist-grid" class="smart-grid"></div>
       </section>
 
-      <!-- 3. WEEKLY TRENDING (INDIA & GLOBAL + SPOTIFY LINKS) -->
+      <!-- 3. WEEKLY TRENDING (100+ SONGS IN MALAYALAM, TAMIL, ENGLISH, HINDI) -->
       <section id="view-browse" class="view">
         <div class="page-header">
           <div>
             <h1 class="page-title">Weekly Trending</h1>
-            <p class="page-subtitle">Live Top 25 Charts with 1-Click Spotify Link Copy & Direct Open</p>
+            <p class="page-subtitle" id="trending-sub-count">Tap ••• on any song to copy its direct song link</p>
           </div>
           <div class="header-actions">
-            <button id="reg-india" class="btn-am" onclick="setTrendingRegion('india')">India Top 25</button>
-            <button id="reg-global" class="btn-am-secondary" onclick="setTrendingRegion('global')">Global Top 25</button>
-            <button class="btn-am-secondary" onclick="fetchTrending(true)">Refresh</button>
+            <button id="lang-malayalam" class="btn-am" onclick="selectTrendingLang('malayalam')">Malayalam (100+)</button>
+            <button id="lang-tamil" class="btn-am-secondary" onclick="selectTrendingLang('tamil')">Tamil (100+)</button>
+            <button id="lang-english" class="btn-am-secondary" onclick="selectTrendingLang('english')">English (100+)</button>
+            <button id="lang-hindi" class="btn-am-secondary" onclick="selectTrendingLang('hindi')">Hindi (100+)</button>
           </div>
         </div>
         <div id="trending-container" class="track-table"></div>
@@ -1272,7 +1227,7 @@
     </button>
   </nav>
 
-  <!-- BOTTOM MINI PLAYER (CLICK TO OPEN FULLSCREEN PLAYER) -->
+  <!-- BOTTOM MINI PLAYER -->
   <footer class="am-player-bar" onclick="openFullscreenPlayer(event)">
     <div class="transport-controls" onclick="event.stopPropagation()">
       <button class="ctrl-icon" id="btn-shuffle" onclick="toggleShuffle()" title="Shuffle">
@@ -1320,7 +1275,7 @@
     <audio id="audio-player" preload="metadata"></audio>
   </footer>
 
-  <!-- EXPANDABLE FULLSCREEN APPLE MUSIC NOW PLAYING MODAL -->
+  <!-- EXPANDABLE FULLSCREEN PLAYER -->
   <div id="fullscreen-player">
     <div class="fs-bg-blur" id="fs-bg"></div>
 
@@ -1384,7 +1339,7 @@
     </div>
 
     <div style="position:relative; z-index:2; text-align:center; font-size:0.75rem; color:rgba(255,255,255,0.45);">
-      Musix Cloud Streamer • Direct Google Drive Audio
+      Musix • Direct Google Drive Audio
     </div>
   </div>
 
@@ -1413,7 +1368,6 @@
   </div>
 
   <script>
-    // Register Service Worker for instant logo splash screen
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('/sw.js').catch(() => {});
     }
@@ -1422,14 +1376,15 @@
     const SVG_PAUSE = `<svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>`;
     const SVG_HEART_OUTLINE = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>`;
     const SVG_HEART_SOLID = `<svg width="18" height="18" viewBox="0 0 24 24" fill="#fa243c" stroke="#fa243c" stroke-width="2"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>`;
+    const SVG_DOTS = `<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>`;
 
     let driveSongs = [];
     let currentQueue = [];
     let currentIndex = -1;
     let isShuffle = false;
     let isRepeat = false;
-    let trendingData = { indiaTrending: [], globalTrending: [] };
-    let currentRegion = 'india';
+    let currentTrendingLang = 'malayalam';
+    let trendingByLang = { malayalam: [], tamil: [], english: [], hindi: [] };
     let activePlaylistId = null;
     let activeSmartSongs = [];
     let songPendingPlaylistAdd = null;
@@ -1448,7 +1403,34 @@
       const t = document.getElementById('toast-box');
       t.textContent = msg;
       t.classList.add('show');
-      setTimeout(() => t.classList.remove('show'), 2400);
+      clearTimeout(window.__toastTimer);
+      window.__toastTimer = setTimeout(() => t.classList.remove('show'), 2600);
+    }
+
+    // Universal Clipboard Copy (works on Desktop + Mobile APK even after async calls)
+    async function copyTextUniversal(text) {
+      try {
+        if (navigator.clipboard && window.isSecureContext) {
+          await navigator.clipboard.writeText(text);
+          return true;
+        }
+      } catch (e) {}
+
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.left = '-9999px';
+        ta.style.top = '0';
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        const ok = document.execCommand('copy');
+        document.body.removeChild(ta);
+        return ok;
+      } catch (err) {
+        return false;
+      }
     }
 
     function saveUserData() {
@@ -1465,29 +1447,24 @@
       return { title: clean.trim(), artist: 'Cloud Artist' };
     }
 
-    // Smart Language & Vibe Classifier
     function classifyLanguageAndVibe(title, artist, album, genre) {
       const blob = `${title} ${artist} ${album} ${genre}`.toLowerCase();
 
-      // 1. Detect Language
       let language = 'English / Global';
       if (/malayalam|mollywood|sushin|jakes bejoy|vineeth|shaan rahman|gopi sundar|rex vijayan|dabzee|fejo|govind vasantha|vishnu vijay|aavesham|premalu|manjummel|kumbalangi|hridayam|sithara|harisankar/.test(blob)) {
         language = 'Malayalam';
-      } else if (/tamil|kollywood|anirudh|rahman|yuvan|harris jayaraj|gv prakash|santhosh narayanan|sid sriram|ilayaraja|dhanush|lokesh|leo|jailer|vikram|saroja/.test(blob)) {
+      } else if (/tamil|kollywood|anirudh|rahman|yuvan|harris jayaraj|gv prakash|santhosh narayanan|sid sriram|ilayaraja|dhanush|lokesh|leo|jailer|vikram|saroja|sai abhyankkar/.test(blob)) {
         language = 'Tamil';
-      } else if (/hindi|bollywood|arijit|pritam|vishal|shreya ghoshal|atif|jubin|badshah|diljit|amit trivedi|sachin-jigar|ap dhillon|kk|sonu nigam|ranbir/.test(blob)) {
+      } else if (/hindi|bollywood|arijit|pritam|vishal|shreya ghoshal|atif|jubin|badshah|diljit|amit trivedi|sachin-jigar|ap dhillon|kk|sonu nigam/.test(blob)) {
         language = 'Hindi';
       } else if (/telugu|tollywood|devi sri|thaman|allu arjun|pushpa|rrr|keeravani/.test(blob)) {
         language = 'Telugu';
       } else if (/kannada|sandalwood|ravi basrur|kgf|kantara|charan raj/.test(blob)) {
         language = 'Kannada';
-      } else if (/indian|desi|punjabi|carnatic/.test(blob)) {
-        language = 'Indian Mix';
       }
 
-      // 2. Detect Vibe / Mood
       let vibe = 'Feel Good & Vibe';
-      if (/hip-hop|rap|electronic|dance|phonk|rock|workout|gym|bass|mass|kuthu|illuminati|hukum|power|beast|bada|party|club|remix/.test(blob)) {
+      if (/hip-hop|rap|electronic|dance|phonk|rock|workout|gym|bass|mass|kuthu|illuminati|hukum|power|beast|party|club|remix/.test(blob)) {
         vibe = 'High Energy & Workout';
       } else if (/r&b|soul|lofi|lo-fi|chill|slowed|reverb|acoustic|unplugged|indie|night|sleep|ambient/.test(blob)) {
         vibe = 'Late Night & Chill';
@@ -1572,7 +1549,13 @@
       const mobBtn = document.getElementById(`mob-${viewName}`);
       if (mobBtn) mobBtn.classList.add('active');
 
-      if (viewName === 'browse' && trendingData.indiaTrending.length === 0) fetchTrending();
+      if (viewName === 'browse') {
+        if (!trendingByLang[currentTrendingLang] || trendingByLang[currentTrendingLang].length === 0) {
+          fetchTrendingByLang(currentTrendingLang);
+        } else {
+          renderTrending();
+        }
+      }
       if (viewName === 'liked') renderLikedView();
       if (viewName === 'songs') renderAllSongsView();
       if (viewName === 'smart') renderSmartPlaylistsView();
@@ -1605,12 +1588,11 @@
         renderAllSongsView();
         renderSmartPlaylistsView();
       } catch (err) {
-        document.getElementById('splash-status').textContent = 'Waking up Render cloud server... almost ready!';
+        document.getElementById('splash-status').textContent = 'Waking up cloud server... almost ready!';
         setTimeout(() => fetchLibrary(force), 3500);
       }
     }
 
-    // Build Smart Auto-Playlists by Language, Vibe, and Artist
     function buildSmartGroups() {
       const languages = {};
       const vibes = {};
@@ -1803,7 +1785,6 @@
           : `<p style="color:var(--am-subtext); padding:1rem 0;">No matching songs found.</p>`;
     }
 
-    // Favorites
     function getLikedSongs() {
       return driveSongs.filter(s => likedIds.includes(s.id));
     }
@@ -1842,7 +1823,6 @@
           : `<p style="color:var(--am-subtext); padding:1rem 0;">Tap the heart icon on any song to save it here.</p>`;
     }
 
-    // Custom Playlists
     function renderSidebarPlaylists() {
       const box = document.getElementById('sidebar-playlists');
       if (playlists.length === 0) {
@@ -1976,8 +1956,7 @@
       }
     }
 
-    // Fullscreen Expandable Player Drawer
-    function openFullscreenPlayer(e) {
+    function openFullscreenPlayer() {
       document.getElementById('fullscreen-player').classList.add('open');
     }
 
@@ -1985,7 +1964,6 @@
       document.getElementById('fullscreen-player').classList.remove('open');
     }
 
-    // Playback Engine
     function playSpecificSong(songId) {
       if (currentQueue.length === 0) currentQueue = [...driveSongs];
       let idx = currentQueue.findIndex(s => s.id === songId);
@@ -2018,12 +1996,10 @@
       audioPlayer.src = `/api/stream/${song.id}`;
       audioPlayer.play();
 
-      // Mini player UI
       document.getElementById('lcd-title').textContent = meta.title;
       document.getElementById('lcd-artist').textContent = `— ${meta.artist}`;
       document.getElementById('lcd-cover').src = meta.artwork;
 
-      // Fullscreen player UI
       document.getElementById('fs-title').textContent = meta.title;
       document.getElementById('fs-artist').textContent = `${meta.artist} — ${meta.album}`;
       document.getElementById('fs-cover').src = meta.artwork;
@@ -2145,116 +2121,173 @@
       return `${m}:${s}`;
     }
 
-    // Weekly Trending with Direct Browser Fallback + Spotify Copy/Open Links
-    async function fetchDirectItunesRss(country) {
-      const res = await fetch(`https://itunes.apple.com/${country}/rss/topsongs/limit=25/json`);
-      const data = await res.json();
-      const uploadedNames = driveSongs.map(f => f.name.toLowerCase());
-      return (data?.feed?.entry || []).map((entry, idx) => {
-        const title = entry['im:name']?.label || 'Unknown';
-        const artist = entry['im:artist']?.label || 'Unknown';
-        const images = entry['im:image'] || [];
-        const artwork = (images[images.length - 1]?.label || '/icon-192.png').replace('170x170bb', '600x600bb');
-        const genre = entry.category?.attributes?.label || 'Trending';
-        const spotifyUrl = `https://open.spotify.com/search/${encodeURIComponent(title + ' ' + artist)}`;
-        return {
-          rank: idx + 1,
-          title,
-          artist,
-          genre,
-          artwork,
-          spotifyUrl,
-          alreadyInDrive: uploadedNames.some(n => n.includes(title.toLowerCase()))
-        };
-      });
+    // WEEKLY TRENDING: 100+ SONGS IN MALAYALAM, TAMIL, ENGLISH, HINDI
+    async function fetchClientSideTrendingFallback(lang) {
+      const queriesByLang = {
+        malayalam: [
+          'malayalam hits 2025 2026',
+          'sushin shyam jakes bejoy vishnu vijay',
+          'malayalam songs vineeth sreenivasan shaan rahman',
+          'mollywood hits dabzee rex vijayan'
+        ],
+        tamil: [
+          'tamil hits 2025 2026',
+          'anirudh ravichander sai abhyankkar tamil',
+          'ar rahman yuvan shankar raja gv prakash tamil',
+          'kollywood hits santhosh narayanan'
+        ],
+        hindi: [
+          'hindi hits 2025 2026',
+          'arijit singh pritam sachin jigar hindi',
+          'bollywood hits vishal mishra shreya ghoshal',
+          'hindi top songs diljit dosanjh karan aujla'
+        ],
+        english: [
+          'pop hits 2025 2026',
+          'the weeknd bruno mars taylor swift billie eilish',
+          'global hits sabrina carpenter kendrick lamar',
+          'english top songs post malone dua lipa'
+        ]
+      };
+      const terms = queriesByLang[lang] || queriesByLang.malayalam;
+      const country = lang === 'english' ? 'us' : 'in';
+
+      const responses = await Promise.all(
+        terms.map(t =>
+          fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(t)}&country=${country}&media=music&entity=song&limit=60`)
+            .then(r => r.json())
+            .then(d => d.results || [])
+            .catch(() => [])
+        )
+      );
+
+      const seen = new Set();
+      const merged = [];
+      for (const arr of responses) {
+        for (const item of arr) {
+          if (!item.trackId || !item.trackName) continue;
+          const key = `${item.trackName.toLowerCase().trim()}_${(item.artistName || '').toLowerCase().trim()}`;
+          if (seen.has(item.trackId) || seen.has(key)) continue;
+          seen.add(item.trackId);
+          seen.add(key);
+          merged.push({
+            rank: merged.length + 1,
+            trackId: item.trackId,
+            title: item.trackName,
+            artist: item.artistName || 'Unknown Artist',
+            album: item.collectionName || 'Single',
+            genre: item.primaryGenreName || 'Music',
+            artwork: (item.artworkUrl100 || '/icon-192.png').replace('100x100bb', '600x600bb'),
+            trackViewUrl: item.trackViewUrl || ''
+          });
+          if (merged.length >= 120) break;
+        }
+        if (merged.length >= 120) break;
+      }
+      return merged;
     }
 
-    async function fetchTrending() {
+    async function fetchTrendingByLang(lang) {
       const box = document.getElementById('trending-container');
-      box.innerHTML = `<p style="color:var(--am-subtext);">Loading live Top 25 charts...</p>`;
+      box.innerHTML = `<p style="color:var(--am-subtext); padding:1rem 0;">Loading 100+ trending ${lang.toUpperCase()} songs...</p>`;
       try {
-        const res = await fetch('/api/trending');
-        if (!res.ok) throw new Error('Fallback to direct RSS');
-        const json = await res.json();
-        if (!json.indiaTrending || json.indiaTrending.length === 0) throw new Error('Empty');
-        trendingData = json;
+        const res = await fetch(`/api/trending?lang=${lang}`);
+        if (!res.ok) throw new Error('Fallback');
+        const data = await res.json();
+        if (!data.songs || data.songs.length === 0) throw new Error('Empty');
+        trendingByLang[lang] = data.songs;
         renderTrending();
       } catch (e) {
-        // Direct client-side fallback so India & Global Top 25 ALWAYS load
         try {
-          const [indiaTrending, globalTrending] = await Promise.all([
-            fetchDirectItunesRss('in'),
-            fetchDirectItunesRss('us')
-          ]);
-          trendingData = { indiaTrending, globalTrending };
+          trendingByLang[lang] = await fetchClientSideTrendingFallback(lang);
           renderTrending();
         } catch (err) {
-          box.innerHTML = `<p style="color:#ff453a;">Could not load trending charts. Check your internet connection.</p>`;
+          box.innerHTML = `<p style="color:#ff453a;">Failed to load trending songs. Check your connection.</p>`;
         }
       }
     }
 
-    function setTrendingRegion(region) {
-      currentRegion = region;
-      document.getElementById('reg-india').className = region === 'india' ? 'btn-am' : 'btn-am-secondary';
-      document.getElementById('reg-global').className = region === 'global' ? 'btn-am' : 'btn-am-secondary';
-      renderTrending();
+    function selectTrendingLang(lang) {
+      currentTrendingLang = lang;
+      ['malayalam', 'tamil', 'english', 'hindi'].forEach(l => {
+        const btn = document.getElementById(`lang-${l}`);
+        if (btn) btn.className = l === lang ? 'btn-am' : 'btn-am-secondary';
+      });
+      if (!trendingByLang[lang] || trendingByLang[lang].length === 0) {
+        fetchTrendingByLang(lang);
+      } else {
+        renderTrending();
+      }
     }
 
-    function copySpotifyLink(url, title) {
-      navigator.clipboard.writeText(url);
-      showToast(`Copied Spotify link for "${title}"!`);
+    // Copy Direct Song Link via 3-Dots Button (safe numeric index, never breaks on quotes)
+    async function copyTrendingSongLink(idx, event) {
+      if (event) event.stopPropagation();
+      const list = trendingByLang[currentTrendingLang] || [];
+      const item = list[idx];
+      if (!item) return;
+
+      showToast(`Fetching direct song link for "${item.title}"...`);
+
+      let finalUrl = item.cachedDirectUrl || '';
+      if (!finalUrl) {
+        try {
+          const qs = new URLSearchParams({
+            trackId: item.trackId || '',
+            trackUrl: item.trackViewUrl || '',
+            title: item.title || '',
+            artist: item.artist || ''
+          });
+          const res = await fetch(`/api/song-link?${qs.toString()}`);
+          if (res.ok) {
+            const data = await res.json();
+            if (data.url) finalUrl = data.url;
+          }
+        } catch (e) {}
+      }
+
+      if (!finalUrl) {
+        finalUrl = item.trackViewUrl || `https://music.apple.com/in/song/${item.trackId}`;
+      }
+
+      item.cachedDirectUrl = finalUrl;
+      await copyTextUniversal(finalUrl);
+      showToast(`✓ Copied song link: ${item.title}`);
     }
 
     function renderTrending() {
-      const list = currentRegion === 'india' ? trendingData.indiaTrending : trendingData.globalTrending;
+      const list = trendingByLang[currentTrendingLang] || [];
       const box = document.getElementById('trending-container');
-      if (!list || list.length === 0) {
-        box.innerHTML = `<p style="color:var(--am-subtext);">No chart tracks found.</p>`;
+      const countLabel = document.getElementById('trending-sub-count');
+
+      if (countLabel) {
+        countLabel.textContent = `${list.length} ${currentTrendingLang.charAt(0).toUpperCase() + currentTrendingLang.slice(1)} Trending Songs • Tap ••• to copy direct song link`;
+      }
+
+      if (list.length === 0) {
+        box.innerHTML = `<p style="color:var(--am-subtext);">No songs found.</p>`;
         return;
       }
 
-      box.innerHTML = list.map(item => {
-        const safeName = `${item.title} - ${item.artist}`.replace(/'/g, "\\'");
-        const safeTitle = item.title.replace(/'/g, "\\'");
-        const spotifyUrl = item.spotifyUrl || `https://open.spotify.com/search/${encodeURIComponent(item.title + ' ' + item.artist)}`;
-        return `
-          <div class="track-row" onclick="window.open('${spotifyUrl}', '_blank')">
-            <div class="track-num">#${item.rank}</div>
-            <img src="${item.artwork}" class="track-thumb" alt="${item.title}" loading="lazy" />
-            <div class="track-main">
-              <div class="track-name">${item.title}</div>
-              <div class="track-artist">
-                <span>${item.artist}</span>
-                <span class="tag-pill">${item.genre || 'Chart'}</span>
-              </div>
-            </div>
-            <div class="track-album">Spotify 320kbps Ready</div>
-            <div class="track-actions" onclick="event.stopPropagation()">
-              <button class="btn-spotify" onclick="copySpotifyLink('${spotifyUrl}', '${safeTitle}')" title="Copy Spotify Link">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-                <span>Copy Link</span>
-              </button>
-              <a href="${spotifyUrl}" target="_blank" class="btn-spotify" title="Open in Spotify">
-                <span>Spotify ↗</span>
-              </a>
-              ${
-                item.alreadyInDrive
-                  ? `<span class="tag-pill" style="color:#30d158; background:rgba(48,209,88,0.15);">✓ In Drive</span>`
-                  : `<button class="btn-am" style="padding:0.38rem 0.7rem; font-size:0.76rem;" onclick="prefillUpload('${safeName}')">+ Upload</button>`
-              }
+      box.innerHTML = list.map((item, idx) => `
+        <div class="track-row" onclick="copyTrendingSongLink(${idx}, event)">
+          <div class="track-num">#${idx + 1}</div>
+          <img src="${item.artwork}" class="track-thumb" alt="Art" loading="lazy" />
+          <div class="track-main">
+            <div class="track-name">${item.title}</div>
+            <div class="track-artist">
+              <span>${item.artist}</span>
+              <span class="tag-pill">${item.genre || 'Trending'}</span>
             </div>
           </div>
-        `;
-      }).join('');
-    }
-
-    function prefillUpload(fullTitle) {
-      switchView('upload');
-      document.getElementById('song-title').value = `${fullTitle}.mp3`;
-      const status = document.getElementById('upload-status');
-      status.textContent = `Ready to upload "${fullTitle}". Select your audio file below!`;
-      status.style.color = '#30d158';
+          <div class="track-album">${item.album || ''}</div>
+          <div class="track-actions" onclick="event.stopPropagation()">
+            <button class="dots-btn" onclick="copyTrendingSongLink(${idx}, event)" title="Copy direct song link">
+              ${SVG_DOTS}
+            </button>
+          </div>
+        </div>
+      `).join('');
     }
 
     function handleFileSelect(event) {
