@@ -1,19 +1,29 @@
-﻿{
+{
+  "id": "/",
   "name": "Musix",
   "short_name": "Musix",
-  "description": "Musix Cloud & Offline Music Player",
+  "description": "Musix Cloud and Offline Music Streamer",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#0d0d0f",
   "theme_color": "#0d0d0f",
+  "lang": "en",
+  "dir": "ltr",
+  "categories": ["music", "entertainment"],
   "icons": [
     {
       "src": "/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     },
     {
       "src": "/icon-192.png",
