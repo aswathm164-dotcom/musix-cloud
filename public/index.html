@@ -950,7 +950,7 @@
 </head>
 <body>
 
-  <!-- BEATING APP ICON ON STARTUP (PLAYS FULL HEARTBEAT ANIMATION) -->
+  <!-- BEATING APP ICON ON STARTUP -->
   <div id="splash-screen">
     <div class="splash-logo-wrap">
       <img src="/icon-512.png" alt="Musix" />
@@ -1371,7 +1371,6 @@
     const audioPlayer = document.getElementById('audio-player');
     const nextPreloader = document.getElementById('next-audio-preloader');
 
-    // Guarantees the beating logo always beats for at least 2.8 seconds on launch
     function dismissSplash() {
       const elapsed = Date.now() - SPLASH_START_TIME;
       const remaining = Math.max(0, MIN_SPLASH_DURATION - elapsed);
