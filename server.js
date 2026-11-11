@@ -9,7 +9,7 @@ const path = require('path');
 const app = express();
 const upload = multer({ storage: multer.memoryStorage() });
 
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, 'public'), { dotfiles: 'allow' }));
 
 const auth = new google.auth.OAuth2(
   process.env.GOOGLE_CLIENT_ID,

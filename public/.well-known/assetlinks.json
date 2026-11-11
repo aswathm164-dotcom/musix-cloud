@@ -1,0 +1,8 @@
+[{
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "com.onrender.musix_cloud.twa",
+        "sha256_cert_fingerprints": ["36:AB:0D:49:33:52:AA:28:33:CB:D9:C9:F7:7E:1C:9F:6F:AF:FF:C2:FE:C1:1C:6E:2C:E9:9A:A3:AA:3F:B2:EE"]
+      }
+    }]
