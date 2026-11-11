@@ -28,6 +28,7 @@ let songsCache = null;
 let lastCacheTime = 0;
 const fileMetaCache = {};
 const trendingCache = {};
+const artistPhotoCache = {};
 
 async function getDriveSongs(forceRefresh = false) {
   if (!forceRefresh && songsCache && Date.now() - lastCacheTime < 30000) {
@@ -52,10 +53,24 @@ async function getDriveSongs(forceRefresh = false) {
   return songsCache;
 }
 
-app.get('/api/ping', (req, res) => res.json({ status: 'awake' }));
+app.get('/api/ping', function (req, res) {
+  res.json({ status: 'awake', time: Date.now() });
+});
 
-// 1. Upload Audio File to Google Drive
-app.post('/api/upload', upload.single('audio'), async (req, res) => {
+app.get('/.well-known/assetlinks.json', function (req, res) {
+  res.json([
+    {
+      relation: ['delegate_permission/common.handle_all_urls'],
+      target: {
+        namespace: 'android_app',
+        package_name: 'com.onrender.musix_cloud.twa',
+        sha256_cert_fingerprints: (process.env.TWA_SHA256 ? [process.env.TWA_SHA256] : [])
+      }
+    }
+  ]);
+});
+
+app.post('/api/upload', upload.single('audio'), async function (req, res) {
   try {
     if (!req.file) return res.status(400).json({ error: 'No audio file provided' });
 
@@ -82,8 +97,7 @@ app.post('/api/upload', upload.single('audio'), async (req, res) => {
   }
 });
 
-// 2. List All Uploaded Songs
-app.get('/api/songs', async (req, res) => {
+app.get('/api/songs', async function (req, res) {
   try {
     const force = req.query.refresh === '1';
     const files = await getDriveSongs(force);
@@ -93,8 +107,7 @@ app.get('/api/songs', async (req, res) => {
   }
 });
 
-// 3. Stream & Offline Download Endpoint
-app.get('/api/stream/:fileId', async (req, res) => {
+app.get('/api/stream/:fileId', async function (req, res) {
   try {
     const fileId = req.params.fileId;
     const range = req.headers.range;
@@ -158,7 +171,48 @@ app.get('/api/stream/:fileId', async (req, res) => {
   }
 });
 
-// Strict Language Filter for Trending Tracks
+// Multi-Source Real Artist Face Photo Resolver (Deezer + Wikipedia REST API)
+app.get('/api/artist-image', async function (req, res) {
+  const name = (req.query.name || '').trim();
+  if (!name || name === 'Cloud Artist') return res.json({ image: '' });
+
+  const key = name.toLowerCase();
+  if (artistPhotoCache[key]) {
+    return res.json({ image: artistPhotoCache[key] });
+  }
+
+  // 1. Try Deezer Artist Search
+  try {
+    const dzUrl = 'https://api.deezer.com/search/artist?q=' + encodeURIComponent(name) + '&limit=1';
+    const dzRes = await axios.get(dzUrl, { timeout: 4000 });
+    const list = (dzRes.data && dzRes.data.data) || [];
+    if (list.length > 0) {
+      const pic = list[0].picture_big || list[0].picture_medium || list[0].picture_xl;
+      if (pic && pic.indexOf('/images/artist//') === -1) {
+        artistPhotoCache[key] = pic;
+        return res.json({ image: pic });
+      }
+    }
+  } catch (e) {}
+
+  // 2. Try Wikipedia Page Summary Image (Great for Indian Artists)
+  try {
+    const wikiTitle = encodeURIComponent(name.replace(/\s+/g, '_'));
+    const wikiUrl = 'https://en.wikipedia.org/api/rest_v1/page/summary/' + wikiTitle;
+    const wikiRes = await axios.get(wikiUrl, {
+      timeout: 4000,
+      headers: { 'User-Agent': 'MusixPlayer/1.0' }
+    });
+    const thumb = wikiRes.data && wikiRes.data.thumbnail && wikiRes.data.thumbnail.source;
+    if (thumb) {
+      artistPhotoCache[key] = thumb;
+      return res.json({ image: thumb });
+    }
+  } catch (e) {}
+
+  return res.json({ image: '' });
+});
+
 function isStrictLanguageMatch(item, lang) {
   const genre = (item.primaryGenreName || '').toLowerCase();
   const text = ((item.trackName || '') + ' ' + (item.collectionName || '') + ' ' + (item.artistName || '')).toLowerCase();
@@ -267,8 +321,7 @@ async function fetchLanguageTrending(lang) {
   return merged;
 }
 
-// 4. Trending Songs Endpoint
-app.get('/api/trending', async (req, res) => {
+app.get('/api/trending', async function (req, res) {
   try {
     const lang = (req.query.lang || 'malayalam').toLowerCase();
     const force = req.query.refresh === '1';
@@ -285,8 +338,7 @@ app.get('/api/trending', async (req, res) => {
   }
 });
 
-// 5. Direct Downloadable Song Link Resolver
-app.get('/api/song-link', async (req, res) => {
+app.get('/api/song-link', async function (req, res) {
   const trackId = req.query.trackId || '';
   const trackUrl = req.query.trackUrl || '';
   const title = req.query.title || '';
@@ -334,6 +386,12 @@ app.get('/api/song-link', async (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
+app.listen(PORT, function () {
   console.log('Musix server running on http://localhost:' + PORT);
+
+  // Built-in Keep-Awake Pinger every 10 minutes so Render never shows the loading screen
+  const selfUrl = process.env.RENDER_EXTERNAL_URL || 'https://musix-cloud.onrender.com';
+  setInterval(function () {
+    axios.get(selfUrl + '/api/ping', { timeout: 5000 }).catch(function () {});
+  }, 600000);
 });
