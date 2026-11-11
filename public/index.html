@@ -5,16 +5,17 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Musix</title>
   <link rel="manifest" href="/manifest.json" />
-  <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png" />
+  <!-- Borderless Rounded SVG Favicon for Browser Tab (No Black or White Border) -->
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' stop-color='%23ff5872'/%3E%3Cstop offset='100%25' stop-color='%23f81f38'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='100' height='100' rx='24' fill='url(%23g)'/%3E%3Cpath d='M38 68V30l34-6v38' fill='none' stroke='%23fff' stroke-width='7' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='30' cy='68' r='9' fill='%23fff'/%3E%3Ccircle cx='64' cy='62' r='9' fill='%23fff'/%3E%3C/svg%3E" />
   <link rel="apple-touch-icon" href="/icon-512.png" />
-  <meta name="theme-color" content="#0d0d0f" />
+  <meta name="theme-color" content="#0b0c10" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <style>
     :root {
-      --am-canvas: #0d0d0f;
-      --am-sidebar: #141417;
-      --am-card: #1c1c21;
+      --am-canvas: #0b0c10;
+      --am-sidebar: #12131a;
+      --am-card: #1a1b24;
       --am-hover: rgba(255, 255, 255, 0.07);
       --am-border: rgba(255, 255, 255, 0.08);
       --am-accent: #fa243c;
@@ -45,15 +46,16 @@
 
     svg { display: block; flex-shrink: 0; }
 
+    /* CLEAN SPLASH SCREEN: DEEP MIDNIGHT BACKGROUND + PURE VECTOR BEATING LOGO */
     #splash-screen {
       position: fixed;
       inset: 0;
-      background: radial-gradient(circle at 50% 50%, #240d13 0%, #0d0d0f 70%);
+      background: linear-gradient(145deg, #13151f 0%, #090a0f 100%);
       z-index: 9999;
       display: flex;
       align-items: center;
       justify-content: center;
-      transition: opacity 0.45s ease, visibility 0.45s ease;
+      transition: opacity 0.4s ease, visibility 0.4s ease;
     }
 
     #splash-screen.hidden {
@@ -63,53 +65,42 @@
     }
 
     .splash-logo-wrap {
-      width: 96px;
-      height: 96px;
-      border-radius: 24px;
-      overflow: hidden;
+      width: 92px;
+      height: 92px;
+      border-radius: 22px;
+      background: linear-gradient(135deg, #ff5872 0%, #f81f38 100%);
       display: flex;
       align-items: center;
       justify-content: center;
-      background: linear-gradient(135deg, #fb5c74, #fa233b);
-      animation: heartbeatGlow 1.15s infinite ease-in-out;
+      animation: cleanHeartbeat 1.15s infinite ease-in-out;
     }
 
-    .splash-logo-wrap img {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-      border-radius: 24px;
-    }
-
-    @keyframes heartbeatGlow {
-      0% {
+    @keyframes cleanHeartbeat {
+      0%, 100% {
         transform: scale(1);
-        box-shadow: 0 0 25px rgba(250, 36, 60, 0.45), 0 0 55px rgba(250, 36, 60, 0.2);
+        box-shadow: 0 10px 30px rgba(248, 31, 56, 0.35);
       }
       18% {
-        transform: scale(1.18);
-        box-shadow: 0 0 50px rgba(250, 36, 60, 0.95), 0 0 95px rgba(250, 36, 60, 0.65);
+        transform: scale(1.16);
+        box-shadow: 0 14px 44px rgba(248, 31, 56, 0.65);
       }
       34% {
         transform: scale(1);
-        box-shadow: 0 0 28px rgba(250, 36, 60, 0.5), 0 0 60px rgba(250, 36, 60, 0.25);
+        box-shadow: 0 10px 30px rgba(248, 31, 56, 0.35);
       }
       52% {
-        transform: scale(1.12);
-        box-shadow: 0 0 42px rgba(250, 36, 60, 0.85), 0 0 80px rgba(250, 36, 60, 0.5);
-      }
-      75%, 100% {
-        transform: scale(1);
-        box-shadow: 0 0 25px rgba(250, 36, 60, 0.45), 0 0 55px rgba(250, 36, 60, 0.2);
+        transform: scale(1.1);
+        box-shadow: 0 12px 38px rgba(248, 31, 56, 0.55);
       }
     }
 
+    /* TOAST */
     #toast-box {
       position: fixed;
       top: 14px;
       left: 50%;
       transform: translateX(-50%) translateY(-80px);
-      background: rgba(28, 28, 34, 0.96);
+      background: rgba(28, 28, 36, 0.96);
       backdrop-filter: blur(16px);
       border: 1px solid rgba(255,255,255,0.15);
       color: #fff;
@@ -128,6 +119,7 @@
 
     #toast-box.show { transform: translateX(-50%) translateY(0); }
 
+    /* APP LAYOUT */
     .app-shell {
       display: flex;
       flex: 1;
@@ -160,13 +152,18 @@
       letter-spacing: -0.4px;
     }
 
-    .brand img {
+    .brand-logo-sq {
       width: 28px;
       height: 28px;
       border-radius: 7px;
-      object-fit: cover;
+      background: linear-gradient(135deg, #ff5872 0%, #f81f38 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 12px rgba(248, 31, 56, 0.35);
     }
 
+    /* COMPACT TOP HEADER ABOVE HOME */
     .home-top-brand {
       display: flex;
       align-items: center;
@@ -178,14 +175,6 @@
       display: flex;
       align-items: center;
       gap: 0.5rem;
-    }
-
-    .home-top-brand-left img {
-      width: 28px;
-      height: 28px;
-      border-radius: 7px;
-      object-fit: cover;
-      box-shadow: 0 4px 12px rgba(250, 36, 60, 0.35);
     }
 
     .home-top-brand-name {
@@ -276,7 +265,7 @@
       flex: 1;
       overflow-y: auto;
       padding: 1rem 1.25rem 4.5rem;
-      background: linear-gradient(180deg, #1e1014 0%, var(--am-canvas) 200px);
+      background: linear-gradient(180deg, #161824 0%, var(--am-canvas) 220px);
     }
 
     .view { display: none; }
@@ -346,6 +335,7 @@
       align-items: center;
     }
 
+    /* COMPACT SQUARE SMART CARDS & ARTIST PHOTO SQUARE BOXES */
     .smart-grid {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
@@ -357,13 +347,13 @@
       position: relative;
       aspect-ratio: 1 / 1;
       border-radius: 12px;
-      padding: 0.6rem;
+      padding: 0.55rem;
       display: flex;
       flex-direction: column;
       justify-content: space-between;
       cursor: pointer;
       overflow: hidden;
-      border: 1px solid rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.12);
       box-shadow: 0 6px 14px rgba(0, 0, 0, 0.35);
     }
 
@@ -372,29 +362,48 @@
       inset: 0;
       background-size: cover;
       background-position: center;
-      opacity: 0.28;
+      opacity: 0.32;
       filter: blur(1px);
+    }
+
+    /* Clear, unblurred artist photo inside the small square box */
+    .smart-card-bg.artist-square-photo {
+      opacity: 0.88;
+      filter: none;
+      transition: transform 0.25s ease;
+    }
+
+    .smart-card:hover .smart-card-bg.artist-square-photo {
+      transform: scale(1.06);
+    }
+
+    .smart-card-shade {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(180deg, rgba(0,0,0,0.2) 0%, rgba(0,0,0,0.1) 45%, rgba(0,0,0,0.84) 100%);
+      z-index: 1;
     }
 
     .smart-card-top { position: relative; z-index: 2; }
 
     .smart-pill {
-      font-size: 0.55rem;
+      font-size: 0.54rem;
       font-weight: 700;
       text-transform: uppercase;
-      padding: 0.14rem 0.4rem;
+      padding: 0.13rem 0.38rem;
       border-radius: 99px;
-      background: rgba(0, 0, 0, 0.45);
+      background: rgba(0, 0, 0, 0.52);
+      backdrop-filter: blur(4px);
       color: #fff;
     }
 
     .smart-card-bottom { position: relative; z-index: 2; }
 
     .smart-card-title {
-      font-size: 0.78rem;
+      font-size: 0.76rem;
       font-weight: 800;
       line-height: 1.15;
-      text-shadow: 0 2px 6px rgba(0,0,0,0.6);
+      text-shadow: 0 2px 6px rgba(0,0,0,0.85);
       display: -webkit-box;
       -webkit-line-clamp: 2;
       -webkit-box-orient: vertical;
@@ -402,12 +411,14 @@
     }
 
     .smart-card-count {
-      font-size: 0.64rem;
-      color: rgba(255, 255, 255, 0.85);
+      font-size: 0.62rem;
+      color: rgba(255, 255, 255, 0.88);
       font-weight: 600;
       margin-top: 2px;
+      text-shadow: 0 1px 4px rgba(0,0,0,0.8);
     }
 
+    /* COMPACT RECENTLY ADDED STRIP */
     .recent-strip {
       display: flex;
       gap: 0.6rem;
@@ -453,6 +464,7 @@
       text-overflow: ellipsis;
     }
 
+    /* TRENDING TABS & SEARCH */
     .trending-lang-tabs {
       display: flex;
       gap: 0.4rem;
@@ -528,6 +540,7 @@
 
     .trending-clear-btn.show { display: inline-flex; }
 
+    /* TRACKLIST TABLE */
     .track-table { width: 100%; }
 
     .track-row {
@@ -940,9 +953,14 @@
 </head>
 <body>
 
+  <!-- CLEAN BEATING MUSIX LOGO ON DARK MIDNIGHT BACKGROUND (NEVER TURNS BLACK) -->
   <div id="splash-screen">
     <div class="splash-logo-wrap">
-      <img src="/icon-512.png" alt="Musix" />
+      <svg width="50" height="50" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M9 18V5l12-2v13"></path>
+        <circle cx="6" cy="18" r="3" fill="#ffffff"></circle>
+        <circle cx="18" cy="16" r="3" fill="#ffffff"></circle>
+      </svg>
     </div>
   </div>
 
@@ -951,7 +969,13 @@
   <div class="app-shell">
     <aside class="sidebar">
       <div class="brand">
-        <img src="/icon-192.png" alt="Musix" />
+        <div class="brand-logo-sq">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M9 18V5l12-2v13"></path>
+            <circle cx="6" cy="18" r="3" fill="#ffffff"></circle>
+            <circle cx="18" cy="16" r="3" fill="#ffffff"></circle>
+          </svg>
+        </div>
         <span>Musix</span>
       </div>
 
@@ -1013,7 +1037,13 @@
       <section id="view-home" class="view active">
         <div class="home-top-brand">
           <div class="home-top-brand-left">
-            <img src="/icon-192.png" alt="Musix" />
+            <div class="brand-logo-sq">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M9 18V5l12-2v13"></path>
+                <circle cx="6" cy="18" r="3" fill="#ffffff"></circle>
+                <circle cx="18" cy="16" r="3" fill="#ffffff"></circle>
+              </svg>
+            </div>
             <span class="home-top-brand-name">Musix</span>
           </div>
           <span id="net-status-badge" class="offline-status-pill" onclick="switchView('offline')" style="cursor:pointer;">Offline Ready</span>
@@ -1312,7 +1342,7 @@
   <script>
     const AUDIO_CACHE_NAME = 'musix-offline-audio-v1';
     const SPLASH_START_TIME = Date.now();
-    const MIN_SPLASH_DURATION = 2800;
+    const MIN_SPLASH_DURATION = 2200;
 
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('/sw.js').catch(function () {});
@@ -1345,6 +1375,7 @@
     let offlineIds = JSON.parse(localStorage.getItem('am_offline_ids') || '[]');
     let playlists = JSON.parse(localStorage.getItem('am_playlists') || '[]');
     let metaCache = JSON.parse(localStorage.getItem('am_meta_cache_v5') || '{}');
+    let artistFaceCache = JSON.parse(localStorage.getItem('am_artist_faces_v2') || '{}');
 
     const audioPlayer = document.getElementById('audio-player');
     const nextPreloader = document.getElementById('next-audio-preloader');
@@ -1454,6 +1485,27 @@
       return { language: language, vibe: vibe, primaryArtist: primaryArtist };
     }
 
+    async function fetchArtistPhotoForSquare(artistName, fallbackArt) {
+      if (!artistName || artistName === 'Cloud Artist') return fallbackArt || '/icon-512.png';
+      if (artistFaceCache[artistName]) return artistFaceCache[artistName];
+
+      try {
+        const res = await fetch('/api/artist-image?name=' + encodeURIComponent(artistName));
+        const data = await res.json();
+        if (data && data.image) {
+          artistFaceCache[artistName] = data.image;
+          localStorage.setItem('am_artist_faces_v2', JSON.stringify(artistFaceCache));
+          const cleanKey = artistName.replace(/[^a-zA-Z0-9]/g, '_');
+          document.querySelectorAll('[data-artist-sq="' + cleanKey + '"]').forEach(function (el) {
+            el.style.backgroundImage = "url('" + data.image + "')";
+          });
+          return data.image;
+        }
+      } catch (e) {}
+
+      return fallbackArt || '/icon-512.png';
+    }
+
     async function enrichSongMetadata(song) {
       if (metaCache[song.id]) return metaCache[song.id];
       const parsed = parseTrackName(song.name);
@@ -1491,6 +1543,7 @@
           };
           metaCache[song.id] = enriched;
           localStorage.setItem('am_meta_cache_v5', JSON.stringify(metaCache));
+          fetchArtistPhotoForSquare(tags.primaryArtist, enriched.artwork);
           return enriched;
         }
       } catch (e) {}
@@ -1646,6 +1699,11 @@
         for (const song of driveSongs) {
           if (!metaCache[song.id]) {
             await enrichSongMetadata(song);
+          } else {
+            const m = metaCache[song.id];
+            if (m && m.primaryArtist && !artistFaceCache[m.primaryArtist]) {
+              fetchArtistPhotoForSquare(m.primaryArtist, m.artwork);
+            }
           }
         }
         refreshAllViews();
@@ -1688,22 +1746,45 @@
       'linear-gradient(135deg, #ec4899, #8b5cf6)'
     ];
 
-    function renderSquareSmartCardsHTML(groupObj, categoryLabel, showArtBg) {
+    function renderSquareSmartCardsHTML(groupObj, categoryLabel) {
       const entries = Object.entries(groupObj).sort(function (a, b) { return b[1].length - a[1].length; });
       if (entries.length === 0) {
         return '<p style="color:var(--am-subtext); font-size:0.78rem;">No songs yet.</p>';
       }
+      const isArtistBox = categoryLabel === 'Artist';
+
       return entries.map(function (entry, i) {
         const name = entry[0];
         const list = entry[1];
         const bg = GRADIENTS[i % GRADIENTS.length];
         const safeName = name.replace(/'/g, "\\'");
-        const firstArt = (showArtBg && list.length > 0) ? getSongMeta(list[0]).artwork : '';
-        const bgLayer = firstArt ? '<div class="smart-card-bg" style="background-image:url(\'' + firstArt + '\');"></div>' : '';
+        const firstArt = list.length > 0 ? getSongMeta(list[0]).artwork : '/icon-512.png';
         const countText = list.length + (list.length === 1 ? ' Song' : ' Songs');
+
+        if (isArtistBox) {
+          const cleanKey = name.replace(/[^a-zA-Z0-9]/g, '_');
+          const photoUrl = artistFaceCache[name] || firstArt;
+          if (!artistFaceCache[name]) {
+            fetchArtistPhotoForSquare(name, firstArt);
+          }
+          return (
+            '<div class="smart-card" style="background:#1a1b24;" onclick="openSmartPlaylist(\'Artist\', \'' + safeName + '\')">' +
+              '<div class="smart-card-bg artist-square-photo" data-artist-sq="' + cleanKey + '" style="background-image:url(\'' + photoUrl + '\');"></div>' +
+              '<div class="smart-card-shade"></div>' +
+              '<div class="smart-card-top">' +
+                '<span class="smart-pill">Artist</span>' +
+              '</div>' +
+              '<div class="smart-card-bottom">' +
+                '<div class="smart-card-title">' + name + '</div>' +
+                '<div class="smart-card-count">' + countText + '</div>' +
+              '</div>' +
+            '</div>'
+          );
+        }
+
         return (
           '<div class="smart-card" style="background:' + bg + ';" onclick="openSmartPlaylist(\'' + categoryLabel + '\', \'' + safeName + '\')">' +
-            bgLayer +
+            '<div class="smart-card-bg" style="background-image:url(\'' + firstArt + '\');"></div>' +
             '<div class="smart-card-top">' +
               '<span class="smart-pill">' + categoryLabel + '</span>' +
             '</div>' +
@@ -1718,9 +1799,9 @@
 
     function renderSmartPlaylistsView() {
       const groups = buildSmartGroups();
-      document.getElementById('smart-lang-grid').innerHTML = renderSquareSmartCardsHTML(groups.languages, 'Language', true);
-      document.getElementById('smart-vibe-grid').innerHTML = renderSquareSmartCardsHTML(groups.vibes, 'Vibe', true);
-      document.getElementById('smart-artist-grid').innerHTML = renderSquareSmartCardsHTML(groups.artists, 'Artist', false);
+      document.getElementById('smart-lang-grid').innerHTML = renderSquareSmartCardsHTML(groups.languages, 'Language');
+      document.getElementById('smart-vibe-grid').innerHTML = renderSquareSmartCardsHTML(groups.vibes, 'Vibe');
+      document.getElementById('smart-artist-grid').innerHTML = renderSquareSmartCardsHTML(groups.artists, 'Artist');
     }
 
     function openSmartPlaylist(category, name) {
@@ -1740,7 +1821,9 @@
       document.getElementById('pl-delete-btn').style.display = 'none';
 
       const coverBox = document.getElementById('pl-hero-cover');
-      if (list.length > 0) {
+      if (category === 'Artist' && artistFaceCache[name]) {
+        coverBox.innerHTML = '<img src="' + artistFaceCache[name] + '" alt="Artist" />';
+      } else if (list.length > 0) {
         coverBox.innerHTML = '<img src="' + getSongMeta(list[0]).artwork + '" alt="Cover" />';
       } else {
         coverBox.innerHTML = '';

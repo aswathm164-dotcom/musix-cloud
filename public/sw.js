@@ -1,4 +1,4 @@
-const SHELL_CACHE = 'musix-shell-v11';
+const SHELL_CACHE = 'musix-shell-v12';
 const AUDIO_CACHE = 'musix-offline-audio-v1';
 const ASSETS = [
   '/',

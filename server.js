@@ -53,24 +53,9 @@ async function getDriveSongs(forceRefresh = false) {
   return songsCache;
 }
 
-app.get('/api/ping', function (req, res) {
-  res.json({ status: 'awake', time: Date.now() });
-});
+app.get('/api/ping', (req, res) => res.json({ status: 'awake' }));
 
-app.get('/.well-known/assetlinks.json', function (req, res) {
-  res.json([
-    {
-      relation: ['delegate_permission/common.handle_all_urls'],
-      target: {
-        namespace: 'android_app',
-        package_name: 'com.onrender.musix_cloud.twa',
-        sha256_cert_fingerprints: (process.env.TWA_SHA256 ? [process.env.TWA_SHA256] : [])
-      }
-    }
-  ]);
-});
-
-app.post('/api/upload', upload.single('audio'), async function (req, res) {
+app.post('/api/upload', upload.single('audio'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No audio file provided' });
 
@@ -97,7 +82,7 @@ app.post('/api/upload', upload.single('audio'), async function (req, res) {
   }
 });
 
-app.get('/api/songs', async function (req, res) {
+app.get('/api/songs', async (req, res) => {
   try {
     const force = req.query.refresh === '1';
     const files = await getDriveSongs(force);
@@ -107,7 +92,7 @@ app.get('/api/songs', async function (req, res) {
   }
 });
 
-app.get('/api/stream/:fileId', async function (req, res) {
+app.get('/api/stream/:fileId', async (req, res) => {
   try {
     const fileId = req.params.fileId;
     const range = req.headers.range;
@@ -171,8 +156,8 @@ app.get('/api/stream/:fileId', async function (req, res) {
   }
 });
 
-// Multi-Source Real Artist Face Photo Resolver (Deezer + Wikipedia REST API)
-app.get('/api/artist-image', async function (req, res) {
+// Artist Photo Resolver for Smart Mix Square Boxes
+app.get('/api/artist-image', async (req, res) => {
   const name = (req.query.name || '').trim();
   if (!name || name === 'Cloud Artist') return res.json({ image: '' });
 
@@ -181,7 +166,7 @@ app.get('/api/artist-image', async function (req, res) {
     return res.json({ image: artistPhotoCache[key] });
   }
 
-  // 1. Try Deezer Artist Search
+  // 1. Try Deezer Artist Photo API
   try {
     const dzUrl = 'https://api.deezer.com/search/artist?q=' + encodeURIComponent(name) + '&limit=1';
     const dzRes = await axios.get(dzUrl, { timeout: 4000 });
@@ -195,18 +180,15 @@ app.get('/api/artist-image', async function (req, res) {
     }
   } catch (e) {}
 
-  // 2. Try Wikipedia Page Summary Image (Great for Indian Artists)
+  // 2. Fallback to iTunes Artist Top Track Artwork
   try {
-    const wikiTitle = encodeURIComponent(name.replace(/\s+/g, '_'));
-    const wikiUrl = 'https://en.wikipedia.org/api/rest_v1/page/summary/' + wikiTitle;
-    const wikiRes = await axios.get(wikiUrl, {
-      timeout: 4000,
-      headers: { 'User-Agent': 'MusixPlayer/1.0' }
-    });
-    const thumb = wikiRes.data && wikiRes.data.thumbnail && wikiRes.data.thumbnail.source;
-    if (thumb) {
-      artistPhotoCache[key] = thumb;
-      return res.json({ image: thumb });
+    const itUrl = 'https://itunes.apple.com/search?term=' + encodeURIComponent(name) + '&country=in&media=music&entity=song&limit=1';
+    const itRes = await axios.get(itUrl, { timeout: 4000 });
+    const hits = (itRes.data && itRes.data.results) || [];
+    if (hits.length > 0 && hits[0].artworkUrl100) {
+      const art = hits[0].artworkUrl100.replace('100x100bb', '600x600bb');
+      artistPhotoCache[key] = art;
+      return res.json({ image: art });
     }
   } catch (e) {}
 
@@ -321,7 +303,7 @@ async function fetchLanguageTrending(lang) {
   return merged;
 }
 
-app.get('/api/trending', async function (req, res) {
+app.get('/api/trending', async (req, res) => {
   try {
     const lang = (req.query.lang || 'malayalam').toLowerCase();
     const force = req.query.refresh === '1';
@@ -338,7 +320,7 @@ app.get('/api/trending', async function (req, res) {
   }
 });
 
-app.get('/api/song-link', async function (req, res) {
+app.get('/api/song-link', async (req, res) => {
   const trackId = req.query.trackId || '';
   const trackUrl = req.query.trackUrl || '';
   const title = req.query.title || '';
@@ -386,12 +368,6 @@ app.get('/api/song-link', async function (req, res) {
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, function () {
+app.listen(PORT, () => {
   console.log('Musix server running on http://localhost:' + PORT);
-
-  // Built-in Keep-Awake Pinger every 10 minutes so Render never shows the loading screen
-  const selfUrl = process.env.RENDER_EXTERNAL_URL || 'https://musix-cloud.onrender.com';
-  setInterval(function () {
-    axios.get(selfUrl + '/api/ping', { timeout: 5000 }).catch(function () {});
-  }, 600000);
 });
