@@ -11,7 +11,10 @@
   "theme_color": "#0b0c10",
   "lang": "en",
   "dir": "ltr",
-  "categories": ["music", "entertainment"],
+  "categories": [
+    "music",
+    "entertainment"
+  ],
   "icons": [
     {
       "src": "/icon-512.png",

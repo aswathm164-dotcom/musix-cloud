@@ -34,6 +34,8 @@
       -webkit-tap-highlight-color: transparent;
     }
 
+    html, body { background-color: #0b0c10; }
+
     body {
       background-color: var(--am-canvas);
       color: var(--am-text);
@@ -56,6 +58,10 @@
       align-items: center;
       justify-content: center;
       transition: opacity 0.4s ease, visibility 0.4s ease;
+    }
+
+    @media (display-mode: standalone), (display-mode: fullscreen), (display-mode: minimal-ui) {
+      #splash-screen { display: none !important; opacity: 0 !important; visibility: hidden !important; pointer-events: none !important; }
     }
 
     #splash-screen.hidden {
@@ -1342,7 +1348,9 @@
   <script>
     const AUDIO_CACHE_NAME = 'musix-offline-audio-v1';
     const SPLASH_START_TIME = Date.now();
-    const MIN_SPLASH_DURATION = 2200;
+    const IS_STANDALONE = window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true || document.referrer.includes("android-app://");
+    if (IS_STANDALONE) { const sp = document.getElementById("splash-screen"); if (sp) sp.remove(); }
+    const MIN_SPLASH_DURATION = IS_STANDALONE ? 0 : 2200;
 
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('/sw.js').catch(function () {});
