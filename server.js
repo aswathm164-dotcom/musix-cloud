@@ -1,3 +1,7 @@
+const v8 = require('v8');
+v8.setFlagsFromString('--max-old-space-size=350');
+const os = require('os');
+const fs = require('fs');
 require('dotenv').config();
 const express = require('express');
 const multer = require('multer');
@@ -7,7 +11,7 @@ const axios = require('axios');
 const path = require('path');
 
 const app = express();
-const upload = multer({ storage: multer.memoryStorage() });
+const upload = multer({ dest: os.tmpdir(), limits: { fileSize: 80 * 1024 * 1024 } });
 
 app.use(express.static(path.join(__dirname, 'public'), { dotfiles: 'allow' }));
 app.use(express.json());
@@ -192,9 +196,14 @@ app.post('/api/upload', upload.single('audio'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No audio file provided' });
 
-    const id3 = extractAudioTags(req.file.buffer);
-    const bufferStream = new stream.PassThrough();
-    bufferStream.end(req.file.buffer);
+    // Read only first 64 KB for ID3 tags instead of loading whole file into RAM
+    const headerBuf = Buffer.alloc(65536);
+    const fd = fs.openSync(req.file.path, 'r');
+    const bytesRead = fs.readSync(fd, headerBuf, 0, 65536, 0);
+    fs.closeSync(fd);
+    const id3 = extractAudioTags(headerBuf.subarray(0, bytesRead));
+
+    const fileStream = fs.createReadStream(req.file.path);
 
     const response = await drive.files.create({
       requestBody: {
@@ -210,7 +219,7 @@ app.post('/api/upload', upload.single('audio'), async (req, res) => {
       },
       media: {
         mimeType: req.file.mimetype,
-        body: bufferStream,
+        body: fileStream,
       },
       fields: 'id, name, size, mimeType, appProperties',
     });
@@ -219,6 +228,10 @@ app.post('/api/upload', upload.single('audio'), async (req, res) => {
     res.status(200).json(response.data);
   } catch (error) {
     res.status(500).json({ error: error.message });
+  } finally {
+    if (req.file && req.file.path) {
+      fs.unlink(req.file.path, function () {});
+    }
   }
 });
 

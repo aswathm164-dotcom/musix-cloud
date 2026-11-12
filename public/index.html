@@ -2856,19 +2856,17 @@
       if (!nextSong || preloadedNextSongId === nextSong.id) return;
       preloadedNextSongId = nextSong.id;
 
-      if (nextPreloader) {
-        nextPreloader.src = '/api/stream/' + nextSong.id;
-        nextPreloader.load();
+      if (audioPlayer.readyState >= 4) {
+        ensureWarmAudioCache(nextSong.id);
       }
-      ensureWarmAudioCache(nextSong.id);
     }
 
     // Monitor buffered ranges every second while playing; if <30s buffered ahead, trigger warm fetch
     setInterval(function () {
       if (audioPlayer.paused || !currentQueue[currentIndex]) return;
       const ahead = getBufferedAheadSeconds();
-      if (ahead < 30 && navigator.onLine) {
-        ensureWarmAudioCache(currentQueue[currentIndex].id);
+      if (ahead < 10 && audioPlayer.paused && !userIntentionallyPaused && navigator.onLine) {
+        audioPlayer.play().catch(function () {});
       }
     }, 1000);
 
@@ -3724,7 +3722,6 @@
 
       if (!playedFromCache) {
         audioPlayer.src = '/api/stream/' + song.id;
-        ensureWarmAudioCache(song.id);
       }
 
       setPlayStateUI(true);
@@ -3734,7 +3731,7 @@
       clearTimeout(spinnerTimer);
       setBufferingSpinner(false);
 
-      setTimeout(preloadNextTrackInQueue, 800);
+      setTimeout(preloadNextTrackInQueue, 4000);
     }
 
     function setPlayStateUI(playing) {
