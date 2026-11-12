@@ -1930,8 +1930,25 @@
         <button class="btn-am-secondary" onclick="triggerOptionAddToPlaylist()">+ Add to Playlist</button>
       </div>
 
-      <p style="font-size:0.72rem; font-weight:700; text-transform:uppercase; letter-spacing:0.06em; color:var(--am-subtext); margin-bottom:0.45rem;">Change Language (Permanent Override)</p>
+      <p style="font-size:0.72rem; font-weight:700; text-transform:uppercase; letter-spacing:0.06em; color:var(--am-subtext); margin-bottom:0.45rem;">Change Language (Instant Sync)</p>
       <div id="opt-lang-list"></div>
+
+      <details style="margin-top:0.75rem; border-top:1px solid rgba(255,255,255,0.08); padding-top:0.65rem;">
+        <summary style="font-size:0.75rem; font-weight:700; color:var(--am-accent); cursor:pointer; margin-bottom:0.55rem;">Edit Full Metadata (Title, Artist, Album, Year, Track, Genre)</summary>
+        <input type="text" id="edit-meta-title" class="am-input" placeholder="Song Title" style="margin-bottom:0.45rem; padding:0.45rem 0.65rem;" />
+        <input type="text" id="edit-meta-artist" class="am-input" placeholder="Artist" style="margin-bottom:0.45rem; padding:0.45rem 0.65rem;" />
+        <input type="text" id="edit-meta-album" class="am-input" placeholder="Album / Movie" style="margin-bottom:0.45rem; padding:0.45rem 0.65rem;" />
+        <input type="text" id="edit-meta-album-artist" class="am-input" placeholder="Album Artist" style="margin-bottom:0.45rem; padding:0.45rem 0.65rem;" />
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.4rem;">
+          <input type="text" id="edit-meta-genre" class="am-input" placeholder="Genre" style="margin-bottom:0.45rem; padding:0.45rem 0.65rem;" />
+          <input type="text" id="edit-meta-year" class="am-input" placeholder="Year (e.g. 2026)" style="margin-bottom:0.45rem; padding:0.45rem 0.65rem;" />
+        </div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.4rem;">
+          <input type="text" id="edit-meta-track" class="am-input" placeholder="Track #" style="margin-bottom:0.45rem; padding:0.45rem 0.65rem;" />
+          <input type="text" id="edit-meta-cover" class="am-input" placeholder="Cover Art URL" style="margin-bottom:0.45rem; padding:0.45rem 0.65rem;" />
+        </div>
+        <button class="btn-am" style="width:100%; justify-content:center; padding:0.5rem;" onclick="saveFullSongMetadataFromModal()">Save All Metadata Everywhere</button>
+      </details>
 
       <div style="display:flex; justify-content:flex-end; margin-top:0.65rem;">
         <button class="btn-am-secondary" onclick="closeModals()">Done</button>
@@ -2451,24 +2468,42 @@
     function getSongMeta(song) {
       if (!song) return { title: 'Unknown', artist: 'Unknown', album: 'Single', language: 'Other/Unknown', vibe: 'Feel Good', artwork: '/icon-512.png' };
       const parsed = parseTrackName(song.name);
-      const cached = metaCache[song.id] || oldMetaCache[song.id];
-      if (cached) {
-        const strictLang = manualLangOverrides[song.id] || determineSongLanguageStrict(song, cached.title || parsed.title, cached.artist, cached.album, cached.genre, (song.appProperties || {}).tagLang);
-        cached.language = strictLang;
-        return cached;
-      }
-      const strictLang = determineSongLanguageStrict(song, parsed.title, parsed.artist, '', '', (song.appProperties || {}).tagLang);
-      const pArtist = parsed.artist.split(/,|&|feat\.|ft\./i)[0].trim() || 'Cloud Artist';
-      return {
-        title: parsed.title,
-        artist: parsed.artist,
+      const cm = song.cloudMeta || {};
+      const cached = metaCache[song.id] || oldMetaCache[song.id] || {};
+
+      const resolvedTitle = cm.title || cached.title || parsed.title;
+      const resolvedArtist = cm.artist || cached.artist || parsed.artist;
+      const resolvedAlbum = cm.album || cached.album || 'Cloud Drive';
+      const resolvedAlbumArtist = cm.albumArtist || cached.albumArtist || '';
+      const resolvedGenre = cm.genre || cached.genre || 'Music';
+      const resolvedYear = cm.year || cached.year || '';
+      const resolvedTrack = cm.trackNumber || cached.trackNumber || '';
+      const resolvedArt = cm.coverArt || cached.artwork || '/icon-512.png';
+
+      const strictLang =
+        manualLangOverrides[song.id] ||
+        song.cloudLang ||
+        cm.language ||
+        determineSongLanguageStrict(song, resolvedTitle, resolvedArtist, resolvedAlbum, resolvedGenre, (song.appProperties || {}).tagLang);
+
+      const pArtist = (resolvedAlbumArtist || resolvedArtist).split(/,|&|feat\.|ft\./i)[0].trim() || 'Cloud Artist';
+      const merged = {
+        title: resolvedTitle,
+        artist: resolvedArtist,
         primaryArtist: pArtist,
-        album: 'Cloud Drive',
+        album: resolvedAlbum,
+        albumArtist: resolvedAlbumArtist,
+        genre: resolvedGenre,
         language: strictLang,
-        vibe: classifyVibeOnly(parsed.title, parsed.artist, '', ''),
-        explicit: false,
-        artwork: '/icon-512.png'
+        year: resolvedYear,
+        trackNumber: resolvedTrack,
+        vibe: cached.vibe || classifyVibeOnly(resolvedTitle, resolvedArtist, resolvedAlbum, resolvedGenre),
+        explicit: Boolean(cached.explicit),
+        artwork: resolvedArt,
+        updatedAt: Math.max(cm.updatedAt || 0, cached.updatedAt || 0)
       };
+      metaCache[song.id] = merged;
+      return merged;
     }
 
     // One-time re-check of existing library with summary report
@@ -2544,13 +2579,25 @@
       if (!song) return;
       songInOptionsModal = song;
       const meta = getSongMeta(song);
-      const isManual = Boolean(manualLangOverrides[song.id]);
+      const isManual = Boolean(manualLangOverrides[song.id] || song.cloudLang);
       const isOff = offlineIds.includes(song.id);
 
       document.getElementById('opt-song-title').textContent = meta.title + ' ? ' + meta.artist;
       document.getElementById('opt-song-cur-lang').textContent =
-        'Current Language: ' + meta.language + (isManual ? ' (Manual Override)' : ' (Auto)');
+        'Current Language: ' + meta.language + (isManual ? ' (Synced)' : ' (Auto)');
       document.getElementById('opt-dl-btn').textContent = isOff ? 'Remove Offline Copy' : 'Download Offline';
+
+      const tEl = document.getElementById('edit-meta-title');
+      if (tEl) {
+        tEl.value = meta.title || '';
+        document.getElementById('edit-meta-artist').value = meta.artist === 'Cloud Artist' ? '' : (meta.artist || '');
+        document.getElementById('edit-meta-album').value = meta.album === 'Cloud Drive' ? '' : (meta.album || '');
+        document.getElementById('edit-meta-album-artist').value = meta.albumArtist || '';
+        document.getElementById('edit-meta-genre').value = meta.genre === 'Music' ? '' : (meta.genre || '');
+        document.getElementById('edit-meta-year').value = meta.year || '';
+        document.getElementById('edit-meta-track').value = meta.trackNumber || '';
+        document.getElementById('edit-meta-cover').value = (meta.artwork && meta.artwork.indexOf('/icon-') === -1 && meta.artwork.indexOf('data:') === -1) ? meta.artwork : '';
+      }
 
       const listEl = document.getElementById('opt-lang-list');
       listEl.innerHTML = ALL_LANGUAGES.map(function (lang) {
@@ -2564,6 +2611,48 @@
       }).join('');
 
       document.getElementById('modal-song-options').classList.add('open');
+    }
+
+    async function saveFullSongMetadataFromModal() {
+      if (!songInOptionsModal) return;
+      const songId = songInOptionsModal.id;
+      const currentMeta = getSongMeta(songInOptionsModal);
+      const payload = {
+        title: document.getElementById('edit-meta-title').value.trim() || currentMeta.title,
+        artist: document.getElementById('edit-meta-artist').value.trim() || currentMeta.artist,
+        album: document.getElementById('edit-meta-album').value.trim() || currentMeta.album,
+        albumArtist: document.getElementById('edit-meta-album-artist').value.trim(),
+        genre: document.getElementById('edit-meta-genre').value.trim() || currentMeta.genre,
+        language: currentMeta.language,
+        year: document.getElementById('edit-meta-year').value.trim(),
+        trackNumber: document.getElementById('edit-meta-track').value.trim(),
+        coverArt: document.getElementById('edit-meta-cover').value.trim() || currentMeta.artwork,
+        updatedAt: Date.now(),
+        source: 'app-edit'
+      };
+
+      songInOptionsModal.cloudMeta = Object.assign({}, songInOptionsModal.cloudMeta, payload);
+      songInOptionsModal.cloudLang = payload.language;
+      metaCache[songId] = Object.assign({}, metaCache[songId], payload, { artwork: payload.coverArt });
+      localStorage.setItem('am_meta_cache_v6', JSON.stringify(metaCache));
+      localStorage.setItem('am_cached_drive_songs', JSON.stringify(driveSongs));
+      refreshAllViews();
+      closeModals();
+
+      try {
+        const res = await fetch('/api/songs/' + encodeURIComponent(songId) + '/metadata', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (res.ok) {
+          showToast('Saved metadata across all devices');
+        } else {
+          showToast('Saved locally (will sync when online)');
+        }
+      } catch (e) {
+        showToast('Saved locally (will sync when online)');
+      }
     }
 
     function openCurrentSongOptions() {
@@ -4034,8 +4123,78 @@
       }
     }
 
+    
+    function applyIncomingCloudRecords(recordsMap) {
+      if (!recordsMap || typeof recordsMap !== 'object') return;
+      let changed = false;
+      driveSongs.forEach(function (song) {
+        const rec = recordsMap[song.id];
+        if (!rec) return;
+        const prevUpdated = (song.cloudMeta && song.cloudMeta.updatedAt) || 0;
+        if ((rec.updatedAt || 0) >= prevUpdated) {
+          song.cloudMeta = Object.assign({}, song.cloudMeta, rec);
+          if (rec.language) {
+            song.cloudLang = rec.language;
+            manualLangOverrides[song.id] = rec.language;
+          }
+          if (metaCache[song.id]) {
+            if (rec.title) metaCache[song.id].title = rec.title;
+            if (rec.artist) metaCache[song.id].artist = rec.artist;
+            if (rec.album) metaCache[song.id].album = rec.album;
+            if (rec.albumArtist) metaCache[song.id].albumArtist = rec.albumArtist;
+            if (rec.genre) metaCache[song.id].genre = rec.genre;
+            if (rec.language) metaCache[song.id].language = rec.language;
+            if (rec.year) metaCache[song.id].year = rec.year;
+            if (rec.trackNumber) metaCache[song.id].trackNumber = rec.trackNumber;
+            if (rec.coverArt) metaCache[song.id].artwork = rec.coverArt;
+            metaCache[song.id].updatedAt = rec.updatedAt || Date.now();
+          }
+          changed = true;
+        }
+      });
+      if (changed) {
+        localStorage.setItem('am_lang_overrides_v1', JSON.stringify(manualLangOverrides));
+        localStorage.setItem('am_meta_cache_v6', JSON.stringify(metaCache));
+        localStorage.setItem('am_cached_drive_songs', JSON.stringify(driveSongs));
+        refreshAllViews();
+        if (activeSmartSongs.length > 0 && document.getElementById('pl-hero-type').textContent === 'Language') {
+          openSmartPlaylist('Language', document.getElementById('pl-hero-title').textContent);
+        }
+      }
+    }
+
+    function connectRealtimeSyncStream() {
+      if (typeof EventSource === 'undefined') return;
+      try {
+        const es = new EventSource('/api/events');
+        es.onmessage = function (ev) {
+          try {
+            const msg = JSON.parse(ev.data);
+            if (msg.type === 'metadata-update') {
+              if (msg.records) {
+                applyIncomingCloudRecords(msg.records);
+              } else if (msg.songId && msg.record) {
+                applyIncomingCloudRecords({ [msg.songId]: msg.record });
+              }
+            }
+          } catch (e) {}
+        };
+        es.onerror = function () {
+          es.close();
+          setTimeout(connectRealtimeSyncStream, 8000);
+        };
+      } catch (e) {}
+    }
+
+    document.addEventListener('visibilitychange', function () {
+      if (!document.hidden && navigator.onLine) {
+        fetchLibrary(true);
+      }
+    });
+
     initPlayerTouchInteractions();
-    fetchLibrary();
+    connectRealtimeSyncStream();
+    fetchLibrary(true);
   </script>
 </body>
 </html>
