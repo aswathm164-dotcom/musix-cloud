@@ -30,13 +30,64 @@ const fileMetaCache = {};
 const trendingCache = {};
 const artistPhotoCache = {};
 
+// Parse ID3v2 embedded tags (TLAN language, TCON genre, TALB album/movie, TPE1 artist, TIT2 title)
+function extractAudioTags(buffer) {
+  const tags = { language: '', album: '', artist: '', title: '', genre: '' };
+  try {
+    if (!buffer || buffer.length < 10) return tags;
+    if (buffer.toString('ascii', 0, 3) !== 'ID3') return tags;
+    const version = buffer[3];
+    const size =
+      ((buffer[6] & 0x7f) << 21) |
+      ((buffer[7] & 0x7f) << 14) |
+      ((buffer[8] & 0x7f) << 7) |
+      (buffer[9] & 0x7f);
+    const limit = Math.min(buffer.length, 10 + size);
+    let pos = 10;
+
+    while (pos + 10 < limit) {
+      const frameId = buffer.toString('ascii', pos, pos + 4);
+      if (!/^[A-Z0-9]{4}$/.test(frameId)) break;
+      let frameSize = 0;
+      if (version === 4) {
+        frameSize =
+          ((buffer[pos + 4] & 0x7f) << 21) |
+          ((buffer[pos + 5] & 0x7f) << 14) |
+          ((buffer[pos + 6] & 0x7f) << 7) |
+          (buffer[pos + 7] & 0x7f);
+      } else {
+        frameSize = buffer.readUInt32BE(pos + 4);
+      }
+      if (frameSize <= 1 || pos + 10 + frameSize > limit) break;
+
+      const encoding = buffer[pos + 10];
+      const payload = buffer.subarray(pos + 11, pos + 10 + frameSize);
+      let text = '';
+      if (encoding === 1 || encoding === 2) {
+        text = payload.toString('utf16le').replace(/\0/g, '').trim();
+      } else {
+        text = payload.toString('utf8').replace(/\0/g, '').trim();
+      }
+
+      if (frameId === 'TLAN') tags.language = text;
+      else if (frameId === 'TALB') tags.album = text;
+      else if (frameId === 'TPE1') tags.artist = text;
+      else if (frameId === 'TIT2') tags.title = text;
+      else if (frameId === 'TCON') tags.genre = text;
+
+      pos += 10 + frameSize;
+    }
+  } catch (e) {}
+  return tags;
+}
+
 async function getDriveSongs(forceRefresh = false) {
   if (!forceRefresh && songsCache && Date.now() - lastCacheTime < 30000) {
     return songsCache;
   }
   const response = await drive.files.list({
     q: "'" + DRIVE_FOLDER_ID + "' in parents and trashed = false",
-    fields: 'files(id, name, size, mimeType, createdTime)',
+    fields: 'files(id, name, size, mimeType, createdTime, appProperties)',
     orderBy: 'createdTime desc',
     pageSize: 500,
   });
@@ -59,6 +110,7 @@ app.post('/api/upload', upload.single('audio'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No audio file provided' });
 
+    const id3 = extractAudioTags(req.file.buffer);
     const bufferStream = new stream.PassThrough();
     bufferStream.end(req.file.buffer);
 
@@ -67,12 +119,18 @@ app.post('/api/upload', upload.single('audio'), async (req, res) => {
         name: req.body.title || req.file.originalname,
         parents: [DRIVE_FOLDER_ID],
         mimeType: req.file.mimetype,
+        appProperties: {
+          tagLang: (req.body.language || id3.language || '').slice(0, 40),
+          tagAlbum: (id3.album || '').slice(0, 60),
+          tagArtist: (id3.artist || '').slice(0, 60),
+          tagGenre: (id3.genre || '').slice(0, 40)
+        }
       },
       media: {
         mimeType: req.file.mimetype,
         body: bufferStream,
       },
-      fields: 'id, name, size, mimeType',
+      fields: 'id, name, size, mimeType, appProperties',
     });
 
     songsCache = null;
@@ -92,11 +150,12 @@ app.get('/api/songs', async (req, res) => {
   }
 });
 
+// Range-enabled low-latency audio streaming endpoint
 app.get('/api/stream/:fileId', async (req, res) => {
   try {
     const fileId = req.params.fileId;
     const range = req.headers.range;
-    const isDownload = req.query.download === '1';
+    const isFullFetch = req.query.download === '1' || req.query.warm === '1';
 
     let meta = fileMetaCache[fileId];
     if (!meta) {
@@ -114,10 +173,11 @@ app.get('/api/stream/:fileId', async (req, res) => {
     const fileSize = meta.size;
     const mimeType = meta.mimeType;
 
-    if (range && !isDownload) {
+    if (range && !isFullFetch) {
       const parts = range.replace(/bytes=/, '').split('-');
       const start = parseInt(parts[0], 10);
-      const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+      const requestedEnd = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+      const end = Math.min(requestedEnd, fileSize - 1);
       const chunkSize = end - start + 1;
 
       const driveStream = await drive.files.get(
@@ -136,6 +196,8 @@ app.get('/api/stream/:fileId', async (req, res) => {
         'Cache-Control': 'public, max-age=31536000, immutable'
       });
 
+      driveStream.data.on('error', () => { if (!res.writableEnded) res.end(); });
+      req.on('close', () => { if (driveStream.data && driveStream.data.destroy) driveStream.data.destroy(); });
       driveStream.data.pipe(res);
     } else {
       res.writeHead(200, {
@@ -149,24 +211,22 @@ app.get('/api/stream/:fileId', async (req, res) => {
         { fileId: fileId, alt: 'media' },
         { responseType: 'stream' }
       );
+      driveStream.data.on('error', () => { if (!res.writableEnded) res.end(); });
+      req.on('close', () => { if (driveStream.data && driveStream.data.destroy) driveStream.data.destroy(); });
       driveStream.data.pipe(res);
     }
   } catch (error) {
-    res.status(500).send('Error streaming audio');
+    if (!res.headersSent) res.status(500).send('Error streaming audio');
   }
 });
 
-// Artist Photo Resolver for Smart Mix Square Boxes
 app.get('/api/artist-image', async (req, res) => {
   const name = (req.query.name || '').trim();
   if (!name || name === 'Cloud Artist') return res.json({ image: '' });
 
   const key = name.toLowerCase();
-  if (artistPhotoCache[key]) {
-    return res.json({ image: artistPhotoCache[key] });
-  }
+  if (artistPhotoCache[key]) return res.json({ image: artistPhotoCache[key] });
 
-  // 1. Try Deezer Artist Photo API
   try {
     const dzUrl = 'https://api.deezer.com/search/artist?q=' + encodeURIComponent(name) + '&limit=1';
     const dzRes = await axios.get(dzUrl, { timeout: 4000 });
@@ -180,7 +240,6 @@ app.get('/api/artist-image', async (req, res) => {
     }
   } catch (e) {}
 
-  // 2. Fallback to iTunes Artist Top Track Artwork
   try {
     const itUrl = 'https://itunes.apple.com/search?term=' + encodeURIComponent(name) + '&country=in&media=music&entity=song&limit=1';
     const itRes = await axios.get(itUrl, { timeout: 4000 });
@@ -195,27 +254,32 @@ app.get('/api/artist-image', async (req, res) => {
   return res.json({ image: '' });
 });
 
-function isStrictLanguageMatch(item, lang) {
+function detectTrendingTrackLanguage(item) {
   const genre = (item.primaryGenreName || '').toLowerCase();
-  const text = ((item.trackName || '') + ' ' + (item.collectionName || '') + ' ' + (item.artistName || '')).toLowerCase();
+  const rawText = (item.trackName || '') + ' ' + (item.collectionName || '') + ' ' + (item.artistName || '');
+  const lower = rawText.toLowerCase();
 
-  if (lang === 'malayalam') {
-    if (/tamil|telugu|kannada|hindi|bollywood|kollywood|tollywood/.test(genre + ' ' + text)) return false;
-    return genre.indexOf('malayalam') !== -1 || /malayalam|mollywood|sushin|jakes bejoy|vishnu vijay|vineeth|shaan rahman|rex vijayan|gopi sundar|dabzee|govind vasantha|fejo/.test(text);
-  }
-  if (lang === 'tamil') {
-    if (/malayalam|mollywood|telugu|tollywood|kannada|hindi|bollywood|sushin|vishnu vijay|jakes bejoy|vineeth sreenivasan|shaan rahman|dabzee|rex vijayan|gopi sundar|govind vasantha|varnajaalam|farhash/.test(genre + ' ' + text)) return false;
-    return genre.indexOf('tamil') !== -1 || /tamil|kollywood|anirudh|yuvan|harris jayaraj|gv prakash|santhosh narayanan|ilayaraja|sai abhyankkar|pradeep kumar|sean roldan/.test(text);
-  }
-  if (lang === 'hindi') {
-    if (/malayalam|tamil|telugu|kannada|mollywood|kollywood|tollywood/.test(genre + ' ' + text)) return false;
-    return genre.indexOf('hindi') !== -1 || genre.indexOf('bollywood') !== -1 || /hindi|bollywood|arijit|pritam|vishal mishra|sachin-jigar|shreya ghoshal|atif aslam|jubin nautiyal/.test(text);
-  }
-  if (lang === 'english') {
-    if (/malayalam|tamil|telugu|kannada|hindi|bollywood|punjabi|spanish|latin/.test(genre + ' ' + text)) return false;
-    return true;
-  }
-  return true;
+  // 1a. Explicit iTunes primaryGenreName language tag
+  if (genre.includes('malayalam')) return 'malayalam';
+  if (genre.includes('tamil')) return 'tamil';
+  if (genre.includes('telugu')) return 'telugu';
+  if (genre.includes('kannada')) return 'kannada';
+  if (genre.includes('hindi') || genre.includes('bollywood')) return 'hindi';
+
+  // 1b. Unicode Script range check
+  if (/[\u0D00-\u0D7F]/.test(rawText)) return 'malayalam';
+  if (/[\u0B80-\u0BFF]/.test(rawText)) return 'tamil';
+  if (/[\u0C00-\u0C7F]/.test(rawText)) return 'telugu';
+  if (/[\u0C80-\u0CFF]/.test(rawText)) return 'kannada';
+  if (/[\u0900-\u097F]/.test(rawText)) return 'hindi';
+
+  // 1c. Known artist / film lookup
+  if (/\b(sushin shyam|jakes bejoy|vishnu vijay|vineeth sreenivasan|shaan rahman|rex vijayan|gopi sundar|dabzee|govind vasantha|fejo|vedan|thirumaali|job kurian|ks harisankar|sithara krishnakumar|aavesham|premalu|manjummel boys|kumbalangi nights|hridayam|bramayugam|aadujeevitham|bougainvillea|varshangalkku shesham)\b/.test(lower)) return 'malayalam';
+  if (/\b(anirudh|anirudh ravichander|yuvan shankar raja|harris jayaraj|g\.?v\.? prakash|santhosh narayanan|ilayaraja|ilaiyaraaja|sai abhyankkar|pradeep kumar|sean roldan|hiphop tamizha|dhee|jailer|leo|vikram|master|ponniyin selvan|amaran|vettaiyan|goat)\b/.test(lower)) return 'tamil';
+  if (/\b(arijit singh|pritam|vishal mishra|sachin-jigar|sachin jigar|shreya ghoshal|atif aslam|jubin nautiyal|amit trivedi|badshah|diljit dosanjh|sonu nigam|kumar sanu|udit narayan|animal|stree 2|bhool bhulaiyaa|jawan|pathaan|kabir singh|aashiqui 2)\b/.test(lower)) return 'hindi';
+  if (/\b(the weeknd|bruno mars|billie eilish|taylor swift|sabrina carpenter|post malone|dua lipa|coldplay|kendrick lamar|ed sheeran|drake|travis scott|ariana grande|justin bieber|lady gaga|imagine dragons)\b/.test(lower)) return 'english';
+
+  return 'unknown';
 }
 
 async function fetchLanguageTrending(lang) {
@@ -232,7 +296,7 @@ async function fetchLanguageTrending(lang) {
       'anirudh ravichander tamil',
       'yuvan shankar raja harris jayaraj tamil',
       'gv prakash santhosh narayanan tamil',
-      'ar rahman sai abhyankkar tamil'
+      'sai abhyankkar sean roldan tamil'
     ],
     hindi: [
       'hindi songs 2025 2026',
@@ -241,7 +305,6 @@ async function fetchLanguageTrending(lang) {
       'bollywood hits shreya ghoshal jubin nautiyal'
     ],
     english: [
-      'pop hits 2025 2026',
       'the weeknd bruno mars billie eilish',
       'taylor swift sabrina carpenter post malone',
       'dua lipa coldplay kendrick lamar'
@@ -260,12 +323,8 @@ async function fetchLanguageTrending(lang) {
       '&media=music&entity=song&limit=65';
     return axios
       .get(url, { timeout: 8000 })
-      .then(function (r) {
-        return (r.data && r.data.results) || [];
-      })
-      .catch(function () {
-        return [];
-      });
+      .then(function (r) { return (r.data && r.data.results) || []; })
+      .catch(function () { return []; });
   });
 
   const resultsArrays = await Promise.all(requests);
@@ -275,12 +334,9 @@ async function fetchLanguageTrending(lang) {
   for (const arr of resultsArrays) {
     for (const item of arr) {
       if (!item.trackId || !item.trackName) continue;
-      if (!isStrictLanguageMatch(item, lang)) continue;
+      if (detectTrendingTrackLanguage(item) !== lang) continue;
 
-      const key =
-        item.trackName.toLowerCase().trim() +
-        '_' +
-        (item.artistName || '').toLowerCase().trim();
+      const key = item.trackName.toLowerCase().trim() + '_' + (item.artistName || '').toLowerCase().trim();
       if (seen.has(item.trackId) || seen.has(key)) continue;
       seen.add(item.trackId);
       seen.add(key);
@@ -292,12 +348,13 @@ async function fetchLanguageTrending(lang) {
         artist: item.artistName || 'Unknown Artist',
         album: item.collectionName || 'Single',
         genre: item.primaryGenreName || 'Music',
+        explicit: item.trackExplicitness === 'explicit',
         artwork: (item.artworkUrl100 || '/icon-512.png').replace('100x100bb', '600x600bb'),
         trackViewUrl: item.trackViewUrl || ''
       });
-      if (merged.length >= 120) break;
+      if (merged.length >= 100) break;
     }
-    if (merged.length >= 120) break;
+    if (merged.length >= 100) break;
   }
 
   return merged;
