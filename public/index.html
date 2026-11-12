@@ -2000,6 +2000,12 @@
 
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('/sw.js').catch(function () {});
+      navigator.serviceWorker.addEventListener('controllerchange', function () {
+        if (!window.__musixSwReloaded) {
+          window.__musixSwReloaded = true;
+          window.location.reload();
+        }
+      });
     }
 
     const SVG_PLAY_MINI = '<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 4 20 12 6 20 6 4"/></svg>';
@@ -2315,10 +2321,12 @@
 
     function determineSongLanguageStrict(song, parsedTitle, artist, album, sourceGenre, tagLang) {
       // Priority 0: Permanent user manual override
+      if (song && song.cloudLang) return song.cloudLang;
       const cloudProps = (song && song.appProperties) || {};
       if (cloudProps.manualLang) {
         return cloudProps.manualLang;
       }
+      if (song && song.cloudLang) return song.cloudLang;
       if (song && manualLangOverrides[song.id]) {
         return manualLangOverrides[song.id];
       }
@@ -2563,25 +2571,32 @@
       if (current) openSongOptionsModal(current.id);
     }
 
-    async function syncSongLanguageToCloud(songId, newLang, silent) {
+    async function pushAllOverridesToCloud(silent) {
       try {
-        const res = await fetch('/api/songs/' + encodeURIComponent(songId) + '/language', {
+        const res = await fetch('/api/sync-metadata', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ language: newLang })
+          body: JSON.stringify({ overrides: manualLangOverrides })
         });
-        if (res.ok) {
-          const target = driveSongs.find(function (s) { return s.id === songId; });
-          if (target) {
-            target.appProperties = Object.assign({}, target.appProperties, { manualLang: newLang, tagLang: newLang });
-            localStorage.setItem('am_cached_drive_songs', JSON.stringify(driveSongs));
-          }
-          if (!silent) showToast('Saved "' + newLang + '" everywhere');
-        } else if (!silent) {
-          showToast('Saved locally (will sync when online)');
+        if (!res.ok) throw new Error('Sync HTTP ' + res.status);
+        const data = await res.json();
+        if (data && data.overrides) {
+          manualLangOverrides = Object.assign({}, manualLangOverrides, data.overrides);
+          localStorage.setItem('am_lang_overrides_v1', JSON.stringify(manualLangOverrides));
+          driveSongs.forEach(function (s) {
+            if (manualLangOverrides[s.id]) {
+              s.cloudLang = manualLangOverrides[s.id];
+              if (metaCache[s.id]) metaCache[s.id].language = manualLangOverrides[s.id];
+            }
+          });
+          localStorage.setItem('am_cached_drive_songs', JSON.stringify(driveSongs));
+          localStorage.setItem('am_meta_cache_v6', JSON.stringify(metaCache));
         }
+        if (!silent) showToast('Synced across all devices');
+        return true;
       } catch (e) {
-        if (!silent) showToast('Saved locally (will sync when online)');
+        if (!silent) showToast('Saved locally (offline)');
+        return false;
       }
     }
 
@@ -2590,20 +2605,19 @@
       localStorage.setItem('am_lang_overrides_v1', JSON.stringify(manualLangOverrides));
       const target = driveSongs.find(function (s) { return s.id === songId; });
       if (target) {
-        target.appProperties = Object.assign({}, target.appProperties, { manualLang: newLang, tagLang: newLang });
+        target.cloudLang = newLang;
         localStorage.setItem('am_cached_drive_songs', JSON.stringify(driveSongs));
       }
       if (metaCache[songId]) {
         metaCache[songId].language = newLang;
         localStorage.setItem('am_meta_cache_v6', JSON.stringify(metaCache));
       }
-      showToast('Syncing "' + newLang + '" everywhere...');
-      syncSongLanguageToCloud(songId, newLang, false);
       refreshAllViews();
       if (activeSmartSongs.length > 0 && document.getElementById('pl-hero-type').textContent === 'Language') {
         openSmartPlaylist('Language', document.getElementById('pl-hero-title').textContent);
       }
       closeModals();
+      pushAllOverridesToCloud(false);
     }
 
     function triggerOptionDownload() {
@@ -3092,6 +3106,9 @@
       }
 
       try {
+        if (Object.keys(manualLangOverrides).length > 0) {
+          await pushAllOverridesToCloud(true);
+        }
         const res = await fetch(force ? '/api/songs?refresh=1' : '/api/songs');
         if (!res.ok) throw new Error('Offline or waking up');
         driveSongs = await res.json();

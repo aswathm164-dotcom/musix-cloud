@@ -82,6 +82,79 @@ function extractAudioTags(buffer) {
   return tags;
 }
 
+const META_FILE_NAME = 'musix-metadata.json';
+let metaFileIdCache = null;
+let cloudOverridesCache = null;
+
+async function loadCloudOverrides(allFiles) {
+  try {
+    let metaFile = Array.isArray(allFiles)
+      ? allFiles.find(function (f) { return f.name === META_FILE_NAME; })
+      : null;
+
+    if (!metaFile && !metaFileIdCache) {
+      const search = await drive.files.list({
+        q: "'" + DRIVE_FOLDER_ID + "' in parents and name = '" + META_FILE_NAME + "' and trashed = false",
+        fields: 'files(id, name)',
+        pageSize: 1
+      });
+      if (search.data.files && search.data.files.length > 0) {
+        metaFile = search.data.files[0];
+      }
+    }
+
+    if (metaFile) metaFileIdCache = metaFile.id;
+    if (!metaFileIdCache) {
+      cloudOverridesCache = cloudOverridesCache || {};
+      return cloudOverridesCache;
+    }
+
+    const fileRes = await drive.files.get(
+      { fileId: metaFileIdCache, alt: 'media' },
+      { responseType: 'json' }
+    );
+    const data = typeof fileRes.data === 'string' ? JSON.parse(fileRes.data) : (fileRes.data || {});
+    cloudOverridesCache = data.overrides || {};
+    return cloudOverridesCache;
+  } catch (e) {
+    return cloudOverridesCache || {};
+  }
+}
+
+async function saveCloudOverrides(incomingMap) {
+  const existing = await loadCloudOverrides(null);
+  const merged = Object.assign({}, existing);
+  Object.keys(incomingMap || {}).forEach(function (k) {
+    if (incomingMap[k]) merged[k] = String(incomingMap[k]).slice(0, 40);
+  });
+
+  const payload = JSON.stringify({ updatedAt: Date.now(), overrides: merged });
+  const media = { mimeType: 'application/json', body: payload };
+
+  if (metaFileIdCache) {
+    await drive.files.update({
+      fileId: metaFileIdCache,
+      media: media,
+      fields: 'id'
+    });
+  } else {
+    const created = await drive.files.create({
+      requestBody: {
+        name: META_FILE_NAME,
+        parents: [DRIVE_FOLDER_ID],
+        mimeType: 'application/json'
+      },
+      media: media,
+      fields: 'id'
+    });
+    metaFileIdCache = created.data.id;
+  }
+
+  cloudOverridesCache = merged;
+  songsCache = null;
+  return merged;
+}
+
 async function getDriveSongs(forceRefresh = false) {
   if (!forceRefresh && songsCache && Date.now() - lastCacheTime < 30000) {
     return songsCache;
@@ -92,16 +165,24 @@ async function getDriveSongs(forceRefresh = false) {
     orderBy: 'createdTime desc',
     pageSize: 500,
   });
-  songsCache = response.data.files || [];
+  const rawFiles = response.data.files || [];
+  const overrides = await loadCloudOverrides(rawFiles);
+
+  songsCache = rawFiles
+    .filter(function (f) { return f.name !== META_FILE_NAME; })
+    .map(function (f) {
+      if (f.size) {
+        fileMetaCache[f.id] = {
+          size: parseInt(f.size, 10),
+          mimeType: f.mimeType || 'audio/mpeg'
+        };
+      }
+      const appLang = (f.appProperties && (f.appProperties.manualLang || f.appProperties.tagLang)) || '';
+      f.cloudLang = overrides[f.id] || appLang || '';
+      return f;
+    });
+
   lastCacheTime = Date.now();
-  songsCache.forEach(function (f) {
-    if (f.size) {
-      fileMetaCache[f.id] = {
-        size: parseInt(f.size, 10),
-        mimeType: f.mimeType || 'audio/mpeg'
-      };
-    }
-  });
   return songsCache;
 }
 
@@ -142,25 +223,25 @@ app.post('/api/upload', upload.single('audio'), async (req, res) => {
 });
 
 
+
+
+app.post('/api/sync-metadata', async (req, res) => {
+  try {
+    const incoming = (req.body && req.body.overrides) || {};
+    const merged = await saveCloudOverrides(incoming);
+    res.json({ ok: true, overrides: merged });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.post('/api/songs/:fileId/language', async (req, res) => {
   try {
     const fileId = req.params.fileId;
     const language = String((req.body && req.body.language) || '').trim();
     if (!language) return res.status(400).json({ error: 'Language is required' });
-
-    await drive.files.update({
-      fileId: fileId,
-      requestBody: {
-        appProperties: {
-          manualLang: language.slice(0, 40),
-          tagLang: language.slice(0, 40)
-        }
-      },
-      fields: 'id, appProperties'
-    });
-
-    songsCache = null;
-    res.json({ ok: true, id: fileId, language: language });
+    const merged = await saveCloudOverrides({ [fileId]: language });
+    res.json({ ok: true, id: fileId, language: language, overrides: merged });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
