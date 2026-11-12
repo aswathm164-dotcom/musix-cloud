@@ -2315,6 +2315,10 @@
 
     function determineSongLanguageStrict(song, parsedTitle, artist, album, sourceGenre, tagLang) {
       // Priority 0: Permanent user manual override
+      const cloudProps = (song && song.appProperties) || {};
+      if (cloudProps.manualLang) {
+        return cloudProps.manualLang;
+      }
       if (song && manualLangOverrides[song.id]) {
         return manualLangOverrides[song.id];
       }
@@ -2559,14 +2563,42 @@
       if (current) openSongOptionsModal(current.id);
     }
 
+    async function syncSongLanguageToCloud(songId, newLang, silent) {
+      try {
+        const res = await fetch('/api/songs/' + encodeURIComponent(songId) + '/language', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ language: newLang })
+        });
+        if (res.ok) {
+          const target = driveSongs.find(function (s) { return s.id === songId; });
+          if (target) {
+            target.appProperties = Object.assign({}, target.appProperties, { manualLang: newLang, tagLang: newLang });
+            localStorage.setItem('am_cached_drive_songs', JSON.stringify(driveSongs));
+          }
+          if (!silent) showToast('Saved "' + newLang + '" everywhere');
+        } else if (!silent) {
+          showToast('Saved locally (will sync when online)');
+        }
+      } catch (e) {
+        if (!silent) showToast('Saved locally (will sync when online)');
+      }
+    }
+
     function setManualSongLanguage(songId, newLang) {
       manualLangOverrides[songId] = newLang;
       localStorage.setItem('am_lang_overrides_v1', JSON.stringify(manualLangOverrides));
+      const target = driveSongs.find(function (s) { return s.id === songId; });
+      if (target) {
+        target.appProperties = Object.assign({}, target.appProperties, { manualLang: newLang, tagLang: newLang });
+        localStorage.setItem('am_cached_drive_songs', JSON.stringify(driveSongs));
+      }
       if (metaCache[songId]) {
         metaCache[songId].language = newLang;
         localStorage.setItem('am_meta_cache_v6', JSON.stringify(metaCache));
       }
-      showToast('Saved "' + newLang + '" permanently');
+      showToast('Syncing "' + newLang + '" everywhere...');
+      syncSongLanguageToCloud(songId, newLang, false);
       refreshAllViews();
       if (activeSmartSongs.length > 0 && document.getElementById('pl-hero-type').textContent === 'Language') {
         openSmartPlaylist('Language', document.getElementById('pl-hero-title').textContent);
@@ -3063,6 +3095,23 @@
         const res = await fetch(force ? '/api/songs?refresh=1' : '/api/songs');
         if (!res.ok) throw new Error('Offline or waking up');
         driveSongs = await res.json();
+        let pushedCount = 0;
+        for (const song of driveSongs) {
+          const cloudManual = song.appProperties && song.appProperties.manualLang;
+          const localManual = manualLangOverrides[song.id];
+          if (cloudManual && localManual !== cloudManual) {
+            manualLangOverrides[song.id] = cloudManual;
+            if (metaCache[song.id]) metaCache[song.id].language = cloudManual;
+          } else if (!cloudManual && localManual) {
+            pushedCount++;
+            syncSongLanguageToCloud(song.id, localManual, true);
+          }
+        }
+        localStorage.setItem('am_lang_overrides_v1', JSON.stringify(manualLangOverrides));
+        localStorage.setItem('am_meta_cache_v6', JSON.stringify(metaCache));
+        if (pushedCount > 0) {
+          showToast('Synced ' + pushedCount + ' previous change(s) to cloud');
+        }
         localStorage.setItem('am_cached_drive_songs', JSON.stringify(driveSongs));
         if (currentQueue.length === 0) currentQueue = driveSongs.slice();
 

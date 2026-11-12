@@ -10,6 +10,7 @@ const app = express();
 const upload = multer({ storage: multer.memoryStorage() });
 
 app.use(express.static(path.join(__dirname, 'public'), { dotfiles: 'allow' }));
+app.use(express.json());
 
 const auth = new google.auth.OAuth2(
   process.env.GOOGLE_CLIENT_ID,
@@ -135,6 +136,31 @@ app.post('/api/upload', upload.single('audio'), async (req, res) => {
 
     songsCache = null;
     res.status(200).json(response.data);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+
+app.post('/api/songs/:fileId/language', async (req, res) => {
+  try {
+    const fileId = req.params.fileId;
+    const language = String((req.body && req.body.language) || '').trim();
+    if (!language) return res.status(400).json({ error: 'Language is required' });
+
+    await drive.files.update({
+      fileId: fileId,
+      requestBody: {
+        appProperties: {
+          manualLang: language.slice(0, 40),
+          tagLang: language.slice(0, 40)
+        }
+      },
+      fields: 'id, appProperties'
+    });
+
+    songsCache = null;
+    res.json({ ok: true, id: fileId, language: language });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
