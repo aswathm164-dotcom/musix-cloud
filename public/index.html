@@ -1768,8 +1768,8 @@
       </button>
     </div>
 
-    <audio id="audio-player" preload="auto" playsinline crossorigin="anonymous"></audio>
-    <audio id="next-audio-preloader" preload="auto" style="display:none;" crossorigin="anonymous"></audio>
+    <audio id="audio-player" preload="auto" playsinline></audio>
+    <audio id="next-audio-preloader" preload="auto" style="display:none;"></audio>
   </footer>
 
   <!-- SMARTPHONE BOTTOM NAVIGATION BAR -->
@@ -1813,7 +1813,7 @@
     <!-- 3. Large square album art -->
     <div class="np-art-stage">
       <div class="np-art-box" id="fs-art-box">
-        <img id="fs-cover" src="/icon-512.png" alt="Album Cover" crossorigin="anonymous" />
+        <img id="fs-cover" src="/icon-512.png" alt="Album Cover" />
       </div>
     </div>
 
@@ -3176,7 +3176,8 @@
           const finalArtist = searchArtist || foundArtist || 'Cloud Artist';
           const finalAlbum = searchAlbum || foundAlbum || 'Cloud Drive';
           const finalGenre = (baseMeta.genre && baseMeta.genre !== 'Music') ? baseMeta.genre : (foundGenre || 'Music');
-          const finalLang = determineSongLanguageStrict(song, searchTitle, finalArtist, finalAlbum, finalGenre, (song.appProperties || {}).tagLang);
+          const strictOriginalLang = determineSongLanguageStrict(song, song.name, finalArtist, finalAlbum, '', (song.appProperties || {}).tagLang);
+          const finalLang = (strictOriginalLang && strictOriginalLang !== 'Other/Unknown') ? strictOriginalLang : determineSongLanguageStrict(song, searchTitle, finalArtist, finalAlbum, finalGenre, (song.appProperties || {}).tagLang);
 
           metaCache[song.id] = Object.assign({}, baseMeta, {
             artist: finalArtist,
@@ -3208,6 +3209,23 @@
       }
       isFetchingArtQueue = false;
     }
+
+// Re-verify cached languages against full filename and auto-start artwork queue
+setInterval(function () {
+  if (driveSongs && driveSongs.length > 0 && !isFetchingArtQueue) {
+    let needsArt = false;
+    driveSongs.forEach(function (s) {
+      const m = metaCache[s.id];
+      if (!m || !m.artwork || m.artwork === '/icon-512.png') needsArt = true;
+      const strictCheck = determineSongLanguageStrict(s, s.name, (m && m.artist) || '', (m && m.album) || '', '', (s.appProperties || {}).tagLang);
+      if (m && strictCheck && strictCheck !== 'Other/Unknown' && m.language !== strictCheck && !manualLangOverrides[s.id]) {
+        m.language = strictCheck;
+      }
+    });
+    if (needsArt) fetchAllMissingAlbumArt();
+  }
+}, 3000);
+
 
     function refreshAllViews() {
       renderHomeView();

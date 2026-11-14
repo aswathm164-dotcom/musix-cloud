@@ -813,58 +813,63 @@ app.get('/api/song-artwork', async (req, res) => {
   if (!rawTitle) return res.json({ artwork: '' });
 
   const cleanTitle = rawTitle
-    .replace(/\b(from|ost|original motion picture soundtrack)\b/gi, ' ')
+    .replace(/\b(from|ost|original motion picture soundtrack|one side love)\b/gi, ' ')
     .replace(/[()\[\]\-_]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
-  const cleanArtist = (rawArtist === 'Cloud Artist' || rawArtist === 'Unknown') ? '' : rawArtist;
-  const query = (cleanTitle + ' ' + cleanArtist).trim();
-  const cacheKey = query.toLowerCase();
+  const shortTitle = cleanTitle.split(' ').slice(0, 2).join(' ');
+  const cleanArtist = (rawArtist === 'Cloud Artist' || rawArtist === 'Unknown') ? '' : rawArtist.split(/,|&/)[0].trim();
 
-  if (songArtworkCache[cacheKey]) {
-    return res.json(songArtworkCache[cacheKey]);
-  }
+  const candidateQueries = [
+    (cleanTitle + ' ' + cleanArtist).trim(),
+    (shortTitle + ' ' + cleanArtist).trim(),
+    cleanTitle,
+    cleanArtist
+  ].filter(Boolean);
 
-  try {
-    const itUrl = 'https://itunes.apple.com/search?term=' + encodeURIComponent(query) + '&country=in&media=music&entity=song&limit=5';
-    const itRes = await axios.get(itUrl, { timeout: 4500 });
-    const results = (itRes.data && itRes.data.results) || [];
-    if (results.length > 0) {
-      const hit = results[0];
-      const payload = {
-        artwork: (hit.artworkUrl100 || '').replace('100x100bb', '600x600bb'),
-        album: hit.collectionName || '',
-        artist: hit.artistName || cleanArtist,
-        genre: hit.primaryGenreName || '',
-        year: hit.releaseDate ? String(hit.releaseDate).slice(0, 4) : ''
-      };
-      if (payload.artwork) {
-        songArtworkCache[cacheKey] = payload;
-        return res.json(payload);
-      }
-    }
-  } catch (e) {}
+  const cacheKey = candidateQueries[0].toLowerCase();
+  if (songArtworkCache[cacheKey]) return res.json(songArtworkCache[cacheKey]);
 
-  try {
-    const dzUrl = 'https://api.deezer.com/search?q=' + encodeURIComponent(query) + '&limit=3';
-    const dzRes = await axios.get(dzUrl, { timeout: 4500 });
-    const dzList = (dzRes.data && dzRes.data.data) || [];
-    if (dzList.length > 0) {
-      const dHit = dzList[0];
-      const cover = dHit.album && (dHit.album.cover_big || dHit.album.cover_xl || dHit.album.cover_medium);
-      if (cover) {
+  for (const q of candidateQueries) {
+    try {
+      const itUrl = 'https://itunes.apple.com/search?term=' + encodeURIComponent(q) + '&country=in&media=music&entity=song&limit=5';
+      const itRes = await axios.get(itUrl, { timeout: 4000 });
+      const results = (itRes.data && itRes.data.results) || [];
+      if (results.length > 0 && results[0].artworkUrl100) {
+        const hit = results[0];
         const payload = {
-          artwork: cover,
-          album: (dHit.album && dHit.album.title) || '',
-          artist: (dHit.artist && dHit.artist.name) || cleanArtist,
-          genre: '',
-          year: ''
+          artwork: hit.artworkUrl100.replace('100x100bb', '600x600bb'),
+          album: hit.collectionName || '',
+          artist: cleanArtist || hit.artistName || '',
+          genre: hit.primaryGenreName || '',
+          year: hit.releaseDate ? String(hit.releaseDate).slice(0, 4) : ''
         };
         songArtworkCache[cacheKey] = payload;
         return res.json(payload);
       }
-    }
-  } catch (e) {}
+    } catch (e) {}
+
+    try {
+      const dzUrl = 'https://api.deezer.com/search?q=' + encodeURIComponent(q) + '&limit=3';
+      const dzRes = await axios.get(dzUrl, { timeout: 4000 });
+      const dzList = (dzRes.data && dzRes.data.data) || [];
+      if (dzList.length > 0 && dzList[0].album) {
+        const dHit = dzList[0];
+        const cover = dHit.album.cover_big || dHit.album.cover_xl || dHit.album.cover_medium;
+        if (cover) {
+          const payload = {
+            artwork: cover,
+            album: dHit.album.title || '',
+            artist: cleanArtist || (dHit.artist && dHit.artist.name) || '',
+            genre: '',
+            year: ''
+          };
+          songArtworkCache[cacheKey] = payload;
+          return res.json(payload);
+        }
+      }
+    } catch (e) {}
+  }
 
   return res.json({ artwork: '' });
 });
