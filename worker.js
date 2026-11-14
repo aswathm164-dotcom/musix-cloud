@@ -92,6 +92,46 @@ export default {
       });
     }
 
+    if (url.pathname === '/api/artist-image') {
+      const name = (url.searchParams.get('name') || '').trim();
+      if (!name || name === 'Cloud Artist') return new Response(JSON.stringify({ image: '' }), { headers: jsonHeaders });
+      try {
+        const dzRes = await fetch('https://api.deezer.com/search/artist?q=' + encodeURIComponent(name) + '&limit=1');
+        const dzData = await dzRes.json();
+        const pic = dzData.data && dzData.data[0] && (dzData.data[0].picture_big || dzData.data[0].picture_medium);
+        if (pic && !pic.includes('/images/artist//')) {
+          return new Response(JSON.stringify({ image: pic }), { headers: jsonHeaders });
+        }
+      } catch (e) {}
+      return new Response(JSON.stringify({ image: '' }), { headers: jsonHeaders });
+    }
+
+    if (url.pathname === '/api/trending') {
+      const lang = (url.searchParams.get('lang') || 'malayalam').toLowerCase();
+      const queries = {
+        malayalam: 'malayalam songs 2025 2026 sushin shyam jakes bejoy',
+        tamil: 'tamil songs 2025 2026 anirudh ravichander',
+        hindi: 'hindi songs 2025 2026 arijit singh pritam',
+        english: 'top pop hits 2025 2026 the weeknd bruno mars'
+      };
+      const term = queries[lang] || queries.malayalam;
+      const country = lang === 'english' ? 'us' : 'in';
+      const itRes = await fetch('https://itunes.apple.com/search?term=' + encodeURIComponent(term) + '&country=' + country + '&media=music&entity=song&limit=50');
+      const itData = await itRes.json();
+      const songs = (itData.results || []).map((item, idx) => ({
+        rank: idx + 1,
+        trackId: item.trackId,
+        title: item.trackName,
+        artist: item.artistName || 'Unknown Artist',
+        album: item.collectionName || 'Single',
+        genre: item.primaryGenreName || 'Music',
+        explicit: item.trackExplicitness === 'explicit',
+        artwork: (item.artworkUrl100 || '/icon-512.png').replace('100x100bb', '600x600bb'),
+        trackViewUrl: item.trackViewUrl || ''
+      }));
+      return new Response(JSON.stringify({ songs }), { headers: jsonHeaders });
+    }
+
     try {
       const token = await getAccessToken(env);
       const folderId = env.DRIVE_FOLDER_ID;
