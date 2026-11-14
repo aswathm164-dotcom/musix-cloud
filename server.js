@@ -740,20 +740,68 @@ app.get('/api/songs', async (req, res) => {
 app.get('/api/stream/:fileId', async (req, res) => {
   try {
     const fileId = req.params.fileId;
-    const token = await getDriveAccessToken();
-    const directDriveUrl =
-      'https://www.googleapis.com/drive/v3/files/' +
-      encodeURIComponent(fileId) +
-      '?alt=media&access_token=' +
-      encodeURIComponent(token);
+    const range = req.headers.range;
 
-    res.set({
-      'Cache-Control': 'private, max-age=1800',
-      'Access-Control-Allow-Origin': '*'
-    });
-    return res.redirect(302, directDriveUrl);
+    let meta = fileMetaCache[fileId];
+    if (!meta) {
+      const gMeta = await drive.files.get({
+        fileId: fileId,
+        fields: 'size, mimeType',
+      });
+      meta = {
+        size: parseInt(gMeta.data.size, 10),
+        mimeType: gMeta.data.mimeType || 'audio/mpeg'
+      };
+      fileMetaCache[fileId] = meta;
+    }
+
+    const fileSize = meta.size;
+    const mimeType = meta.mimeType;
+
+    if (range) {
+      const parts = range.replace(/bytes=/, '').split('-');
+      const start = parseInt(parts[0], 10);
+      const requestedEnd = parts[1] ? parseInt(parts[1], 10) : Math.min(start + 2 * 1024 * 1024 - 1, fileSize - 1);
+      const end = Math.min(requestedEnd, fileSize - 1);
+      const chunkSize = end - start + 1;
+
+      const driveStream = await drive.files.get(
+        { fileId: fileId, alt: 'media' },
+        {
+          responseType: 'stream',
+          headers: { Range: 'bytes=' + start + '-' + end },
+        }
+      );
+
+      res.writeHead(206, {
+        'Content-Range': 'bytes ' + start + '-' + end + '/' + fileSize,
+        'Accept-Ranges': 'bytes',
+        'Content-Length': chunkSize,
+        'Content-Type': mimeType,
+        'Cache-Control': 'public, max-age=31536000, immutable'
+      });
+
+      driveStream.data.on('error', () => { if (!res.writableEnded) res.end(); });
+      req.on('close', () => { if (driveStream.data && driveStream.data.destroy) driveStream.data.destroy(); });
+      driveStream.data.pipe(res);
+    } else {
+      res.writeHead(200, {
+        'Content-Length': fileSize,
+        'Content-Type': mimeType,
+        'Accept-Ranges': 'bytes',
+        'Cache-Control': 'public, max-age=31536000, immutable'
+      });
+
+      const driveStream = await drive.files.get(
+        { fileId: fileId, alt: 'media' },
+        { responseType: 'stream' }
+      );
+      driveStream.data.on('error', () => { if (!res.writableEnded) res.end(); });
+      req.on('close', () => { if (driveStream.data && driveStream.data.destroy) driveStream.data.destroy(); });
+      driveStream.data.pipe(res);
+    }
   } catch (error) {
-    if (!res.headersSent) res.status(500).send('Error resolving direct audio stream');
+    if (!res.headersSent) res.status(500).send('Error streaming audio');
   }
 });
 

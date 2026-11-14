@@ -1768,8 +1768,8 @@
       </button>
     </div>
 
-    <audio id="audio-player" preload="auto" playsinline></audio>
-    <audio id="next-audio-preloader" preload="none" style="display:none;"></audio>
+    <audio id="audio-player" preload="auto" playsinline crossorigin="anonymous"></audio>
+    <audio id="next-audio-preloader" preload="auto" style="display:none;" crossorigin="anonymous"></audio>
   </footer>
 
   <!-- SMARTPHONE BOTTOM NAVIGATION BAR -->
@@ -2050,11 +2050,7 @@
     let playbackRequestId = 0;
     let preloadedNextSongId = null;
     let warmBufferInFlight = {};
-    let splashDismissed = sessionStorage.getItem('musix_splash_shown') === '1';
-    if (splashDismissed) {
-      const spInit = document.getElementById('splash-screen');
-      if (spInit) spInit.classList.add('hidden');
-    }
+    let splashDismissed = false;
 
     let likedIds = JSON.parse(localStorage.getItem('am_liked_ids') || '[]');
     let offlineIds = JSON.parse(localStorage.getItem('am_offline_ids') || '[]');
@@ -2192,7 +2188,6 @@
       setTimeout(function () {
         if (splashDismissed) return;
         splashDismissed = true;
-        sessionStorage.setItem('musix_splash_shown', '1');
         const sp = document.getElementById('splash-screen');
         if (sp) sp.classList.add('hidden');
       }, waitMs);
@@ -2202,7 +2197,6 @@
     setTimeout(function () {
       if (!splashDismissed) {
         splashDismissed = true;
-        sessionStorage.setItem('musix_splash_shown', '1');
         const sp = document.getElementById('splash-screen');
         if (sp) sp.classList.add('hidden');
       }
@@ -2471,7 +2465,6 @@
       const cm = song.cloudMeta || {};
       const cached = metaCache[song.id] || oldMetaCache[song.id] || {};
 
-      // Extract "From <Movie>" from title if album is not set yet
       let cleanParsedTitle = parsed.title;
       let inferredAlbum = '';
       const fromMatch = cleanParsedTitle.match(/^(.*?)\s+From\s+(.+)$/i);
@@ -2482,7 +2475,9 @@
 
       const resolvedTitle = cm.title || cached.title || cleanParsedTitle;
       const resolvedArtist = cm.artist || cached.artist || parsed.artist;
-      const resolvedAlbum = (cm.album && cm.album !== 'Cloud Drive') ? cm.album : ((cached.album && cached.album !== 'Cloud Drive') ? cached.album : (inferredAlbum || 'Cloud Drive'));
+      const resolvedAlbum = (cm.album && cm.album !== 'Cloud Drive')
+        ? cm.album
+        : ((cached.album && cached.album !== 'Cloud Drive') ? cached.album : (inferredAlbum || 'Cloud Drive'));
       const resolvedAlbumArtist = cm.albumArtist || cached.albumArtist || '';
       const resolvedGenre = cm.genre || cached.genre || 'Music';
       const resolvedYear = cm.year || cached.year || '';
@@ -2511,7 +2506,6 @@
         vibe: cached.vibe || classifyVibeOnly(resolvedTitle, resolvedArtist, resolvedAlbum, resolvedGenre),
         explicit: Boolean(cached.explicit),
         artwork: resolvedArt,
-        enriched: Boolean(cached.enriched && resolvedArt !== '/icon-512.png'),
         updatedAt: Math.max(cm.updatedAt || 0, cached.updatedAt || 0)
       };
     }
@@ -2646,7 +2640,6 @@
       metaCache[songId] = Object.assign({}, metaCache[songId], payload, { artwork: payload.coverArt });
       localStorage.setItem('am_meta_cache_v6', JSON.stringify(metaCache));
       localStorage.setItem('am_cached_drive_songs', JSON.stringify(driveSongs));
-        setTimeout(enrichLibraryArtworkAndDetails, 300);
       refreshAllViews();
       closeModals();
 
@@ -3118,84 +3111,102 @@
     }
 
     
-    let isEnrichingArtwork = false;
-    async function enrichLibraryArtworkAndDetails() {
-      if (isEnrichingArtwork || !driveSongs || driveSongs.length === 0) return;
-      isEnrichingArtwork = true;
-      let updatedCount = 0;
+    // Clear any placeholder-only cache entries so real artwork always loads
+    Object.keys(metaCache).forEach(function (id) {
+      if (!metaCache[id] || !metaCache[id].artwork || metaCache[id].artwork === '/icon-512.png') {
+        delete metaCache[id];
+      }
+    });
+
+    let isFetchingArtQueue = false;
+    async function fetchAllMissingAlbumArt() {
+      if (isFetchingArtQueue || !driveSongs || driveSongs.length === 0) return;
+      isFetchingArtQueue = true;
+      let changedCount = 0;
 
       for (let i = 0; i < driveSongs.length; i++) {
         const song = driveSongs[i];
-        const cur = getSongMeta(song);
-        if (cur.artwork && cur.artwork !== '/icon-512.png' && cur.enriched) continue;
+        const existing = metaCache[song.id];
+        if (existing && existing.artwork && existing.artwork !== '/icon-512.png') continue;
 
+        const baseMeta = getSongMeta(song);
+        const searchTitle = baseMeta.title;
+        const searchAlbum = baseMeta.album !== 'Cloud Drive' ? baseMeta.album : '';
+        const searchArtist = baseMeta.artist !== 'Cloud Artist' ? baseMeta.artist : '';
+
+        let foundArt = '';
+        let foundAlbum = '';
+        let foundArtist = '';
+        let foundGenre = '';
+        let foundYear = '';
+
+        // 1. Query server /api/song-artwork (iTunes + Deezer)
         try {
-          const searchTerms = (cur.title + ' ' + (cur.album !== 'Cloud Drive' ? cur.album : '') + ' ' + (cur.artist !== 'Cloud Artist' ? cur.artist : '')).trim();
-          let artUrl = '';
-          let foundAlbum = '';
-          let foundArtist = '';
-          let foundGenre = '';
-          let foundYear = '';
+          const srvRes = await fetch('/api/song-artwork?title=' + encodeURIComponent((searchTitle + ' ' + searchAlbum).trim()) + '&artist=' + encodeURIComponent(searchArtist));
+          if (srvRes.ok) {
+            const srvData = await srvRes.json();
+            foundArt = srvData.artwork || '';
+            foundAlbum = srvData.album || '';
+            foundArtist = srvData.artist || '';
+            foundGenre = srvData.genre || '';
+            foundYear = srvData.year || '';
+          }
+        } catch (e) {}
 
-          // 1. Try direct iTunes Search API from browser
+        // 2. Fallback to direct browser iTunes search
+        if (!foundArt) {
           try {
-            const itRes = await fetch('https://itunes.apple.com/search?term=' + encodeURIComponent(searchTerms) + '&country=in&media=music&entity=song&limit=3');
+            const q = (searchTitle + ' ' + searchArtist).trim();
+            const itRes = await fetch('https://itunes.apple.com/search?term=' + encodeURIComponent(q) + '&country=in&media=music&entity=song&limit=3');
             if (itRes.ok) {
               const itData = await itRes.json();
               if (itData.results && itData.results.length > 0) {
                 const hit = itData.results[0];
-                artUrl = (hit.artworkUrl100 || '').replace('100x100bb', '600x600bb');
-                foundAlbum = hit.collectionName || '';
-                foundArtist = hit.artistName || '';
-                foundGenre = hit.primaryGenreName || '';
-                foundYear = hit.releaseDate ? String(hit.releaseDate).slice(0, 4) : '';
+                foundArt = (hit.artworkUrl100 || '').replace('100x100bb', '600x600bb');
+                foundAlbum = hit.collectionName || foundAlbum;
+                foundArtist = hit.artistName || foundArtist;
+                foundGenre = hit.primaryGenreName || foundGenre;
+                foundYear = hit.releaseDate ? String(hit.releaseDate).slice(0, 4) : foundYear;
               }
             }
           } catch (e) {}
+        }
 
-          // 2. Fallback to server /api/song-artwork (iTunes + Deezer)
-          if (!artUrl) {
-            const srvRes = await fetch('/api/song-artwork?title=' + encodeURIComponent(cur.title + ' ' + (cur.album !== 'Cloud Drive' ? cur.album : '')) + '&artist=' + encodeURIComponent(cur.artist));
-            if (srvRes.ok) {
-              const srvData = await srvRes.json();
-              artUrl = srvData.artwork || '';
-              foundAlbum = srvData.album || foundAlbum;
-              foundArtist = srvData.artist || foundArtist;
-              foundGenre = srvData.genre || foundGenre;
-              foundYear = srvData.year || foundYear;
-            }
-          }
+        if (foundArt) {
+          const finalArtist = searchArtist || foundArtist || 'Cloud Artist';
+          const finalAlbum = searchAlbum || foundAlbum || 'Cloud Drive';
+          const finalGenre = (baseMeta.genre && baseMeta.genre !== 'Music') ? baseMeta.genre : (foundGenre || 'Music');
+          const finalLang = determineSongLanguageStrict(song, searchTitle, finalArtist, finalAlbum, finalGenre, (song.appProperties || {}).tagLang);
 
-          const finalAlbum = (cur.album && cur.album !== 'Cloud Drive') ? cur.album : (foundAlbum || 'Cloud Drive');
-          const finalArtist = (cur.artist && cur.artist !== 'Cloud Artist') ? cur.artist : (foundArtist || 'Cloud Artist');
-          const finalGenre = (cur.genre && cur.genre !== 'Music') ? cur.genre : (foundGenre || 'Music');
-          const finalLang = determineSongLanguageStrict(song, cur.title, finalArtist, finalAlbum, finalGenre, (song.appProperties || {}).tagLang);
-
-          metaCache[song.id] = Object.assign({}, cur, {
+          metaCache[song.id] = Object.assign({}, baseMeta, {
             artist: finalArtist,
+            primaryArtist: finalArtist.split(/,|&|feat\.|ft\./i)[0].trim() || 'Cloud Artist',
             album: finalAlbum,
             genre: finalGenre,
-            year: cur.year || foundYear,
+            year: baseMeta.year || foundYear,
             language: finalLang,
-            artwork: artUrl || '/icon-512.png',
-            enriched: Boolean(artUrl),
+            artwork: foundArt,
             updatedAt: Date.now()
           });
+          changedCount++;
 
-          if (artUrl) {
-            updatedCount++;
-            if (updatedCount % 4 === 0) {
-              localStorage.setItem('am_meta_cache_v6', JSON.stringify(metaCache));
-              refreshAllViews();
-            }
+          if (changedCount % 3 === 0) {
+            localStorage.setItem('am_meta_cache_v6', JSON.stringify(metaCache));
+            refreshAllViews();
+            updateSplashCollage();
+        setTimeout(fetchAllMissingAlbumArt, 200);
           }
-        } catch (err) {}
-        await new Promise(r => setTimeout(r, 180));
+        }
+        await new Promise(function (r) { setTimeout(r, 150); });
       }
 
-      localStorage.setItem('am_meta_cache_v6', JSON.stringify(metaCache));
-      refreshAllViews();
-      isEnrichingArtwork = false;
+      if (changedCount > 0) {
+        localStorage.setItem('am_meta_cache_v6', JSON.stringify(metaCache));
+        refreshAllViews();
+        updateSplashCollage();
+        setTimeout(fetchAllMissingAlbumArt, 200);
+      }
+      isFetchingArtQueue = false;
     }
 
     function refreshAllViews() {
@@ -4152,60 +4163,27 @@
       const btn = document.getElementById('upload-submit-btn');
       const status = document.getElementById('upload-status');
 
-      const file = fileInput.files[0];
-      if (!file) return;
+      if (!fileInput.files[0]) return;
 
       const selectedLang = langSelect ? langSelect.value : '';
-      const cleanTitle = (titleInput.value || file.name).trim();
+      const formData = new FormData();
+      formData.append('title', titleInput.value);
+      if (selectedLang) formData.append('language', selectedLang);
+      formData.append('audio', fileInput.files[0]);
 
       btn.disabled = true;
       btn.textContent = 'Uploading...';
-      status.textContent = 'Uploading directly to Google Drive...';
+      status.textContent = 'Uploading & classifying...';
       status.style.color = '#94a3b8';
 
       try {
-        const tokRes = await fetch('/api/drive-token');
-        if (!tokRes.ok) throw new Error('Could not get Drive token');
-        const tokData = await tokRes.json();
-
-        const metaObj = {
-          name: cleanTitle.endsWith('.mp3') ? cleanTitle : cleanTitle + '.mp3',
-          parents: [tokData.folderId],
-          mimeType: file.type || 'audio/mpeg',
-          appProperties: {
-            manualLang: selectedLang || '',
-            tagLang: selectedLang || ''
-          }
-        };
-
-        const boundary = '-------MusixDirectUploadBoundary' + Date.now();
-        const metaPart =
-          '--' + boundary + '\r\n' +
-          'Content-Type: application/json; charset=UTF-8\r\n\r\n' +
-          JSON.stringify(metaObj) + '\r\n' +
-          '--' + boundary + '\r\n' +
-          'Content-Type: ' + (file.type || 'audio/mpeg') + '\r\n\r\n';
-        const closePart = '\r\n--' + boundary + '--';
-
-        const multipartBlob = new Blob([metaPart, file, closePart], {
-          type: 'multipart/related; boundary=' + boundary
-        });
-
-        const upRes = await fetch(
-          'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name',
-          {
-            method: 'POST',
-            headers: { 'Authorization': 'Bearer ' + tokData.token },
-            body: multipartBlob
-          }
-        );
-        const data = await upRes.json();
-        if (!upRes.ok) throw new Error((data.error && data.error.message) || 'Upload failed');
+        const res = await fetch('/api/upload', { method: 'POST', body: formData });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Upload failed');
 
         if (selectedLang && data.id) {
           manualLangOverrides[data.id] = selectedLang;
           localStorage.setItem('am_lang_overrides_v1', JSON.stringify(manualLangOverrides));
-          await pushAllOverridesToCloud(true);
         }
 
         status.textContent = 'Added "' + data.name + '"!';
