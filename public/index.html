@@ -1768,8 +1768,8 @@
       </button>
     </div>
 
-    <audio id="audio-player" preload="auto" playsinline crossorigin="anonymous"></audio>
-    <audio id="next-audio-preloader" preload="auto" style="display:none;" crossorigin="anonymous"></audio>
+    <audio id="audio-player" preload="auto" playsinline></audio>
+    <audio id="next-audio-preloader" preload="none" style="display:none;"></audio>
   </footer>
 
   <!-- SMARTPHONE BOTTOM NAVIGATION BAR -->
@@ -2017,13 +2017,7 @@
 
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('/sw.js').catch(function () {});
-      navigator.serviceWorker.addEventListener('controllerchange', function () {
-        if (!window.__musixSwReloaded) {
-          window.__musixSwReloaded = true;
-          window.location.reload();
-        }
-      });
-    }
+      }
 
     const SVG_PLAY_MINI = '<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 4 20 12 6 20 6 4"/></svg>';
     const SVG_PAUSE_MINI = '<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>';
@@ -2056,7 +2050,11 @@
     let playbackRequestId = 0;
     let preloadedNextSongId = null;
     let warmBufferInFlight = {};
-    let splashDismissed = false;
+    let splashDismissed = sessionStorage.getItem('musix_splash_shown') === '1';
+    if (splashDismissed) {
+      const spInit = document.getElementById('splash-screen');
+      if (spInit) spInit.classList.add('hidden');
+    }
 
     let likedIds = JSON.parse(localStorage.getItem('am_liked_ids') || '[]');
     let offlineIds = JSON.parse(localStorage.getItem('am_offline_ids') || '[]');
@@ -2194,6 +2192,7 @@
       setTimeout(function () {
         if (splashDismissed) return;
         splashDismissed = true;
+        sessionStorage.setItem('musix_splash_shown', '1');
         const sp = document.getElementById('splash-screen');
         if (sp) sp.classList.add('hidden');
       }, waitMs);
@@ -2203,6 +2202,7 @@
     setTimeout(function () {
       if (!splashDismissed) {
         splashDismissed = true;
+        sessionStorage.setItem('musix_splash_shown', '1');
         const sp = document.getElementById('splash-screen');
         if (sp) sp.classList.add('hidden');
       }
@@ -2910,32 +2910,7 @@
     }
 
     // Warm full track in Service Worker Recent Audio Cache so >=30s is always buffered ahead and replays are instant
-    async function ensureWarmAudioCache(songId) {
-      if (!songId || !navigator.onLine || warmBufferInFlight[songId]) return;
-      warmBufferInFlight[songId] = true;
-      try {
-        const offCache = await caches.open(AUDIO_CACHE_NAME);
-        if (await offCache.match('/api/stream/' + songId)) {
-          delete warmBufferInFlight[songId];
-          return;
-        }
-        const recCache = await caches.open(RECENT_AUDIO_CACHE_NAME);
-        if (await recCache.match('/api/stream/' + songId)) {
-          delete warmBufferInFlight[songId];
-          return;
-        }
-        const res = await fetch('/api/stream/' + songId + '?warm=1');
-        if (res.ok) {
-          const blob = await res.blob();
-          const headers = new Headers({
-            'Content-Type': blob.type || 'audio/mpeg',
-            'Content-Length': String(blob.size)
-          });
-          await recCache.put('/api/stream/' + songId, new Response(blob, { status: 200, headers: headers }));
-        }
-      } catch (e) {}
-      delete warmBufferInFlight[songId];
-    }
+    async function ensureWarmAudioCache(songId) { return; }
 
     // Preload next song in the queue (first 30+ seconds + audio element preload)
     async function preloadNextTrackInQueue() {
@@ -4085,27 +4060,60 @@
       const btn = document.getElementById('upload-submit-btn');
       const status = document.getElementById('upload-status');
 
-      if (!fileInput.files[0]) return;
+      const file = fileInput.files[0];
+      if (!file) return;
 
       const selectedLang = langSelect ? langSelect.value : '';
-      const formData = new FormData();
-      formData.append('title', titleInput.value);
-      if (selectedLang) formData.append('language', selectedLang);
-      formData.append('audio', fileInput.files[0]);
+      const cleanTitle = (titleInput.value || file.name).trim();
 
       btn.disabled = true;
       btn.textContent = 'Uploading...';
-      status.textContent = 'Uploading & classifying...';
+      status.textContent = 'Uploading directly to Google Drive...';
       status.style.color = '#94a3b8';
 
       try {
-        const res = await fetch('/api/upload', { method: 'POST', body: formData });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Upload failed');
+        const tokRes = await fetch('/api/drive-token');
+        if (!tokRes.ok) throw new Error('Could not get Drive token');
+        const tokData = await tokRes.json();
+
+        const metaObj = {
+          name: cleanTitle.endsWith('.mp3') ? cleanTitle : cleanTitle + '.mp3',
+          parents: [tokData.folderId],
+          mimeType: file.type || 'audio/mpeg',
+          appProperties: {
+            manualLang: selectedLang || '',
+            tagLang: selectedLang || ''
+          }
+        };
+
+        const boundary = '-------MusixDirectUploadBoundary' + Date.now();
+        const metaPart =
+          '--' + boundary + '\r\n' +
+          'Content-Type: application/json; charset=UTF-8\r\n\r\n' +
+          JSON.stringify(metaObj) + '\r\n' +
+          '--' + boundary + '\r\n' +
+          'Content-Type: ' + (file.type || 'audio/mpeg') + '\r\n\r\n';
+        const closePart = '\r\n--' + boundary + '--';
+
+        const multipartBlob = new Blob([metaPart, file, closePart], {
+          type: 'multipart/related; boundary=' + boundary
+        });
+
+        const upRes = await fetch(
+          'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name',
+          {
+            method: 'POST',
+            headers: { 'Authorization': 'Bearer ' + tokData.token },
+            body: multipartBlob
+          }
+        );
+        const data = await upRes.json();
+        if (!upRes.ok) throw new Error((data.error && data.error.message) || 'Upload failed');
 
         if (selectedLang && data.id) {
           manualLangOverrides[data.id] = selectedLang;
           localStorage.setItem('am_lang_overrides_v1', JSON.stringify(manualLangOverrides));
+          await pushAllOverridesToCloud(true);
         }
 
         status.textContent = 'Added "' + data.name + '"!';

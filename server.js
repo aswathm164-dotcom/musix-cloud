@@ -28,6 +28,20 @@ auth.setCredentials({
 const drive = google.drive({ version: 'v3', auth });
 const DRIVE_FOLDER_ID = process.env.DRIVE_FOLDER_ID;
 
+let cachedDriveToken = '';
+let cachedDriveTokenExpiry = 0;
+
+async function getDriveAccessToken() {
+  if (cachedDriveToken && Date.now() < cachedDriveTokenExpiry - 60000) {
+    return cachedDriveToken;
+  }
+  const tokenRes = await auth.getAccessToken();
+  cachedDriveToken = tokenRes.token || tokenRes;
+  cachedDriveTokenExpiry = Date.now() + 50 * 60 * 1000;
+  return cachedDriveToken;
+}
+
+
 const META_FILE_NAME = 'musix-metadata.json';
 let metaFileIdCache = null;
 let centralDbCache = null; // { version: 2, updatedAt, records: { [fileId]: { ... } } }
@@ -466,6 +480,17 @@ async function getDriveSongs(forceRefresh = false) {
 
 app.get('/api/ping', (req, res) => res.json({ status: 'awake' }));
 
+app.get('/api/drive-token', async (req, res) => {
+  try {
+    const token = await getDriveAccessToken();
+    res.set('Cache-Control', 'private, max-age=1800');
+    res.json({ token: token, folderId: DRIVE_FOLDER_ID });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to issue Drive token' });
+  }
+});
+
+
 // Update or upload song binary + metadata from local PC sync agent or web upload
 app.post('/api/upload', upload.single('audio'), async (req, res) => {
   try {
@@ -715,69 +740,20 @@ app.get('/api/songs', async (req, res) => {
 app.get('/api/stream/:fileId', async (req, res) => {
   try {
     const fileId = req.params.fileId;
-    const range = req.headers.range;
-    const isFullFetch = req.query.download === '1' || req.query.warm === '1';
+    const token = await getDriveAccessToken();
+    const directDriveUrl =
+      'https://www.googleapis.com/drive/v3/files/' +
+      encodeURIComponent(fileId) +
+      '?alt=media&access_token=' +
+      encodeURIComponent(token);
 
-    let meta = fileMetaCache[fileId];
-    if (!meta) {
-      const gMeta = await drive.files.get({
-        fileId: fileId,
-        fields: 'size, mimeType',
-      });
-      meta = {
-        size: parseInt(gMeta.data.size, 10),
-        mimeType: gMeta.data.mimeType || 'audio/mpeg'
-      };
-      fileMetaCache[fileId] = meta;
-    }
-
-    const fileSize = meta.size;
-    const mimeType = meta.mimeType;
-
-    if (range && !isFullFetch) {
-      const parts = range.replace(/bytes=/, '').split('-');
-      const start = parseInt(parts[0], 10);
-      const requestedEnd = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
-      const end = Math.min(requestedEnd, fileSize - 1);
-      const chunkSize = end - start + 1;
-
-      const driveStream = await drive.files.get(
-        { fileId: fileId, alt: 'media' },
-        {
-          responseType: 'stream',
-          headers: { Range: 'bytes=' + start + '-' + end },
-        }
-      );
-
-      res.writeHead(206, {
-        'Content-Range': 'bytes ' + start + '-' + end + '/' + fileSize,
-        'Accept-Ranges': 'bytes',
-        'Content-Length': chunkSize,
-        'Content-Type': mimeType,
-        'Cache-Control': 'public, max-age=31536000, immutable'
-      });
-
-      driveStream.data.on('error', () => { if (!res.writableEnded) res.end(); });
-      req.on('close', () => { if (driveStream.data && driveStream.data.destroy) driveStream.data.destroy(); });
-      driveStream.data.pipe(res);
-    } else {
-      res.writeHead(200, {
-        'Content-Length': fileSize,
-        'Content-Type': mimeType,
-        'Accept-Ranges': 'bytes',
-        'Cache-Control': 'public, max-age=31536000, immutable'
-      });
-
-      const driveStream = await drive.files.get(
-        { fileId: fileId, alt: 'media' },
-        { responseType: 'stream' }
-      );
-      driveStream.data.on('error', () => { if (!res.writableEnded) res.end(); });
-      req.on('close', () => { if (driveStream.data && driveStream.data.destroy) driveStream.data.destroy(); });
-      driveStream.data.pipe(res);
-    }
+    res.set({
+      'Cache-Control': 'private, max-age=1800',
+      'Access-Control-Allow-Origin': '*'
+    });
+    return res.redirect(302, directDriveUrl);
   } catch (error) {
-    if (!res.headersSent) res.status(500).send('Error streaming audio');
+    if (!res.headersSent) res.status(500).send('Error resolving direct audio stream');
   }
 });
 
