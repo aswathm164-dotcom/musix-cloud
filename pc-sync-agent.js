@@ -6,7 +6,7 @@ const { google } = require('googleapis');
 
 // Set your local PC music folder via PC_MUSIC_DIR in .env or CLI argument, defaulting to Windows Music folder
 const PC_MUSIC_DIR = process.argv[2] || process.env.PC_MUSIC_DIR || path.join(process.env.USERPROFILE || 'C:\\Users\\Aswath M', 'Music');
-const APP_BASE_URL = process.env.MUSIX_APP_URL || 'https://musix-cloud.onrender.com';
+const APP_BASE_URL = process.env.MUSIX_APP_URL || 'https://musix-cloudx.onrender.com';
 const DRIVE_FOLDER_ID = process.env.DRIVE_FOLDER_ID;
 
 const auth = new google.auth.OAuth2(

@@ -757,6 +757,70 @@ app.get('/api/stream/:fileId', async (req, res) => {
   }
 });
 
+
+const songArtworkCache = {};
+app.get('/api/song-artwork', async (req, res) => {
+  const rawTitle = (req.query.title || '').trim();
+  const rawArtist = (req.query.artist || '').trim();
+  if (!rawTitle) return res.json({ artwork: '' });
+
+  const cleanTitle = rawTitle
+    .replace(/\b(from|ost|original motion picture soundtrack)\b/gi, ' ')
+    .replace(/[()\[\]\-_]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const cleanArtist = (rawArtist === 'Cloud Artist' || rawArtist === 'Unknown') ? '' : rawArtist;
+  const query = (cleanTitle + ' ' + cleanArtist).trim();
+  const cacheKey = query.toLowerCase();
+
+  if (songArtworkCache[cacheKey]) {
+    return res.json(songArtworkCache[cacheKey]);
+  }
+
+  try {
+    const itUrl = 'https://itunes.apple.com/search?term=' + encodeURIComponent(query) + '&country=in&media=music&entity=song&limit=5';
+    const itRes = await axios.get(itUrl, { timeout: 4500 });
+    const results = (itRes.data && itRes.data.results) || [];
+    if (results.length > 0) {
+      const hit = results[0];
+      const payload = {
+        artwork: (hit.artworkUrl100 || '').replace('100x100bb', '600x600bb'),
+        album: hit.collectionName || '',
+        artist: hit.artistName || cleanArtist,
+        genre: hit.primaryGenreName || '',
+        year: hit.releaseDate ? String(hit.releaseDate).slice(0, 4) : ''
+      };
+      if (payload.artwork) {
+        songArtworkCache[cacheKey] = payload;
+        return res.json(payload);
+      }
+    }
+  } catch (e) {}
+
+  try {
+    const dzUrl = 'https://api.deezer.com/search?q=' + encodeURIComponent(query) + '&limit=3';
+    const dzRes = await axios.get(dzUrl, { timeout: 4500 });
+    const dzList = (dzRes.data && dzRes.data.data) || [];
+    if (dzList.length > 0) {
+      const dHit = dzList[0];
+      const cover = dHit.album && (dHit.album.cover_big || dHit.album.cover_xl || dHit.album.cover_medium);
+      if (cover) {
+        const payload = {
+          artwork: cover,
+          album: (dHit.album && dHit.album.title) || '',
+          artist: (dHit.artist && dHit.artist.name) || cleanArtist,
+          genre: '',
+          year: ''
+        };
+        songArtworkCache[cacheKey] = payload;
+        return res.json(payload);
+      }
+    }
+  } catch (e) {}
+
+  return res.json({ artwork: '' });
+});
+
 app.get('/api/artist-image', async (req, res) => {
   const name = (req.query.name || '').trim();
   if (!name || name === 'Cloud Artist') return res.json({ image: '' });

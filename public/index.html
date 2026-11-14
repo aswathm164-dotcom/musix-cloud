@@ -2471,23 +2471,34 @@
       const cm = song.cloudMeta || {};
       const cached = metaCache[song.id] || oldMetaCache[song.id] || {};
 
-      const resolvedTitle = cm.title || cached.title || parsed.title;
+      // Extract "From <Movie>" from title if album is not set yet
+      let cleanParsedTitle = parsed.title;
+      let inferredAlbum = '';
+      const fromMatch = cleanParsedTitle.match(/^(.*?)\s+From\s+(.+)$/i);
+      if (fromMatch) {
+        cleanParsedTitle = fromMatch[1].trim();
+        inferredAlbum = fromMatch[2].trim();
+      }
+
+      const resolvedTitle = cm.title || cached.title || cleanParsedTitle;
       const resolvedArtist = cm.artist || cached.artist || parsed.artist;
-      const resolvedAlbum = cm.album || cached.album || 'Cloud Drive';
+      const resolvedAlbum = (cm.album && cm.album !== 'Cloud Drive') ? cm.album : ((cached.album && cached.album !== 'Cloud Drive') ? cached.album : (inferredAlbum || 'Cloud Drive'));
       const resolvedAlbumArtist = cm.albumArtist || cached.albumArtist || '';
       const resolvedGenre = cm.genre || cached.genre || 'Music';
       const resolvedYear = cm.year || cached.year || '';
       const resolvedTrack = cm.trackNumber || cached.trackNumber || '';
-      const resolvedArt = cm.coverArt || cached.artwork || '/icon-512.png';
+      const resolvedArt = (cm.coverArt && cm.coverArt !== '/icon-512.png')
+        ? cm.coverArt
+        : ((cached.artwork && cached.artwork !== '/icon-512.png') ? cached.artwork : '/icon-512.png');
 
       const strictLang =
         manualLangOverrides[song.id] ||
         song.cloudLang ||
         cm.language ||
-        determineSongLanguageStrict(song, resolvedTitle, resolvedArtist, resolvedAlbum, resolvedGenre, (song.appProperties || {}).tagLang);
+        determineSongLanguageStrict(song, resolvedTitle + ' ' + inferredAlbum, resolvedArtist, resolvedAlbum, resolvedGenre, (song.appProperties || {}).tagLang);
 
       const pArtist = (resolvedAlbumArtist || resolvedArtist).split(/,|&|feat\.|ft\./i)[0].trim() || 'Cloud Artist';
-      const merged = {
+      return {
         title: resolvedTitle,
         artist: resolvedArtist,
         primaryArtist: pArtist,
@@ -2500,10 +2511,9 @@
         vibe: cached.vibe || classifyVibeOnly(resolvedTitle, resolvedArtist, resolvedAlbum, resolvedGenre),
         explicit: Boolean(cached.explicit),
         artwork: resolvedArt,
+        enriched: Boolean(cached.enriched && resolvedArt !== '/icon-512.png'),
         updatedAt: Math.max(cm.updatedAt || 0, cached.updatedAt || 0)
       };
-      metaCache[song.id] = merged;
-      return merged;
     }
 
     // One-time re-check of existing library with summary report
@@ -2636,6 +2646,7 @@
       metaCache[songId] = Object.assign({}, metaCache[songId], payload, { artwork: payload.coverArt });
       localStorage.setItem('am_meta_cache_v6', JSON.stringify(metaCache));
       localStorage.setItem('am_cached_drive_songs', JSON.stringify(driveSongs));
+        setTimeout(enrichLibraryArtworkAndDetails, 300);
       refreshAllViews();
       closeModals();
 
@@ -3104,6 +3115,87 @@
       } catch (err) {
         showToast('Could not download song. Check connection.');
       }
+    }
+
+    
+    let isEnrichingArtwork = false;
+    async function enrichLibraryArtworkAndDetails() {
+      if (isEnrichingArtwork || !driveSongs || driveSongs.length === 0) return;
+      isEnrichingArtwork = true;
+      let updatedCount = 0;
+
+      for (let i = 0; i < driveSongs.length; i++) {
+        const song = driveSongs[i];
+        const cur = getSongMeta(song);
+        if (cur.artwork && cur.artwork !== '/icon-512.png' && cur.enriched) continue;
+
+        try {
+          const searchTerms = (cur.title + ' ' + (cur.album !== 'Cloud Drive' ? cur.album : '') + ' ' + (cur.artist !== 'Cloud Artist' ? cur.artist : '')).trim();
+          let artUrl = '';
+          let foundAlbum = '';
+          let foundArtist = '';
+          let foundGenre = '';
+          let foundYear = '';
+
+          // 1. Try direct iTunes Search API from browser
+          try {
+            const itRes = await fetch('https://itunes.apple.com/search?term=' + encodeURIComponent(searchTerms) + '&country=in&media=music&entity=song&limit=3');
+            if (itRes.ok) {
+              const itData = await itRes.json();
+              if (itData.results && itData.results.length > 0) {
+                const hit = itData.results[0];
+                artUrl = (hit.artworkUrl100 || '').replace('100x100bb', '600x600bb');
+                foundAlbum = hit.collectionName || '';
+                foundArtist = hit.artistName || '';
+                foundGenre = hit.primaryGenreName || '';
+                foundYear = hit.releaseDate ? String(hit.releaseDate).slice(0, 4) : '';
+              }
+            }
+          } catch (e) {}
+
+          // 2. Fallback to server /api/song-artwork (iTunes + Deezer)
+          if (!artUrl) {
+            const srvRes = await fetch('/api/song-artwork?title=' + encodeURIComponent(cur.title + ' ' + (cur.album !== 'Cloud Drive' ? cur.album : '')) + '&artist=' + encodeURIComponent(cur.artist));
+            if (srvRes.ok) {
+              const srvData = await srvRes.json();
+              artUrl = srvData.artwork || '';
+              foundAlbum = srvData.album || foundAlbum;
+              foundArtist = srvData.artist || foundArtist;
+              foundGenre = srvData.genre || foundGenre;
+              foundYear = srvData.year || foundYear;
+            }
+          }
+
+          const finalAlbum = (cur.album && cur.album !== 'Cloud Drive') ? cur.album : (foundAlbum || 'Cloud Drive');
+          const finalArtist = (cur.artist && cur.artist !== 'Cloud Artist') ? cur.artist : (foundArtist || 'Cloud Artist');
+          const finalGenre = (cur.genre && cur.genre !== 'Music') ? cur.genre : (foundGenre || 'Music');
+          const finalLang = determineSongLanguageStrict(song, cur.title, finalArtist, finalAlbum, finalGenre, (song.appProperties || {}).tagLang);
+
+          metaCache[song.id] = Object.assign({}, cur, {
+            artist: finalArtist,
+            album: finalAlbum,
+            genre: finalGenre,
+            year: cur.year || foundYear,
+            language: finalLang,
+            artwork: artUrl || '/icon-512.png',
+            enriched: Boolean(artUrl),
+            updatedAt: Date.now()
+          });
+
+          if (artUrl) {
+            updatedCount++;
+            if (updatedCount % 4 === 0) {
+              localStorage.setItem('am_meta_cache_v6', JSON.stringify(metaCache));
+              refreshAllViews();
+            }
+          }
+        } catch (err) {}
+        await new Promise(r => setTimeout(r, 180));
+      }
+
+      localStorage.setItem('am_meta_cache_v6', JSON.stringify(metaCache));
+      refreshAllViews();
+      isEnrichingArtwork = false;
     }
 
     function refreshAllViews() {
