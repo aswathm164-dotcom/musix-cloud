@@ -4292,9 +4292,8 @@ setInterval(function () {
     connectRealtimeSyncStream();
     fetchLibrary(true);
   </script>
-<script id="musix-hotfix-v32">
+<script id="musix-hotfix-v33">
 (function () {
-  // 1. Stop 63MB background full-file preloading immediately
   window.ensureWarmAudioCache = async function () { return; };
   window.preloadNextTrackInQueue = function () { return; };
   if (typeof nextPreloader !== 'undefined' && nextPreloader) {
@@ -4302,92 +4301,191 @@ setInterval(function () {
     nextPreloader.removeAttribute('src');
   }
 
-  // 2. Stop the infinite sync-metadata <-> songs?refresh=1 loop
+  // Stop sync-metadata infinite loop
   let lastPushedHash = '';
   const origPush = window.pushAllOverridesToCloud;
   window.pushAllOverridesToCloud = async function (silent) {
     const curHash = JSON.stringify(manualLangOverrides || {});
-    if (silent && (curHash === '{}' || curHash === lastPushedHash)) {
-      return true;
-    }
+    if (silent && (curHash === '{}' || curHash === lastPushedHash)) return true;
     lastPushedHash = curHash;
     if (typeof origPush === 'function') return origPush(silent);
     return true;
   };
 
-  // 3. Fix Malayalam classification for Vellarathaaram, Komala Thaamara, Delulu, Chorkk, etc.
+  // Malayalam classifier override
   const origDetermineLang = window.determineSongLanguageStrict;
   const malayalamPattern = /\b(sushin shyam|jakes bejoy|vishnu vijay|vineeth sreenivasan|shaan rahman|rex vijayan|gopi sundar|dabzee|govind vasantha|fejo|vedan|bibin ashok|varkey|nevin thomas|mbl|sarvam maya|vellarathaaram|komala thaamara|masthishka maranam|delulu|athi bheekara kaamukan|neeye punchiri|chorkk|vazhikatti|puthu mazha|premavathi|akale)\b/i;
 
   window.determineSongLanguageStrict = function (song, title, artist, album, genre, driveTagLang) {
-    if (song && manualLangOverrides && manualLangOverrides[song.id]) {
-      return manualLangOverrides[song.id];
-    }
+    if (song && manualLangOverrides && manualLangOverrides[song.id]) return manualLangOverrides[song.id];
     const fullText = ((song && song.name) || '') + ' ' + (title || '') + ' ' + (artist || '') + ' ' + (album || '');
-    if (malayalamPattern.test(fullText)) {
-      return 'Malayalam';
-    }
-    if (typeof origDetermineLang === 'function') {
-      return origDetermineLang(song, title, artist, album, genre, driveTagLang);
-    }
+    if (malayalamPattern.test(fullText)) return 'Malayalam';
+    if (typeof origDetermineLang === 'function') return origDetermineLang(song, title, artist, album, genre, driveTagLang);
     return 'Other/Unknown';
   };
 
-  // 4. Force-fetch real album covers for every song still showing /icon-512.png
-  let artWorkerRunning = false;
-  async function loadAllCoversNow() {
-    if (artWorkerRunning || !Array.isArray(driveSongs) || driveSongs.length === 0) return;
-    artWorkerRunning = true;
+  // Generate a sleek, high-res bespoke album cover if a track has no cover anywhere online or in ID3
+  function generateCustomAlbumCover(title, artist) {
+    const palettes = [
+      ['#ff2d55', '#5856d6'],
+      ['#ff9500', '#ff2d55'],
+      ['#00c7be', '#007aff'],
+      ['#af52de', '#ff2d55'],
+      ['#30d158', '#0a84ff'],
+      ['#ff375f', '#bf5af2'],
+      ['#5e5ce6', '#32ade6']
+    ];
+    const seedStr = (title || 'M') + (artist || 'A');
+    let hash = 0;
+    for (let i = 0; i < seedStr.length; i++) {
+      hash = ((hash << 5) - hash) + seedStr.charCodeAt(i);
+      hash |= 0;
+    }
+    const pair = palettes[Math.abs(hash) % palettes.length];
+    const initials = (title || 'MU')
+      .replace(/[^a-zA-Z0-9\s]/g, '')
+      .trim()
+      .split(/\s+/)
+      .slice(0, 2)
+      .map(w => w[0] ? w[0].toUpperCase() : '')
+      .join('') || 'MX';
 
-    let updatedAny = false;
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">' +
+        '<defs>' +
+          '<linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">' +
+            '<stop offset="0%" stop-color="' + pair[0] + '"/>' +
+            '<stop offset="100%" stop-color="' + pair[1] + '"/>' +
+          '</linearGradient>' +
+        '</defs>' +
+        '<rect width="512" height="512" rx="48" fill="url(#g)"/>' +
+        '<circle cx="256" cy="256" r="175" fill="none" stroke="rgba(255,255,255,0.16)" stroke-width="18"/>' +
+        '<circle cx="256" cy="256" r="115" fill="none" stroke="rgba(255,255,255,0.10)" stroke-width="8"/>' +
+        '<text x="256" y="286" font-family="system-ui,-apple-system,Segoe UI,Roboto,sans-serif" font-size="136" font-weight="800" fill="#ffffff" text-anchor="middle" letter-spacing="-4">' + initials + '</text>' +
+      '</svg>';
+    return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+  }
+
+  // Pre-verify image URL in browser before saving to cache so dead URLs never enter metaCache
+  function verifyImageInBrowser(url) {
+    return new Promise(function (resolve) {
+      if (!url) return resolve(false);
+      if (url.startsWith('data:')) return resolve(true);
+      const img = new Image();
+      let done = false;
+      const finish = function (ok) {
+        if (done) return;
+        done = true;
+        resolve(ok);
+      };
+      img.onload = function () { finish(img.naturalWidth > 10); };
+      img.onerror = function () { finish(false); };
+      setTimeout(function () { finish(false); }, 4500);
+      img.src = url;
+    });
+  }
+
+  // Purge any broken cached URLs (like dead Deezer links from before)
+  const brokenUrls = new Set();
+  Object.keys(metaCache || {}).forEach(function (id) {
+    const art = metaCache[id] && metaCache[id].artwork;
+    if (!art || art.indexOf('icon-512.png') !== -1 || art.indexOf('dzcdn.net') !== -1 || art.indexOf('deezer.com') !== -1) {
+      if (metaCache[id]) delete metaCache[id].artwork;
+    }
+  });
+
+  // Global capture-phase listener: if ANY <img> on screen fails to load, immediately replace and re-fetch
+  window.addEventListener('error', function (e) {
+    const el = e.target;
+    if (el && el.tagName === 'IMG' && el.src && !el.src.startsWith('data:')) {
+      const badSrc = el.src;
+      brokenUrls.add(badSrc);
+      Object.keys(metaCache || {}).forEach(function (id) {
+        if (metaCache[id] && metaCache[id].artwork === badSrc) {
+          delete metaCache[id].artwork;
+        }
+      });
+      el.src = generateCustomAlbumCover(el.alt || 'Musix', '');
+    }
+  }, true);
+
+  function rerenderVisibleViews() {
+    refreshAllViews();
+    if (typeof updateSplashCollage === 'function') updateSplashCollage();
+    const plView = document.getElementById('view-playlist');
+    if (plView && plView.classList.contains('active') && Array.isArray(activeSmartSongs) && activeSmartSongs.length > 0) {
+      const heroType = document.getElementById('pl-hero-type').textContent;
+      const heroTitle = document.getElementById('pl-hero-title').textContent;
+      if (heroType === 'Language' || heroType === 'Vibe' || heroType === 'Artist' || heroType === 'Album') {
+        openSmartPlaylist(heroType, heroTitle);
+      }
+    }
+  }
+
+  let artQueueBusy = false;
+  async function guaranteeEverySongCover() {
+    if (artQueueBusy || !Array.isArray(driveSongs) || driveSongs.length === 0) return;
+    artQueueBusy = true;
+
     for (let i = 0; i < driveSongs.length; i++) {
       const song = driveSongs[i];
       const base = getSongMeta(song);
+      const curArt = (metaCache[song.id] && metaCache[song.id].artwork) || '';
 
-      // Fix cached language if Vellarathaaram or other Malayalam song was cached as Hindi
-      if (malayalamPattern.test(song.name + ' ' + base.title + ' ' + base.artist) && !manualLangOverrides[song.id]) {
-        if (metaCache[song.id] && metaCache[song.id].language !== 'Malayalam') {
-          metaCache[song.id].language = 'Malayalam';
-          updatedAny = true;
-        }
-      }
-
-      const curArt = (metaCache[song.id] && metaCache[song.id].artwork) || base.artwork || '';
-      if (curArt && curArt.indexOf('icon-512.png') === -1 && curArt.indexOf('icon-192.png') === -1) {
+      if (curArt && curArt.indexOf('icon-512.png') === -1 && !brokenUrls.has(curArt)) {
         continue;
       }
 
+      let chosenArt = '';
+      let foundAlbum = base.album;
+      let foundArtist = base.artist;
+
+      // 1. Try /api/song-artwork (iTunes IN + US, verified Deezer, MusicBrainz, Artist Portrait)
       try {
-        const url = '/api/song-artwork?title=' + encodeURIComponent(base.title) + '&artist=' + encodeURIComponent(base.artist);
-        const res = await fetch(url);
+        const res = await fetch('/api/song-artwork?title=' + encodeURIComponent(base.title) + '&artist=' + encodeURIComponent(base.artist));
         if (res.ok) {
           const data = await res.json();
-          if (data && data.artwork) {
-            metaCache[song.id] = Object.assign({}, base, metaCache[song.id] || {}, {
-              artwork: data.artwork,
-              album: (base.album && base.album !== 'Cloud Drive') ? base.album : (data.album || 'Cloud Drive'),
-              artist: (base.artist && base.artist !== 'Cloud Artist') ? base.artist : (data.artist || 'Cloud Artist'),
-              language: window.determineSongLanguageStrict(song, base.title, base.artist, data.album || base.album, '', ''),
-              updatedAt: Date.now()
-            });
-            localStorage.setItem('am_meta_cache_v6', JSON.stringify(metaCache));
-            refreshAllViews();
-            if (typeof updateSplashCollage === 'function') updateSplashCollage();
+          if (data && data.artwork && !brokenUrls.has(data.artwork)) {
+            const ok = await verifyImageInBrowser(data.artwork);
+            if (ok) {
+              chosenArt = data.artwork;
+              if (base.album === 'Cloud Drive' && data.album) foundAlbum = data.album;
+              if (base.artist === 'Cloud Artist' && data.artist) foundArtist = data.artist;
+            }
           }
         }
       } catch (e) {}
-      await new Promise(function (r) { setTimeout(r, 120); });
+
+      // 2. Try embedded MP3 ID3 APIC cover art from Google Drive
+      if (!chosenArt) {
+        const embUrl = '/api/song-embedded-art/' + encodeURIComponent(song.id);
+        const embOk = await verifyImageInBrowser(embUrl);
+        if (embOk) chosenArt = embUrl;
+      }
+
+      // 3. Guaranteed fallback: generate bespoke gradient album cover so NO song ever lacks an icon
+      if (!chosenArt) {
+        chosenArt = generateCustomAlbumCover(base.title, base.artist);
+      }
+
+      metaCache[song.id] = Object.assign({}, base, metaCache[song.id] || {}, {
+        artwork: chosenArt,
+        album: foundAlbum,
+        artist: foundArtist,
+        language: window.determineSongLanguageStrict(song, base.title, foundArtist, foundAlbum, '', ''),
+        updatedAt: Date.now()
+      });
+
+      localStorage.setItem('am_meta_cache_v6', JSON.stringify(metaCache));
+      rerenderVisibleViews();
+      await new Promise(function (r) { setTimeout(r, 80); });
     }
 
-    if (updatedAny) {
-      localStorage.setItem('am_meta_cache_v6', JSON.stringify(metaCache));
-      refreshAllViews();
-    }
-    artWorkerRunning = false;
+    artQueueBusy = false;
   }
 
-  setTimeout(loadAllCoversNow, 1200);
-  setInterval(loadAllCoversNow, 8000);
+  setTimeout(guaranteeEverySongCover, 600);
+  setInterval(guaranteeEverySongCover, 5000);
 })();
 </script>
 </body>

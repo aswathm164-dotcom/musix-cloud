@@ -811,6 +811,71 @@ app.get('/api/stream/:fileId', async (req, res) => {
 
 
 const songArtworkCache = {};
+const embeddedArtCache = {};
+
+async function isImageReachable(url) {
+  if (!url || !url.startsWith('http')) return false;
+  try {
+    const r = await axios.head(url, { timeout: 3000, maxRedirects: 3 });
+    const ct = (r.headers && r.headers['content-type']) || '';
+    return r.status >= 200 && r.status < 300 && ct.startsWith('image/');
+  } catch (e) {
+    return false;
+  }
+}
+
+// Extract embedded ID3v2 APIC cover art directly from the first 180KB of the Drive MP3
+app.get('/api/song-embedded-art/:fileId', async (req, res) => {
+  const fileId = req.params.fileId;
+  if (embeddedArtCache[fileId] === 'none') {
+    return res.status(404).end();
+  }
+  if (embeddedArtCache[fileId]) {
+    res.set({ 'Content-Type': embeddedArtCache[fileId].mime, 'Cache-Control': 'public, max-age=31536000, immutable' });
+    return res.send(embeddedArtCache[fileId].buf);
+  }
+  try {
+    const driveRes = await drive.files.get(
+      { fileId: fileId, alt: 'media' },
+      { responseType: 'arraybuffer', headers: { Range: 'bytes=0-184319' } }
+    );
+    const b = Buffer.from(driveRes.data);
+    if (b.length > 10 && b.toString('ascii', 0, 3) === 'ID3') {
+      const version = b[3];
+      const tagSize = ((b[6] & 0x7f) << 21) | ((b[7] & 0x7f) << 14) | ((b[8] & 0x7f) << 7) | (b[9] & 0x7f);
+      const limit = Math.min(b.length, 10 + tagSize);
+      let pos = 10;
+      while (pos + 10 < limit) {
+        const frameId = b.toString('ascii', pos, pos + 4);
+        if (!/^[A-Z0-9]{4}$/.test(frameId)) break;
+        const fSize = version === 4
+          ? (((b[pos + 4] & 0x7f) << 21) | ((b[pos + 5] & 0x7f) << 14) | ((b[pos + 6] & 0x7f) << 7) | (b[pos + 7] & 0x7f))
+          : b.readUInt32BE(pos + 4);
+        if (fSize <= 1 || pos + 10 + fSize > limit) break;
+        if (frameId === 'APIC') {
+          const payload = b.subarray(pos + 11, pos + 10 + fSize);
+          let mimeEnd = 0;
+          while (mimeEnd < payload.length && payload[mimeEnd] !== 0) mimeEnd++;
+          const mime = payload.toString('ascii', 0, mimeEnd) || 'image/jpeg';
+          let descStart = mimeEnd + 2;
+          while (descStart < payload.length && payload[descStart] !== 0) descStart++;
+          descStart++;
+          if (descStart < payload.length && payload[descStart] === 0) descStart++;
+          const imgBuf = payload.subarray(descStart);
+          if (imgBuf.length > 256) {
+            embeddedArtCache[fileId] = { mime, buf: imgBuf };
+            res.set({ 'Content-Type': mime, 'Cache-Control': 'public, max-age=31536000, immutable' });
+            return res.send(imgBuf);
+          }
+        }
+        pos += 10 + fSize;
+      }
+    }
+  } catch (e) {}
+  embeddedArtCache[fileId] = 'none';
+  return res.status(404).end();
+});
+
 app.get('/api/song-artwork', async (req, res) => {
   const rawTitle = (req.query.title || '').trim();
   const rawArtist = (req.query.artist || '').trim();
@@ -824,13 +889,19 @@ app.get('/api/song-artwork', async (req, res) => {
     movieName = fromMatch[2].trim();
   }
 
+  // Strip "with X", "feat X", "(with Y)", "- Remix" so tracks like "Moth To A Flame with The Weeknd" match cleanly
   const cleanTitle = mainTitle
-    .replace(/\b(from|ost|original motion picture soundtrack|one side love|song)\b/gi, ' ')
+    .replace(/\((with|feat|ft|remix|slowed|reverb|from)[^)]*\)/gi, ' ')
+    .replace(/\b(with|feat|ft)\b.*$/i, ' ')
+    .replace(/\b(remix|from|ost|original motion picture soundtrack|one side love|song|lyrical|video)\b/gi, ' ')
     .replace(/[()\[\]\-_]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+
   const firstTwoWords = cleanTitle.split(' ').slice(0, 2).join(' ');
-  const cleanArtist = (rawArtist === 'Cloud Artist' || rawArtist === 'Unknown') ? '' : rawArtist.split(/,|&|feat|ft/i)[0].trim();
+  const cleanArtist = (rawArtist === 'Cloud Artist' || rawArtist === 'Unknown')
+    ? ''
+    : rawArtist.split(/,|&|\bwith\b|\bfeat\b|\bft\b/i)[0].trim();
 
   const queries = [
     movieName ? (cleanTitle + ' ' + movieName) : '',
@@ -840,39 +911,45 @@ app.get('/api/song-artwork', async (req, res) => {
     cleanTitle
   ].map(s => (s || '').trim()).filter(Boolean);
 
-  const cacheKey = (rawTitle + '__' + cleanArtist).toLowerCase();
+  const cacheKey = (cleanTitle + '__' + cleanArtist + '__' + movieName).toLowerCase();
   if (songArtworkCache[cacheKey]) return res.json(songArtworkCache[cacheKey]);
 
-  // 1. Search iTunes Songs & Albums (India store)
-  for (const q of queries) {
-    try {
-      const itUrl = 'https://itunes.apple.com/search?term=' + encodeURIComponent(q) + '&country=in&media=music&limit=5';
-      const itRes = await axios.get(itUrl, { timeout: 4000 });
-      const hits = (itRes.data && itRes.data.results) || [];
-      if (hits.length > 0 && hits[0].artworkUrl100) {
-        const hit = hits[0];
-        const payload = {
-          artwork: hit.artworkUrl100.replace('100x100bb', '600x600bb'),
-          album: movieName || hit.collectionName || '',
-          artist: cleanArtist || hit.artistName || ''
-        };
-        songArtworkCache[cacheKey] = payload;
-        return res.json(payload);
-      }
-    } catch (e) {}
+  // 1. Query iTunes Search API across both India (in) and Global/US (us) stores
+  for (const store of ['in', 'us']) {
+    for (const q of queries.slice(0, 4)) {
+      try {
+        const itUrl = 'https://itunes.apple.com/search?term=' + encodeURIComponent(q) + '&country=' + store + '&media=music&limit=5';
+        const itRes = await axios.get(itUrl, { timeout: 4000 });
+        const hits = (itRes.data && itRes.data.results) || [];
+        for (const hit of hits) {
+          if (hit.artworkUrl100) {
+            const artUrl = hit.artworkUrl100.replace('100x100bb', '600x600bb');
+            const payload = {
+              artwork: artUrl,
+              album: movieName || hit.collectionName || '',
+              artist: cleanArtist || hit.artistName || ''
+            };
+            songArtworkCache[cacheKey] = payload;
+            return res.json(payload);
+          }
+        }
+      } catch (e) {}
+    }
+  }
 
-    // 2. Search Deezer Tracks
+  // 2. Query Deezer API and verify image URL actually returns HTTP 200 image/*
+  for (const q of queries.slice(0, 3)) {
     try {
       const dzUrl = 'https://api.deezer.com/search?q=' + encodeURIComponent(q) + '&limit=3';
       const dzRes = await axios.get(dzUrl, { timeout: 4000 });
       const dzHits = (dzRes.data && dzRes.data.data) || [];
-      if (dzHits.length > 0 && dzHits[0].album) {
-        const cover = dzHits[0].album.cover_big || dzHits[0].album.cover_xl || dzHits[0].album.cover_medium;
-        if (cover) {
+      for (const dHit of dzHits) {
+        const cover = dHit.album && (dHit.album.cover_big || dHit.album.cover_xl || dHit.album.cover_medium);
+        if (cover && await isImageReachable(cover)) {
           const payload = {
             artwork: cover,
-            album: movieName || dzHits[0].album.title || '',
-            artist: cleanArtist || (dzHits[0].artist && dzHits[0].artist.name) || ''
+            album: movieName || dHit.album.title || '',
+            artist: cleanArtist || (dHit.artist && dHit.artist.name) || ''
           };
           songArtworkCache[cacheKey] = payload;
           return res.json(payload);
@@ -881,14 +958,35 @@ app.get('/api/song-artwork', async (req, res) => {
     } catch (e) {}
   }
 
-  // 3. Fallback to Artist Portrait on Deezer/iTunes if single is too new for album DB
+  // 3. Query MusicBrainz + Cover Art Archive
+  try {
+    const mbQuery = encodeURIComponent('recording:"' + cleanTitle + '"' + (cleanArtist ? ' AND artist:"' + cleanArtist + '"' : ''));
+    const mbRes = await axios.get('https://musicbrainz.org/ws/2/recording/?query=' + mbQuery + '&fmt=json&limit=3', {
+      timeout: 4000,
+      headers: { 'User-Agent': 'MusixCloudApp/1.0 (contact@musix-cloud.app)' }
+    });
+    const recs = (mbRes.data && mbRes.data.recordings) || [];
+    for (const r of recs) {
+      const relId = r.releases && r.releases[0] && r.releases[0].id;
+      if (relId) {
+        const caaUrl = 'https://coverartarchive.org/release/' + relId + '/front-500';
+        if (await isImageReachable(caaUrl)) {
+          const payload = { artwork: caaUrl, album: movieName || (r.releases[0].title || ''), artist: cleanArtist };
+          songArtworkCache[cacheKey] = payload;
+          return res.json(payload);
+        }
+      }
+    }
+  } catch (e) {}
+
+  // 4. Fallback to verified Artist Portrait
   if (cleanArtist) {
     try {
       const arRes = await axios.get('https://api.deezer.com/search/artist?q=' + encodeURIComponent(cleanArtist) + '&limit=1', { timeout: 3500 });
       const arList = (arRes.data && arRes.data.data) || [];
       if (arList.length > 0) {
         const pic = arList[0].picture_big || arList[0].picture_medium;
-        if (pic && !pic.includes('/images/artist//')) {
+        if (pic && !pic.includes('/images/artist//') && await isImageReachable(pic)) {
           const payload = { artwork: pic, album: movieName || 'Single', artist: cleanArtist };
           songArtworkCache[cacheKey] = payload;
           return res.json(payload);
