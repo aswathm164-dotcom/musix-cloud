@@ -4292,36 +4292,64 @@ setInterval(function () {
     connectRealtimeSyncStream();
     fetchLibrary(true);
   </script>
-<script id="musix-hotfix-v36">
+<script id="musix-hotfix-v37">
 (function () {
+  if (localStorage.getItem('musix_client_ver') !== 'v37') {
+    localStorage.setItem('musix_client_ver', 'v37');
+    localStorage.removeItem('am_meta_cache_v6');
+    localStorage.removeItem('am_meta_cache_v5');
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(function (regs) {
+        Promise.all(regs.map(function (r) { return r.unregister(); })).finally(function () {
+          window.location.reload();
+        });
+      });
+      return;
+    }
+  }
+
   window.ensureWarmAudioCache = async function () { return; };
   window.preloadNextTrackInQueue = function () { return; };
   window.fetchAllMissingAlbumArt = async function () { return; };
 
-  // Always return /api/song-cover/:fileId for every song so no placeholder or dead dzcdn link can ever appear
   const origGetSongMeta = window.getSongMeta;
   window.getSongMeta = function (song) {
     const m = origGetSongMeta ? origGetSongMeta(song) : {};
     if (song && song.id) {
-      const guaranteedUrl = '/api/song-cover/' + encodeURIComponent(song.id) + '?v=36';
-      if (!m.artwork || m.artwork.indexOf('icon-512.png') !== -1 || m.artwork.indexOf('dzcdn.net') !== -1 || m.artwork.indexOf('deezer.com') !== -1) {
+      if (/popular\s+with\s+playboi/i.test((song.name || '') + ' ' + (m.title || '')) && /ariana/i.test(m.artist || '')) {
+        m.artist = 'The Weeknd, Playboi Carti, Madonna';
+        m.primaryArtist = 'The Weeknd';
+      }
+      const guaranteedUrl = '/api/song-cover/' + encodeURIComponent(song.id) +
+        '?title=' + encodeURIComponent(m.title || song.name || '') +
+        '&artist=' + encodeURIComponent(m.artist || '') +
+        '&v=37';
+      if (!m.artwork || m.artwork.indexOf('icon-512.png') !== -1 || m.artwork.indexOf('dzcdn.net') !== -1 || m.artwork.indexOf('v=36') !== -1) {
         m.artwork = guaranteedUrl;
       }
       if (metaCache && metaCache[song.id]) {
         metaCache[song.id].artwork = m.artwork;
+        metaCache[song.id].artist = m.artist;
       }
     }
     return m;
   };
 
-  // Sweep DOM every 1.5s to fix any broken or placeholder <img> tags in-place
-  function healDomImages() {
+  function syncCoversInDom() {
     if (Array.isArray(driveSongs) && driveSongs.length > 0) {
       let updated = false;
       driveSongs.forEach(function (s) {
-        const targetUrl = '/api/song-cover/' + encodeURIComponent(s.id) + '?v=36';
+        const base = window.getSongMeta(s);
+        const targetUrl = '/api/song-cover/' + encodeURIComponent(s.id) +
+          '?title=' + encodeURIComponent(base.title || s.name || '') +
+          '&artist=' + encodeURIComponent(base.artist || '') +
+          '&v=37';
         if (!metaCache[s.id] || metaCache[s.id].artwork !== targetUrl) {
-          metaCache[s.id] = Object.assign({}, metaCache[s.id] || {}, { artwork: targetUrl, updatedAt: Date.now() });
+          metaCache[s.id] = Object.assign({}, base, metaCache[s.id] || {}, {
+            artist: base.artist,
+            artwork: targetUrl,
+            updatedAt: Date.now()
+          });
           updated = true;
         }
       });
@@ -4338,8 +4366,8 @@ setInterval(function () {
     }
   }
 
-  setTimeout(healDomImages, 500);
-  setInterval(healDomImages, 2000);
+  setTimeout(syncCoversInDom, 400);
+  setInterval(syncCoversInDom, 2500);
 })();
 </script>
 </body>

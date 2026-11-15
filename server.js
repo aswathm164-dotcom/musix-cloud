@@ -478,14 +478,15 @@ async function getDriveSongs(forceRefresh = false) {
   return songsCache;
 }
 
-// === MUSIX V36 GUARANTEED COVER ENGINE START ===
+
+// === MUSIX V37 GUARANTEED COVER ENGINE START ===
 const knownDriveSongs = {};
 const resolvedCoverCache = {};
 let externalApiQueue = Promise.resolve();
 
 function enqueueExternalLookup(fn) {
   const next = externalApiQueue.then(async () => {
-    await new Promise(r => setTimeout(r, 110));
+    await new Promise(r => setTimeout(r, 90));
     return fn();
   });
   externalApiQueue = next.catch(() => {});
@@ -530,7 +531,7 @@ function makeSvgAlbumCover(title, artist) {
   return Buffer.from(svg, 'utf8');
 }
 
-function buildSearchQueriesForSong(rawName, rawTitle, rawArtist) {
+function buildSmartQueries(rawName, rawTitle, rawArtist) {
   const baseName = String(rawTitle || rawName || '')
     .replace(/\.(mp3|m4a|flac|wav|ogg|aac)$/i, '')
     .replace(/^\d+\s*[\-.]\s*/, '')
@@ -544,84 +545,95 @@ function buildSearchQueriesForSong(rawName, rawTitle, rawArtist) {
     movieName = fromMatch[2].trim();
   }
 
-  // Strip "(feat. ...)", "with ...", "feat ...", "Remix", bitrate tags
-  const cleanedTitle = mainTitle
-    .replace(/\([^)]*(?:feat|ft|with|remix|from|video|audio|slowed|reverb|kbps)[^)]*\)/gi, ' ')
-    .replace(/\[[^\]]*\]/g, ' ')
-    .replace(/\b(?:feat\.?|ft\.?|with)\b.*$/i, ' ')
-    .replace(/\b(?:remix|remastered|ost|original motion picture soundtrack|one side love|lyrical|video|audio|320kbps|128kbps)\b/gi, ' ')
+  // Keep collaborator names ("Playboi Carti Madonna", "The Weeknd", "KIDDO") by only removing connector words
+  const titleWithCollabs = mainTitle
+    .replace(/\b(?:feat\.?|ft\.?|with|prod\.?|by|ost|original motion picture soundtrack|one side love|lyrical|video|audio|320kbps|128kbps)\b/gi, ' ')
     .replace(/[()\[\]\-_/,]+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 
-  // Split artist on '/', ',', '&', ';', 'feat', 'with' so "Benny Blanco/Halsey/Khalid" -> "Benny Blanco"
+  // Core title without "with ..." or "(feat ...)" for scoring
+  const coreTitle = mainTitle
+    .replace(/\([^)]*\)/g, ' ')
+    .replace(/\[[^\]]*\]/g, ' ')
+    .replace(/\b(?:feat\.?|ft\.?|with)\b.*$/i, ' ')
+    .replace(/\b(?:remix|ost|original motion picture soundtrack|one side love|lyrical|video|audio)\b/gi, ' ')
+    .replace(/[()\[\]\-_/,]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  const artistClean = (!rawArtist || rawArtist === 'Cloud Artist' || rawArtist === 'Unknown')
+    ? ''
+    : String(rawArtist).replace(/[/,&;]+/g, ' ').replace(/\s+/g, ' ').trim();
+
   const primaryArtist = (!rawArtist || rawArtist === 'Cloud Artist' || rawArtist === 'Unknown')
     ? ''
     : String(rawArtist).split(/[/,&;]|\b(?:feat\.?|ft\.?|with)\b/i)[0].trim();
 
-  const shortWords = cleanedTitle.split(' ').slice(0, 3).join(' ');
-  const list = [
-    movieName ? (cleanedTitle + ' ' + movieName) : '',
-    (cleanedTitle + ' ' + primaryArtist).trim(),
-    cleanedTitle,
-    (shortWords + ' ' + primaryArtist).trim(),
-    movieName,
-    mainTitle.replace(/[()\[\]\-_/,]+/g, ' ').replace(/\s+/g, ' ').trim()
+  const queries = [
+    movieName ? (coreTitle + ' ' + movieName) : '',
+    (titleWithCollabs + ' ' + primaryArtist).trim(),
+    (coreTitle + ' ' + artistClean).trim(),
+    (coreTitle + ' ' + primaryArtist).trim(),
+    titleWithCollabs,
+    coreTitle
   ].map(s => (s || '').trim()).filter(s => s.length >= 2);
 
   return {
-    queries: Array.from(new Set(list)),
-    cleanTitle: cleanedTitle || mainTitle || 'Musix',
-    cleanArtist: primaryArtist
+    queries: Array.from(new Set(queries)),
+    coreTitle: coreTitle || titleWithCollabs || 'Musix',
+    titleWithCollabs: titleWithCollabs,
+    primaryArtist: primaryArtist,
+    artistClean: artistClean,
+    movieName: movieName
   };
 }
 
-async function extractEmbeddedCoverFromDrive(fileId) {
-  try {
-    const driveRes = await drive.files.get(
-      { fileId: fileId, alt: 'media' },
-      { responseType: 'arraybuffer', headers: { Range: 'bytes=0-655359' } }
-    );
-    const b = Buffer.from(driveRes.data);
-    if (b.length < 32 || b.toString('ascii', 0, 3) !== 'ID3') return null;
+const JUNK_RESULT_RE = /\b(nursery rhyme|nursery rhymes|for kids|kids songs|kidz bop|kids bop|lullaby|lullabies|karaoke|tribute|ringtone|8-bit|instrumental version|piano version|made famous by)\b/i;
 
-    const tagSize = ((b[6] & 0x7f) << 21) | ((b[7] & 0x7f) << 14) | ((b[8] & 0x7f) << 7) | (b[9] & 0x7f);
-    const limit = Math.min(b.length, 10 + tagSize);
-    const apicIdx = b.indexOf(Buffer.from('APIC'));
-    if (apicIdx === -1 || apicIdx >= limit) return null;
+function scoreTrackCandidate(hitTitle, hitArtist, hitAlbum, parsed) {
+  const combinedHit = (hitTitle + ' ' + hitArtist + ' ' + hitAlbum).toLowerCase();
+  if (JUNK_RESULT_RE.test(combinedHit)) return -999;
 
-    const version = b[3];
-    const fSize = version === 4
-      ? (((b[apicIdx + 4] & 0x7f) << 21) | ((b[apicIdx + 5] & 0x7f) << 14) | ((b[apicIdx + 6] & 0x7f) << 7) | (b[apicIdx + 7] & 0x7f))
-      : b.readUInt32BE(apicIdx + 4);
+  let score = 0;
+  const hTitle = String(hitTitle || '').toLowerCase();
+  const hArtist = String(hitArtist || '').toLowerCase();
+  const hAlbum = String(hitAlbum || '').toLowerCase();
 
-    const frameEnd = Math.min(limit, apicIdx + 10 + fSize);
-    const searchRegion = b.subarray(apicIdx + 10, Math.min(frameEnd, apicIdx + 140));
+  const targetCore = parsed.coreTitle.toLowerCase();
+  if (hTitle === targetCore || hTitle.startsWith(targetCore)) score += 40;
+  else if (hTitle.includes(targetCore) || targetCore.includes(hTitle)) score += 25;
 
-    // Scan for JPEG (FF D8 FF) or PNG (89 50 4E 47) magic bytes inside APIC frame
-    let imgOffset = -1;
-    let mime = 'image/jpeg';
-    for (let i = 0; i < searchRegion.length - 4; i++) {
-      if (searchRegion[i] === 0xFF && searchRegion[i + 1] === 0xD8 && searchRegion[i + 2] === 0xFF) {
-        imgOffset = apicIdx + 10 + i;
-        mime = 'image/jpeg';
-        break;
-      }
-      if (searchRegion[i] === 0x89 && searchRegion[i + 1] === 0x50 && searchRegion[i + 2] === 0x4E && searchRegion[i + 3] === 0x47) {
-        imgOffset = apicIdx + 10 + i;
-        mime = 'image/png';
-        break;
-      }
+  // Match artist and collaborator tokens
+  const artistTokens = (parsed.artistClean + ' ' + parsed.titleWithCollabs)
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(w => w.length >= 3 && !['the', 'and', 'remix', 'from'].includes(w));
+
+  let matchedArtistTokens = 0;
+  artistTokens.forEach(tok => {
+    if (hArtist.includes(tok) || hTitle.includes(tok) || hAlbum.includes(tok)) {
+      matchedArtistTokens++;
+      score += 20;
     }
+  });
 
-    if (imgOffset !== -1 && frameEnd - imgOffset > 512) {
-      return { type: 'buffer', mime: mime, buf: b.subarray(imgOffset, frameEnd) };
-    }
-  } catch (e) {}
-  return null;
+  if (parsed.primaryArtist && hArtist.includes(parsed.primaryArtist.toLowerCase())) {
+    score += 45;
+  }
+
+  if (parsed.movieName && hAlbum.includes(parsed.movieName.toLowerCase())) {
+    score += 45;
+  }
+
+  // If we know the artist or collaborators and the result matched NONE of them on a short 1-word title, reject it
+  if (parsed.coreTitle.split(' ').length === 1 && artistTokens.length > 0 && matchedArtistTokens === 0) {
+    return -500;
+  }
+
+  return score;
 }
 
-// Middleware: Prevent stale HTML/SW caching & inject guaranteed /api/song-cover/:fileId into /api/songs
 app.use((req, res, next) => {
   if (req.path === '/' || req.path === '/index.html' || req.path === '/sw.js') {
     res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
@@ -631,30 +643,37 @@ app.use((req, res, next) => {
     res.json = function (data) {
       if (Array.isArray(data)) {
         const malRe = /\b(sushin shyam|jakes bejoy|vishnu vijay|vineeth sreenivasan|shaan rahman|rex vijayan|gopi sundar|dabzee|govind vasantha|fejo|vedan|bibin ashok|varkey|nevin thomas|mbl|sarvam maya|vellarathaaram|komala thaamara|masthishka maranam|delulu|athi bheekara kaamukan|neeye punchiri|chorkk|vazhikatti|puthu mazha|premavathi|akale)\b/i;
-        const futureTs = Date.now() + 86400000;
+        const futureTs = Date.now() + 172800000;
 
         data.forEach(f => {
           if (!f || !f.id) return;
           f.cloudMeta = f.cloudMeta || {};
 
-          // Parse clean title/artist if missing
           const cleanName = String(f.name || '').replace(/\.(mp3|m4a|flac|wav|ogg|aac)$/i, '');
           const parts = cleanName.split(/\s+-\s+/);
           const fallbackTitle = parts[0] ? parts[0].trim() : cleanName;
           const fallbackArtist = parts[1] ? parts.slice(1).join(', ').trim() : 'Cloud Artist';
 
-          const title = f.cloudMeta.title || fallbackTitle;
-          const artist = f.cloudMeta.artist || fallbackArtist;
+          let title = f.cloudMeta.title || fallbackTitle;
+          let artist = f.cloudMeta.artist || fallbackArtist;
+
+          // Fix Popular with Playboi Carti Madonna if its artist was wrongly saved as Ariana Grande
+          if (/popular\s+with\s+playboi/i.test(cleanName + ' ' + title) && /ariana/i.test(artist)) {
+            artist = 'The Weeknd, Playboi Carti, Madonna';
+            f.cloudMeta.artist = artist;
+          }
+
           knownDriveSongs[f.id] = { id: f.id, name: f.name || '', title: title, artist: artist };
 
-          // Fix Malayalam classification directly in /api/songs payload
           if (malRe.test((f.name || '') + ' ' + title + ' ' + artist)) {
             f.cloudLang = 'Malayalam';
             f.cloudMeta.language = 'Malayalam';
           }
 
-          // Force every song to use /api/song-cover/:fileId with future timestamp so stale localStorage is overwritten
-          const coverUrl = '/api/song-cover/' + encodeURIComponent(f.id) + '?v=36';
+          const coverUrl = '/api/song-cover/' + encodeURIComponent(f.id) +
+            '?title=' + encodeURIComponent(title) +
+            '&artist=' + encodeURIComponent(artist) +
+            '&v=37';
           f.cloudMeta.coverArt = coverUrl;
           f.cloudMeta.artwork = coverUrl;
           f.cloudMeta.updatedAt = futureTs;
@@ -670,70 +689,66 @@ app.use((req, res, next) => {
 
 app.get('/api/song-cover/:fileId', async (req, res) => {
   const fileId = req.params.fileId;
+  const qTitle = (req.query.title || '').trim();
+  const qArtist = (req.query.artist || '').trim();
+  const cacheKey = fileId + '__' + qTitle.toLowerCase() + '__' + qArtist.toLowerCase();
+
   res.set({
-    'Cache-Control': 'public, max-age=31536000, immutable',
+    'Cache-Control': 'public, max-age=86400',
     'Access-Control-Allow-Origin': '*'
   });
 
-  if (resolvedCoverCache[fileId]) {
-    const c = resolvedCoverCache[fileId];
+  if (resolvedCoverCache[cacheKey]) {
+    const c = resolvedCoverCache[cacheKey];
     if (c.type === 'redirect') return res.redirect(302, c.url);
     res.set('Content-Type', c.mime);
     return res.send(c.buf);
   }
 
-  let info = knownDriveSongs[fileId];
-  if (!info) {
-    try {
-      const g = await drive.files.get({ fileId: fileId, fields: 'id, name' });
-      const cleanName = String((g.data && g.data.name) || '').replace(/\.(mp3|m4a|flac|wav|ogg|aac)$/i, '');
-      const parts = cleanName.split(/\s+-\s+/);
-      info = {
-        id: fileId,
-        name: (g.data && g.data.name) || '',
-        title: parts[0] ? parts[0].trim() : cleanName,
-        artist: parts[1] ? parts.slice(1).join(', ').trim() : ''
-      };
-      knownDriveSongs[fileId] = info;
-    } catch (e) {
-      info = { id: fileId, name: '', title: req.query.title || 'Musix', artist: req.query.artist || '' };
-    }
-  }
+  const info = knownDriveSongs[fileId] || { id: fileId, name: qTitle, title: qTitle || 'Musix', artist: qArtist };
+  const parsed = buildSmartQueries(info.name, qTitle || info.title, qArtist || info.artist);
 
-  const parsed = buildSearchQueriesForSong(info.name, req.query.title || info.title, req.query.artist || info.artist);
-
-  // 1. Try Embedded ID3v2 APIC cover inside the MP3 file on Google Drive (fast, zero external rate limits)
-  const embedded = await extractEmbeddedCoverFromDrive(fileId);
-  if (embedded) {
-    resolvedCoverCache[fileId] = embedded;
-    res.set('Content-Type', embedded.mime);
-    return res.send(embedded.buf);
-  }
-
-  // 2. Try rate-limited Apple Music (US & IN stores) + Deezer byte proxy
   const onlineResult = await enqueueExternalLookup(async () => {
+    let bestArtUrl = '';
+    let bestScore = -100;
+
+    // 1. Search Apple Music (US & IN stores) and score top candidates
     for (const store of ['us', 'in']) {
       for (const q of parsed.queries.slice(0, 4)) {
         try {
-          const itUrl = 'https://itunes.apple.com/search?term=' + encodeURIComponent(q) + '&country=' + store + '&media=music&limit=3';
-          const itRes = await axios.get(itUrl, { timeout: 4000 });
+          const itUrl = 'https://itunes.apple.com/search?term=' + encodeURIComponent(q) + '&country=' + store + '&media=music&entity=song&limit=8';
+          const itRes = await axios.get(itUrl, { timeout: 3800 });
           const hits = (itRes.data && itRes.data.results) || [];
-          if (hits.length > 0 && hits[0].artworkUrl100) {
-            const artUrl = hits[0].artworkUrl100.replace('100x100bb', '600x600bb');
-            return { type: 'redirect', url: artUrl };
+          for (const hit of hits) {
+            if (!hit.artworkUrl100) continue;
+            const s = scoreTrackCandidate(hit.trackName, hit.artistName, hit.collectionName, parsed);
+            if (s > bestScore) {
+              bestScore = s;
+              bestArtUrl = hit.artworkUrl100.replace('100x100bb', '600x600bb');
+            }
+          }
+          if (bestScore >= 55 && bestArtUrl) {
+            return { type: 'redirect', url: bestArtUrl };
           }
         } catch (e) {}
       }
     }
 
+    if (bestScore >= 20 && bestArtUrl) {
+      return { type: 'redirect', url: bestArtUrl };
+    }
+
+    // 2. Fallback to scored Deezer search (proxied as bytes so Indian ISPs never block)
     for (const q of parsed.queries.slice(0, 3)) {
       try {
-        const dzRes = await axios.get('https://api.deezer.com/search?q=' + encodeURIComponent(q) + '&limit=2', { timeout: 4000 });
+        const dzRes = await axios.get('https://api.deezer.com/search?q=' + encodeURIComponent(q) + '&limit=5', { timeout: 3800 });
         const dzHits = (dzRes.data && dzRes.data.data) || [];
         for (const h of dzHits) {
           const coverUrl = h.album && (h.album.cover_big || h.album.cover_medium);
-          if (coverUrl) {
-            const imgRes = await axios.get(coverUrl, { responseType: 'arraybuffer', timeout: 4500 });
+          if (!coverUrl) continue;
+          const s = scoreTrackCandidate(h.title, h.artist && h.artist.name, h.album && h.album.title, parsed);
+          if (s >= 20) {
+            const imgRes = await axios.get(coverUrl, { responseType: 'arraybuffer', timeout: 4000 });
             const ct = (imgRes.headers && imgRes.headers['content-type']) || 'image/jpeg';
             if (ct.startsWith('image/')) {
               return { type: 'buffer', mime: ct, buf: Buffer.from(imgRes.data) };
@@ -746,20 +761,20 @@ app.get('/api/song-cover/:fileId', async (req, res) => {
   });
 
   if (onlineResult) {
-    resolvedCoverCache[fileId] = onlineResult;
+    resolvedCoverCache[cacheKey] = onlineResult;
     if (onlineResult.type === 'redirect') return res.redirect(302, onlineResult.url);
     res.set('Content-Type', onlineResult.mime);
     return res.send(onlineResult.buf);
   }
 
-  // 3. Guaranteed fallback: serve custom SVG gradient cover so <img> never breaks or shows /icon-512.png
-  const svgBuf = makeSvgAlbumCover(parsed.cleanTitle, parsed.cleanArtist);
+  // 3. Guaranteed clean SVG gradient cover fallback
+  const svgBuf = makeSvgAlbumCover(parsed.coreTitle, parsed.primaryArtist);
   const fallbackObj = { type: 'buffer', mime: 'image/svg+xml', buf: svgBuf };
-  resolvedCoverCache[fileId] = fallbackObj;
+  resolvedCoverCache[cacheKey] = fallbackObj;
   res.set('Content-Type', 'image/svg+xml');
   return res.send(svgBuf);
 });
-// === MUSIX V36 GUARANTEED COVER ENGINE END ===
+// === MUSIX V37 GUARANTEED COVER ENGINE END ===
 
 app.get('/api/ping', (req, res) => res.json({ status: 'awake' }));
 
