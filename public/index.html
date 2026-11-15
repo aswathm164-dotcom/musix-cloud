@@ -1458,6 +1458,65 @@
       .mobile-nav { display: flex; }
     }
   </style>
+<style id="musix-lang-cover-style">
+  .musix-card-has-collage {
+    position: relative !important;
+    overflow: hidden !important;
+    isolation: isolate;
+  }
+  /* Hide the giant watermark music note when real album covers are shown */
+  .musix-card-has-collage > svg,
+  .musix-card-has-collage .mix-watermark,
+  .musix-card-has-collage .card-icon-bg {
+    opacity: 0 !important;
+  }
+  .musix-card-has-collage > *:not(.musix-lang-collage):not(.musix-lang-scrim) {
+    position: relative !important;
+    z-index: 2 !important;
+  }
+  .musix-lang-collage {
+    position: absolute !important;
+    inset: 0 !important;
+    z-index: 0 !important;
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    grid-template-rows: 1fr 1fr !important;
+    gap: 2px !important;
+    background: #121216 !important;
+    pointer-events: none !important;
+  }
+  .musix-lang-collage img {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover !important;
+    display: block !important;
+    filter: saturate(1.08) contrast(1.04);
+  }
+  .musix-lang-scrim {
+    position: absolute !important;
+    inset: 0 !important;
+    z-index: 1 !important;
+    background: linear-gradient(180deg, rgba(10,10,14,0.38) 0%, rgba(10,10,14,0.18) 42%, rgba(10,10,14,0.90) 100%) !important;
+    pointer-events: none !important;
+  }
+  .musix-hero-collage {
+    width: 100% !important;
+    height: 100% !important;
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    grid-template-rows: 1fr 1fr !important;
+    gap: 2px !important;
+    border-radius: inherit !important;
+    overflow: hidden !important;
+    background: #18181f !important;
+  }
+  .musix-hero-collage img {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover !important;
+    display: block !important;
+  }
+</style>
 </head>
 <body>
 
@@ -4292,10 +4351,10 @@ setInterval(function () {
     connectRealtimeSyncStream();
     fetchLibrary(true);
   </script>
-<script id="musix-hotfix-v38">
+<script id="musix-hotfix-v39">
 (function () {
-  if (localStorage.getItem('musix_client_ver') !== 'v38') {
-    localStorage.setItem('musix_client_ver', 'v38');
+  if (localStorage.getItem('musix_client_ver') !== 'v39') {
+    localStorage.setItem('musix_client_ver', 'v39');
     localStorage.removeItem('am_meta_cache_v6');
     localStorage.removeItem('am_meta_cache_v5');
     if ('serviceWorker' in navigator) {
@@ -4329,6 +4388,153 @@ setInterval(function () {
     }
     return m;
   };
+
+  function getSongsForCategory(type, name) {
+    if (!Array.isArray(driveSongs) || driveSongs.length === 0) return [];
+    const target = String(name || '').trim().toLowerCase();
+    return driveSongs.filter(function (s) {
+      const m = window.getSongMeta(s);
+      if (String(type || '').toLowerCase() === 'vibe') {
+        const v = String(m.vibe || '').toLowerCase();
+        return v === target || target.indexOf(v) !== -1 || v.indexOf(target) !== -1;
+      }
+      const l = String(m.language || 'Other/Unknown').toLowerCase();
+      return l === target || target.indexOf(l) !== -1 || l.indexOf(target) !== -1;
+    });
+  }
+
+  function buildFourCoverUrls(songs) {
+    if (!songs || songs.length === 0) return [];
+    const urls = [];
+    for (let i = 0; i < 4; i++) {
+      const s = songs[i % songs.length];
+      urls.push('/api/song-cover/' + encodeURIComponent(s.id) + '?v=38');
+    }
+    return urls;
+  }
+
+  function decorateLanguageAndVibeCards() {
+    if (!Array.isArray(driveSongs) || driveSongs.length === 0) return;
+
+    // 1. Find all Smart Mix / Language / Vibe cards across Home and Smart Mix views
+    const allCards = document.querySelectorAll('[onclick*="openSmartPlaylist"], .smart-mix-card, .mix-card');
+    allCards.forEach(function (card) {
+      let type = '';
+      let name = '';
+      const onclickAttr = card.getAttribute('onclick') || '';
+      const match = onclickAttr.match(/openSmartPlaylist\(\s*['"]([^'"]+)['"]\s*,\s*['"]([^'"]+)['"]\s*\)/);
+      if (match) {
+        type = match[1];
+        name = match[2];
+      } else {
+        const rawText = (card.innerText || '').split('\n').map(function (t) { return t.trim(); }).filter(Boolean);
+        if (rawText.length >= 2 && (rawText[0] === 'LANGUAGE' || rawText[0] === 'VIBE')) {
+          type = rawText[0] === 'VIBE' ? 'Vibe' : 'Language';
+          name = rawText[1];
+        }
+      }
+
+      if (!name) return;
+      const matchingSongs = getSongsForCategory(type, name);
+      if (matchingSongs.length === 0) return;
+
+      const coverUrls = buildFourCoverUrls(matchingSongs);
+      const sig = coverUrls.join('|');
+      if (card.getAttribute('data-collage-sig') === sig) return;
+      card.setAttribute('data-collage-sig', sig);
+      card.classList.add('musix-card-has-collage');
+
+      const oldCollage = card.querySelector('.musix-lang-collage');
+      if (oldCollage) oldCollage.remove();
+      const oldScrim = card.querySelector('.musix-lang-scrim');
+      if (oldScrim) oldScrim.remove();
+
+      const collageDiv = document.createElement('div');
+      collageDiv.className = 'musix-lang-collage';
+      coverUrls.forEach(function (u) {
+        const img = document.createElement('img');
+        img.src = u;
+        img.alt = name;
+        img.loading = 'lazy';
+        collageDiv.appendChild(img);
+      });
+
+      const scrimDiv = document.createElement('div');
+      scrimDiv.className = 'musix-lang-scrim';
+
+      card.insertBefore(scrimDiv, card.firstChild);
+      card.insertBefore(collageDiv, card.firstChild);
+    });
+
+    // 2. Update the Playlist Hero cover inside #view-playlist (replaces the "o o o" rings)
+    const plView = document.getElementById('view-playlist');
+    const heroTitleEl = document.getElementById('pl-hero-title');
+    const heroTypeEl = document.getElementById('pl-hero-type');
+    if (plView && heroTitleEl && heroTypeEl) {
+      const heroTitle = (heroTitleEl.textContent || '').trim();
+      const heroType = (heroTypeEl.textContent || '').trim();
+      const pool = (Array.isArray(activeSmartSongs) && activeSmartSongs.length > 0)
+        ? activeSmartSongs
+        : getSongsForCategory(heroType, heroTitle);
+
+      if (pool && pool.length > 0) {
+        const heroUrls = buildFourCoverUrls(pool);
+        const heroSig = heroTitle + '__' + heroUrls.join('|');
+
+        // Locate the hero artwork box inside the playlist header
+        let artBox = document.getElementById('pl-hero-art') ||
+                     document.getElementById('pl-hero-cover') ||
+                     plView.querySelector('.pl-hero-art, .playlist-hero-art, .hero-art, .pl-art-box');
+
+        if (!artBox && heroTitleEl.parentElement && heroTitleEl.parentElement.parentElement) {
+          const headerFlex = heroTitleEl.parentElement.parentElement;
+          if (headerFlex.firstElementChild && headerFlex.firstElementChild !== heroTitleEl.parentElement) {
+            artBox = headerFlex.firstElementChild;
+          }
+        }
+
+        if (artBox && artBox.getAttribute('data-hero-sig') !== heroSig) {
+          artBox.setAttribute('data-hero-sig', heroSig);
+          if (artBox.tagName === 'IMG') {
+            artBox.src = heroUrls[0];
+          } else {
+            artBox.innerHTML = '';
+            const grid = document.createElement('div');
+            grid.className = 'musix-hero-collage';
+            heroUrls.forEach(function (u) {
+              const img = document.createElement('img');
+              img.src = u;
+              img.alt = heroTitle;
+              grid.appendChild(img);
+            });
+            artBox.appendChild(grid);
+          }
+        }
+      }
+    }
+  }
+
+  // Hook refreshAllViews and openSmartPlaylist so covers appear immediately on navigation
+  const origRefresh = window.refreshAllViews;
+  if (typeof origRefresh === 'function') {
+    window.refreshAllViews = function () {
+      const res = origRefresh.apply(this, arguments);
+      setTimeout(decorateLanguageAndVibeCards, 50);
+      return res;
+    };
+  }
+
+  const origOpenSmart = window.openSmartPlaylist;
+  if (typeof origOpenSmart === 'function') {
+    window.openSmartPlaylist = function () {
+      const res = origOpenSmart.apply(this, arguments);
+      setTimeout(decorateLanguageAndVibeCards, 50);
+      return res;
+    };
+  }
+
+  setTimeout(decorateLanguageAndVibeCards, 300);
+  setInterval(decorateLanguageAndVibeCards, 1500);
 })();
 </script>
 </body>
