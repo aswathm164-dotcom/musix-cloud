@@ -1,6 +1,6 @@
-const SHELL_CACHE = 'musix-shell-v43';
-const AUDIO_CACHE = 'musix-audio-v43';
-const COVER_CACHE = 'musix-covers-v43';
+const SHELL_CACHE = 'musix-shell-v44';
+const AUDIO_CACHE = 'musix-audio-v44';
+const COVER_CACHE = 'musix-covers-v44';
 
 const SHELL_ASSETS = [
   '/manifest.json',

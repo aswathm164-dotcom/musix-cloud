@@ -618,6 +618,7 @@ async function resolveGuaranteedCover(fileId, queryTitle, queryArtist) {
         if (b.length > 1024) {
           const mime = (b[0] === 0x89 && b[1] === 0x50) ? 'image/png' : 'image/jpeg';
           const item = { mime, buf: b };
+          if (Object.keys(coverMemoryCache).length >= 20) { delete coverMemoryCache[Object.keys(coverMemoryCache)[0]]; }
           coverMemoryCache[cleanId] = item;
           return item;
         }
@@ -671,6 +672,7 @@ async function resolveGuaranteedCover(fileId, queryTitle, queryArtist) {
         }
 
         if (extracted && extracted.buf && extracted.buf.length > 1024) {
+          if (Object.keys(coverMemoryCache).length >= 20) { delete coverMemoryCache[Object.keys(coverMemoryCache)[0]]; }
           coverMemoryCache[cleanId] = extracted;
           try { fs.writeFileSync(runtimePath, extracted.buf); } catch (e) {}
           return extracted;
@@ -716,7 +718,8 @@ async function resolveGuaranteedCover(fileId, queryTitle, queryArtist) {
               const b = Buffer.from(imgRes.data);
               if (b.length > 1024) {
                 const item = { mime: 'image/jpeg', buf: b };
-                coverMemoryCache[cleanId] = item;
+                if (Object.keys(coverMemoryCache).length >= 20) { delete coverMemoryCache[Object.keys(coverMemoryCache)[0]]; }
+          coverMemoryCache[cleanId] = item;
                 try { fs.writeFileSync(runtimePath, b); } catch (e) {}
                 return item;
               }
@@ -738,7 +741,8 @@ async function resolveGuaranteedCover(fileId, queryTitle, queryArtist) {
               const b = Buffer.from(imgRes.data);
               if (b.length > 1024) {
                 const item = { mime: 'image/jpeg', buf: b };
-                coverMemoryCache[cleanId] = item;
+                if (Object.keys(coverMemoryCache).length >= 20) { delete coverMemoryCache[Object.keys(coverMemoryCache)[0]]; }
+          coverMemoryCache[cleanId] = item;
                 try { fs.writeFileSync(runtimePath, b); } catch (e) {}
                 return item;
               }
@@ -756,7 +760,8 @@ async function resolveGuaranteedCover(fileId, queryTitle, queryArtist) {
             const b = Buffer.from(imgRes.data);
             if (b.length > 1024) {
               const item = { mime: 'image/jpeg', buf: b };
-              coverMemoryCache[cleanId] = item;
+              if (Object.keys(coverMemoryCache).length >= 20) { delete coverMemoryCache[Object.keys(coverMemoryCache)[0]]; }
+          coverMemoryCache[cleanId] = item;
               try { fs.writeFileSync(runtimePath, b); } catch (e) {}
               return item;
             }
@@ -1198,7 +1203,8 @@ app.get('/api/stream/:fileId', async (req, res) => {
         'Cache-Control': 'public, max-age=31536000, immutable'
       });
 
-      driveStream.data.on('error', () => { if (!res.writableEnded) res.end(); });
+      driveStream.data.on('error', () => { try { if (!res.writableEnded) res.end(); } catch (e) {} });
+      res.on('error', () => { try { if (driveStream.data && driveStream.data.destroy) driveStream.data.destroy(); } catch (e) {} });
       req.on('close', () => { if (driveStream.data && driveStream.data.destroy) driveStream.data.destroy(); });
       driveStream.data.pipe(res);
     } else {
@@ -1214,7 +1220,8 @@ app.get('/api/stream/:fileId', async (req, res) => {
         { fileId: fileId, alt: 'media' },
         { responseType: 'stream' }
       );
-      driveStream.data.on('error', () => { if (!res.writableEnded) res.end(); });
+      driveStream.data.on('error', () => { try { if (!res.writableEnded) res.end(); } catch (e) {} });
+      res.on('error', () => { try { if (driveStream.data && driveStream.data.destroy) driveStream.data.destroy(); } catch (e) {} });
       req.on('close', () => { if (driveStream.data && driveStream.data.destroy) driveStream.data.destroy(); });
       driveStream.data.pipe(res);
     }
@@ -1226,189 +1233,6 @@ app.get('/api/stream/:fileId', async (req, res) => {
 
 
 
-
-const songArtworkCache = {};
-const embeddedArtCache = {};
-
-// Image proxy so external covers (Deezer / CoverArtArchive) load cleanly even if an ISP blocks their CDN
-app.get('/api/img-proxy', async (req, res) => {
-  const target = (req.query.url || '').trim();
-  if (!target.startsWith('http://') && !target.startsWith('https://')) {
-    return res.status(400).end();
-  }
-  try {
-    const imgRes = await axios.get(target, {
-      responseType: 'arraybuffer',
-      timeout: 5000,
-      headers: { 'User-Agent': 'Mozilla/5.0' }
-    });
-    const ct = (imgRes.headers && imgRes.headers['content-type']) || 'image/jpeg';
-    if (!ct.startsWith('image/')) return res.status(404).end();
-    res.set({
-      'Content-Type': ct,
-      'Cache-Control': 'public, max-age=31536000, immutable',
-      'Access-Control-Allow-Origin': '*'
-    });
-    return res.send(Buffer.from(imgRes.data));
-  } catch (e) {
-    return res.status(404).end();
-  }
-});
-
-// Extract embedded ID3v2 APIC cover art from Drive MP3 header
-app.get('/api/song-embedded-art/:fileId', async (req, res) => {
-  const fileId = req.params.fileId;
-  if (embeddedArtCache[fileId] === 'none') return res.status(404).end();
-  if (embeddedArtCache[fileId]) {
-    res.set({ 'Content-Type': embeddedArtCache[fileId].mime, 'Cache-Control': 'public, max-age=31536000, immutable' });
-    return res.send(embeddedArtCache[fileId].buf);
-  }
-  try {
-    const driveRes = await drive.files.get(
-      { fileId: fileId, alt: 'media' },
-      { responseType: 'arraybuffer', headers: { Range: 'bytes=0-184319' } }
-    );
-    const b = Buffer.from(driveRes.data);
-    if (b.length > 10 && b.toString('ascii', 0, 3) === 'ID3') {
-      const version = b[3];
-      const tagSize = ((b[6] & 0x7f) << 21) | ((b[7] & 0x7f) << 14) | ((b[8] & 0x7f) << 7) | (b[9] & 0x7f);
-      const limit = Math.min(b.length, 10 + tagSize);
-      let pos = 10;
-      while (pos + 10 < limit) {
-        const frameId = b.toString('ascii', pos, pos + 4);
-        if (!/^[A-Z0-9]{4}$/.test(frameId)) break;
-        const fSize = version === 4
-          ? (((b[pos + 4] & 0x7f) << 21) | ((b[pos + 5] & 0x7f) << 14) | ((b[pos + 6] & 0x7f) << 7) | (b[pos + 7] & 0x7f))
-          : b.readUInt32BE(pos + 4);
-        if (fSize <= 1 || pos + 10 + fSize > limit) break;
-        if (frameId === 'APIC') {
-          const payload = b.subarray(pos + 11, pos + 10 + fSize);
-          let mimeEnd = 0;
-          while (mimeEnd < payload.length && payload[mimeEnd] !== 0) mimeEnd++;
-          const mime = payload.toString('ascii', 0, mimeEnd) || 'image/jpeg';
-          let descStart = mimeEnd + 2;
-          while (descStart < payload.length && payload[descStart] !== 0) descStart++;
-          descStart++;
-          if (descStart < payload.length && payload[descStart] === 0) descStart++;
-          const imgBuf = payload.subarray(descStart);
-          if (imgBuf.length > 256) {
-            embeddedArtCache[fileId] = { mime, buf: imgBuf };
-            res.set({ 'Content-Type': mime, 'Cache-Control': 'public, max-age=31536000, immutable' });
-            return res.send(imgBuf);
-          }
-        }
-        pos += 10 + fSize;
-      }
-    }
-  } catch (e) {}
-  embeddedArtCache[fileId] = 'none';
-  return res.status(404).end();
-});
-
-app.get('/api/song-artwork', async (req, res) => {
-  const rawTitle = (req.query.title || '').trim();
-  const rawArtist = (req.query.artist || '').trim();
-  if (!rawTitle && !rawArtist) return res.json({ artwork: '' });
-
-  let movieName = '';
-  const fromMatch = rawTitle.match(/^(.*?)\s+From\s+(.+)$/i);
-  let mainTitle = rawTitle;
-  if (fromMatch) {
-    mainTitle = fromMatch[1].trim();
-    movieName = fromMatch[2].trim();
-  }
-
-  // Clean collaboration suffixes ("with The Weeknd", "feat Anitta", "- Remix")
-  const cleanTitle = mainTitle
-    .replace(/\((with|feat|ft|remix|slowed|reverb|from)[^)]*\)/gi, ' ')
-    .replace(/\b(with|feat|ft)\b.*$/i, ' ')
-    .replace(/\b(remix|from|ost|original motion picture soundtrack|one side love|song|lyrical|video)\b/gi, ' ')
-    .replace(/[()\[\]\-_]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-
-  const firstTwoWords = cleanTitle.split(' ').slice(0, 2).join(' ');
-  const cleanArtist = (rawArtist === 'Cloud Artist' || rawArtist === 'Unknown')
-    ? ''
-    : rawArtist.split(/,|&|\bwith\b|\bfeat\b|\bft\b/i)[0].trim();
-
-  const queries = [
-    movieName ? (cleanTitle + ' ' + movieName) : '',
-    (cleanTitle + ' ' + cleanArtist).trim(),
-    movieName,
-    (firstTwoWords + ' ' + cleanArtist).trim(),
-    cleanTitle
-  ].map(s => (s || '').trim()).filter(Boolean);
-
-  const cacheKey = (cleanTitle + '__' + cleanArtist + '__' + movieName).toLowerCase();
-  if (songArtworkCache[cacheKey]) return res.json(songArtworkCache[cacheKey]);
-
-  // 1. Apple iTunes Search API (US + IN stores ? mzstatic.com works globally without ISP blocks)
-  for (const store of ['us', 'in']) {
-    for (const q of queries.slice(0, 4)) {
-      try {
-        const itUrl = 'https://itunes.apple.com/search?term=' + encodeURIComponent(q) + '&country=' + store + '&media=music&limit=5';
-        const itRes = await axios.get(itUrl, { timeout: 4000 });
-        const hits = (itRes.data && itRes.data.results) || [];
-        for (const hit of hits) {
-          if (hit.artworkUrl100) {
-            const artUrl = hit.artworkUrl100.replace('100x100bb', '600x600bb');
-            const payload = {
-              artwork: artUrl,
-              album: movieName || hit.collectionName || '',
-              artist: cleanArtist || hit.artistName || ''
-            };
-            songArtworkCache[cacheKey] = payload;
-            return res.json(payload);
-          }
-        }
-      } catch (e) {}
-    }
-  }
-
-  // 2. Deezer Track Cover routed through /api/img-proxy so Indian ISPs never block it
-  for (const q of queries.slice(0, 3)) {
-    try {
-      const dzUrl = 'https://api.deezer.com/search?q=' + encodeURIComponent(q) + '&limit=3';
-      const dzRes = await axios.get(dzUrl, { timeout: 4000 });
-      const dzHits = (dzRes.data && dzRes.data.data) || [];
-      for (const dHit of dzHits) {
-        const cover = dHit.album && (dHit.album.cover_big || dHit.album.cover_xl || dHit.album.cover_medium);
-        if (cover) {
-          const payload = {
-            artwork: '/api/img-proxy?url=' + encodeURIComponent(cover),
-            album: movieName || dHit.album.title || '',
-            artist: cleanArtist || (dHit.artist && dHit.artist.name) || ''
-          };
-          songArtworkCache[cacheKey] = payload;
-          return res.json(payload);
-        }
-      }
-    } catch (e) {}
-  }
-
-  // 3. Artist Portrait routed through /api/img-proxy
-  if (cleanArtist) {
-    try {
-      const arRes = await axios.get('https://api.deezer.com/search/artist?q=' + encodeURIComponent(cleanArtist) + '&limit=1', { timeout: 3500 });
-      const arList = (arRes.data && arRes.data.data) || [];
-      if (arList.length > 0) {
-        const pic = arList[0].picture_big || arList[0].picture_medium;
-        if (pic && !pic.includes('/images/artist//')) {
-          const payload = {
-            artwork: '/api/img-proxy?url=' + encodeURIComponent(pic),
-            album: movieName || 'Single',
-            artist: cleanArtist
-          };
-          songArtworkCache[cacheKey] = payload;
-          return res.json(payload);
-        }
-      }
-    } catch (e) {}
-  }
-
-  return res.json({ artwork: '' });
-});
 
 app.get('/api/artist-image', async (req, res) => {
   const name = (req.query.name || '').trim();

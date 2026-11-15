@@ -4270,8 +4270,8 @@
   </script>
 <script id="musix-v43-master-engine">
 (function () {
-  if (localStorage.getItem('musix_client_ver') !== 'v43') {
-    localStorage.setItem('musix_client_ver', 'v43');
+  if (localStorage.getItem('musix_client_ver') !== 'v44') {
+    localStorage.setItem('musix_client_ver', 'v44');
     localStorage.removeItem('am_meta_cache_v6');
     localStorage.removeItem('am_meta_cache_v5');
     localStorage.removeItem('am_cached_drive_songs');
@@ -4909,6 +4909,31 @@
       if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
       savePlaybackSession(true);
     });
+
+    
+    const seekInputEl = document.getElementById('seek-bar');
+    if (seekInputEl && !seekInputEl.hasAttribute('data-v44-seek')) {
+      seekInputEl.setAttribute('data-v44-seek', '1');
+      const onUserScrub = function () {
+        if (!audioEl) return;
+        const dur = (isFinite(audioEl.duration) && audioEl.duration > 0)
+          ? audioEl.duration
+          : ((loadSavedSession() && loadSavedSession().duration) || 0);
+        if (dur > 0) {
+          const maxVal = parseFloat(seekInputEl.max) || 100;
+          const rawVal = parseFloat(seekInputEl.value) || 0;
+          const targetSec = maxVal === 100 ? (rawVal / 100) * dur : rawVal;
+          pendingSeekTime = targetSec;
+          if (isFinite(audioEl.duration) && audioEl.duration > 0) {
+            try { audioEl.currentTime = targetSec; pendingSeekTime = null; } catch (e) {}
+          }
+          syncPlayerSeekUI(targetSec, dur);
+          savePlaybackSession();
+        }
+      };
+      seekInputEl.addEventListener('input', onUserScrub);
+      seekInputEl.addEventListener('change', onUserScrub);
+    }
 
     audioEl.addEventListener('seeked', function () {
       savePlaybackSession();
