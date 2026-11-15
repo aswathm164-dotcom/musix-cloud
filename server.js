@@ -813,23 +813,35 @@ app.get('/api/stream/:fileId', async (req, res) => {
 const songArtworkCache = {};
 const embeddedArtCache = {};
 
-async function isImageReachable(url) {
-  if (!url || !url.startsWith('http')) return false;
-  try {
-    const r = await axios.head(url, { timeout: 3000, maxRedirects: 3 });
-    const ct = (r.headers && r.headers['content-type']) || '';
-    return r.status >= 200 && r.status < 300 && ct.startsWith('image/');
-  } catch (e) {
-    return false;
+// Image proxy so external covers (Deezer / CoverArtArchive) load cleanly even if an ISP blocks their CDN
+app.get('/api/img-proxy', async (req, res) => {
+  const target = (req.query.url || '').trim();
+  if (!target.startsWith('http://') && !target.startsWith('https://')) {
+    return res.status(400).end();
   }
-}
-
-// Extract embedded ID3v2 APIC cover art directly from the first 180KB of the Drive MP3
-app.get('/api/song-embedded-art/:fileId', async (req, res) => {
-  const fileId = req.params.fileId;
-  if (embeddedArtCache[fileId] === 'none') {
+  try {
+    const imgRes = await axios.get(target, {
+      responseType: 'arraybuffer',
+      timeout: 5000,
+      headers: { 'User-Agent': 'Mozilla/5.0' }
+    });
+    const ct = (imgRes.headers && imgRes.headers['content-type']) || 'image/jpeg';
+    if (!ct.startsWith('image/')) return res.status(404).end();
+    res.set({
+      'Content-Type': ct,
+      'Cache-Control': 'public, max-age=31536000, immutable',
+      'Access-Control-Allow-Origin': '*'
+    });
+    return res.send(Buffer.from(imgRes.data));
+  } catch (e) {
     return res.status(404).end();
   }
+});
+
+// Extract embedded ID3v2 APIC cover art from Drive MP3 header
+app.get('/api/song-embedded-art/:fileId', async (req, res) => {
+  const fileId = req.params.fileId;
+  if (embeddedArtCache[fileId] === 'none') return res.status(404).end();
   if (embeddedArtCache[fileId]) {
     res.set({ 'Content-Type': embeddedArtCache[fileId].mime, 'Cache-Control': 'public, max-age=31536000, immutable' });
     return res.send(embeddedArtCache[fileId].buf);
@@ -889,7 +901,7 @@ app.get('/api/song-artwork', async (req, res) => {
     movieName = fromMatch[2].trim();
   }
 
-  // Strip "with X", "feat X", "(with Y)", "- Remix" so tracks like "Moth To A Flame with The Weeknd" match cleanly
+  // Clean collaboration suffixes ("with The Weeknd", "feat Anitta", "- Remix")
   const cleanTitle = mainTitle
     .replace(/\((with|feat|ft|remix|slowed|reverb|from)[^)]*\)/gi, ' ')
     .replace(/\b(with|feat|ft)\b.*$/i, ' ')
@@ -914,8 +926,8 @@ app.get('/api/song-artwork', async (req, res) => {
   const cacheKey = (cleanTitle + '__' + cleanArtist + '__' + movieName).toLowerCase();
   if (songArtworkCache[cacheKey]) return res.json(songArtworkCache[cacheKey]);
 
-  // 1. Query iTunes Search API across both India (in) and Global/US (us) stores
-  for (const store of ['in', 'us']) {
+  // 1. Apple iTunes Search API (US + IN stores ? mzstatic.com works globally without ISP blocks)
+  for (const store of ['us', 'in']) {
     for (const q of queries.slice(0, 4)) {
       try {
         const itUrl = 'https://itunes.apple.com/search?term=' + encodeURIComponent(q) + '&country=' + store + '&media=music&limit=5';
@@ -937,7 +949,7 @@ app.get('/api/song-artwork', async (req, res) => {
     }
   }
 
-  // 2. Query Deezer API and verify image URL actually returns HTTP 200 image/*
+  // 2. Deezer Track Cover routed through /api/img-proxy so Indian ISPs never block it
   for (const q of queries.slice(0, 3)) {
     try {
       const dzUrl = 'https://api.deezer.com/search?q=' + encodeURIComponent(q) + '&limit=3';
@@ -945,9 +957,9 @@ app.get('/api/song-artwork', async (req, res) => {
       const dzHits = (dzRes.data && dzRes.data.data) || [];
       for (const dHit of dzHits) {
         const cover = dHit.album && (dHit.album.cover_big || dHit.album.cover_xl || dHit.album.cover_medium);
-        if (cover && await isImageReachable(cover)) {
+        if (cover) {
           const payload = {
-            artwork: cover,
+            artwork: '/api/img-proxy?url=' + encodeURIComponent(cover),
             album: movieName || dHit.album.title || '',
             artist: cleanArtist || (dHit.artist && dHit.artist.name) || ''
           };
@@ -958,36 +970,19 @@ app.get('/api/song-artwork', async (req, res) => {
     } catch (e) {}
   }
 
-  // 3. Query MusicBrainz + Cover Art Archive
-  try {
-    const mbQuery = encodeURIComponent('recording:"' + cleanTitle + '"' + (cleanArtist ? ' AND artist:"' + cleanArtist + '"' : ''));
-    const mbRes = await axios.get('https://musicbrainz.org/ws/2/recording/?query=' + mbQuery + '&fmt=json&limit=3', {
-      timeout: 4000,
-      headers: { 'User-Agent': 'MusixCloudApp/1.0 (contact@musix-cloud.app)' }
-    });
-    const recs = (mbRes.data && mbRes.data.recordings) || [];
-    for (const r of recs) {
-      const relId = r.releases && r.releases[0] && r.releases[0].id;
-      if (relId) {
-        const caaUrl = 'https://coverartarchive.org/release/' + relId + '/front-500';
-        if (await isImageReachable(caaUrl)) {
-          const payload = { artwork: caaUrl, album: movieName || (r.releases[0].title || ''), artist: cleanArtist };
-          songArtworkCache[cacheKey] = payload;
-          return res.json(payload);
-        }
-      }
-    }
-  } catch (e) {}
-
-  // 4. Fallback to verified Artist Portrait
+  // 3. Artist Portrait routed through /api/img-proxy
   if (cleanArtist) {
     try {
       const arRes = await axios.get('https://api.deezer.com/search/artist?q=' + encodeURIComponent(cleanArtist) + '&limit=1', { timeout: 3500 });
       const arList = (arRes.data && arRes.data.data) || [];
       if (arList.length > 0) {
         const pic = arList[0].picture_big || arList[0].picture_medium;
-        if (pic && !pic.includes('/images/artist//') && await isImageReachable(pic)) {
-          const payload = { artwork: pic, album: movieName || 'Single', artist: cleanArtist };
+        if (pic && !pic.includes('/images/artist//')) {
+          const payload = {
+            artwork: '/api/img-proxy?url=' + encodeURIComponent(pic),
+            album: movieName || 'Single',
+            artist: cleanArtist
+          };
           songArtworkCache[cacheKey] = payload;
           return res.json(payload);
         }

@@ -4292,8 +4292,31 @@ setInterval(function () {
     connectRealtimeSyncStream();
     fetchLibrary(true);
   </script>
-<script id="musix-hotfix-v33">
+<script id="musix-hotfix-v34">
 (function () {
+  // 1. One-time automatic Service Worker & cache migration to v34 (never loops)
+  if (localStorage.getItem('musix_client_ver') !== 'v34') {
+    localStorage.setItem('musix_client_ver', 'v34');
+    try {
+      const raw = JSON.parse(localStorage.getItem('am_meta_cache_v6') || '{}');
+      Object.keys(raw).forEach(function (k) {
+        const a = raw[k] && raw[k].artwork;
+        if (!a || a.indexOf('icon-512.png') !== -1 || a.indexOf('dzcdn.net') !== -1 || a.indexOf('deezer.com') !== -1) {
+          if (raw[k]) delete raw[k].artwork;
+        }
+      });
+      localStorage.setItem('am_meta_cache_v6', JSON.stringify(raw));
+    } catch (e) {}
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(function (regs) {
+        Promise.all(regs.map(function (r) { return r.unregister(); })).finally(function () {
+          window.location.reload();
+        });
+      });
+      return;
+    }
+  }
+
   window.ensureWarmAudioCache = async function () { return; };
   window.preloadNextTrackInQueue = function () { return; };
   if (typeof nextPreloader !== 'undefined' && nextPreloader) {
@@ -4301,7 +4324,6 @@ setInterval(function () {
     nextPreloader.removeAttribute('src');
   }
 
-  // Stop sync-metadata infinite loop
   let lastPushedHash = '';
   const origPush = window.pushAllOverridesToCloud;
   window.pushAllOverridesToCloud = async function (silent) {
@@ -4312,7 +4334,6 @@ setInterval(function () {
     return true;
   };
 
-  // Malayalam classifier override
   const origDetermineLang = window.determineSongLanguageStrict;
   const malayalamPattern = /\b(sushin shyam|jakes bejoy|vishnu vijay|vineeth sreenivasan|shaan rahman|rex vijayan|gopi sundar|dabzee|govind vasantha|fejo|vedan|bibin ashok|varkey|nevin thomas|mbl|sarvam maya|vellarathaaram|komala thaamara|masthishka maranam|delulu|athi bheekara kaamukan|neeye punchiri|chorkk|vazhikatti|puthu mazha|premavathi|akale)\b/i;
 
@@ -4324,7 +4345,6 @@ setInterval(function () {
     return 'Other/Unknown';
   };
 
-  // Generate a sleek, high-res bespoke album cover if a track has no cover anywhere online or in ID3
   function generateCustomAlbumCover(title, artist) {
     const palettes = [
       ['#ff2d55', '#5856d6'],
@@ -4347,7 +4367,7 @@ setInterval(function () {
       .trim()
       .split(/\s+/)
       .slice(0, 2)
-      .map(w => w[0] ? w[0].toUpperCase() : '')
+      .map(function (w) { return w[0] ? w[0].toUpperCase() : ''; })
       .join('') || 'MX';
 
     const svg =
@@ -4366,7 +4386,6 @@ setInterval(function () {
     return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
   }
 
-  // Pre-verify image URL in browser before saving to cache so dead URLs never enter metaCache
   function verifyImageInBrowser(url) {
     return new Promise(function (resolve) {
       if (!url) return resolve(false);
@@ -4385,7 +4404,6 @@ setInterval(function () {
     });
   }
 
-  // Purge any broken cached URLs (like dead Deezer links from before)
   const brokenUrls = new Set();
   Object.keys(metaCache || {}).forEach(function (id) {
     const art = metaCache[id] && metaCache[id].artwork;
@@ -4394,17 +4412,10 @@ setInterval(function () {
     }
   });
 
-  // Global capture-phase listener: if ANY <img> on screen fails to load, immediately replace and re-fetch
   window.addEventListener('error', function (e) {
     const el = e.target;
     if (el && el.tagName === 'IMG' && el.src && !el.src.startsWith('data:')) {
-      const badSrc = el.src;
-      brokenUrls.add(badSrc);
-      Object.keys(metaCache || {}).forEach(function (id) {
-        if (metaCache[id] && metaCache[id].artwork === badSrc) {
-          delete metaCache[id].artwork;
-        }
-      });
+      brokenUrls.add(el.src);
       el.src = generateCustomAlbumCover(el.alt || 'Musix', '');
     }
   }, true);
@@ -4432,7 +4443,7 @@ setInterval(function () {
       const base = getSongMeta(song);
       const curArt = (metaCache[song.id] && metaCache[song.id].artwork) || '';
 
-      if (curArt && curArt.indexOf('icon-512.png') === -1 && !brokenUrls.has(curArt)) {
+      if (curArt && curArt.indexOf('icon-512.png') === -1 && curArt.indexOf('dzcdn.net') === -1 && !brokenUrls.has(curArt)) {
         continue;
       }
 
@@ -4440,7 +4451,6 @@ setInterval(function () {
       let foundAlbum = base.album;
       let foundArtist = base.artist;
 
-      // 1. Try /api/song-artwork (iTunes IN + US, verified Deezer, MusicBrainz, Artist Portrait)
       try {
         const res = await fetch('/api/song-artwork?title=' + encodeURIComponent(base.title) + '&artist=' + encodeURIComponent(base.artist));
         if (res.ok) {
@@ -4456,14 +4466,12 @@ setInterval(function () {
         }
       } catch (e) {}
 
-      // 2. Try embedded MP3 ID3 APIC cover art from Google Drive
       if (!chosenArt) {
         const embUrl = '/api/song-embedded-art/' + encodeURIComponent(song.id);
         const embOk = await verifyImageInBrowser(embUrl);
         if (embOk) chosenArt = embUrl;
       }
 
-      // 3. Guaranteed fallback: generate bespoke gradient album cover so NO song ever lacks an icon
       if (!chosenArt) {
         chosenArt = generateCustomAlbumCover(base.title, base.artist);
       }
@@ -4478,14 +4486,14 @@ setInterval(function () {
 
       localStorage.setItem('am_meta_cache_v6', JSON.stringify(metaCache));
       rerenderVisibleViews();
-      await new Promise(function (r) { setTimeout(r, 80); });
+      await new Promise(function (r) { setTimeout(r, 60); });
     }
 
     artQueueBusy = false;
   }
 
-  setTimeout(guaranteeEverySongCover, 600);
-  setInterval(guaranteeEverySongCover, 5000);
+  setTimeout(guaranteeEverySongCover, 400);
+  setInterval(guaranteeEverySongCover, 4000);
 })();
 </script>
 </body>
