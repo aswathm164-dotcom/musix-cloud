@@ -28,20 +28,6 @@ auth.setCredentials({
 const drive = google.drive({ version: 'v3', auth });
 const DRIVE_FOLDER_ID = process.env.DRIVE_FOLDER_ID;
 
-let cachedDriveToken = '';
-let cachedDriveTokenExpiry = 0;
-
-async function getDriveAccessToken() {
-  if (cachedDriveToken && Date.now() < cachedDriveTokenExpiry - 60000) {
-    return cachedDriveToken;
-  }
-  const tokenRes = await auth.getAccessToken();
-  cachedDriveToken = tokenRes.token || tokenRes;
-  cachedDriveTokenExpiry = Date.now() + 50 * 60 * 1000;
-  return cachedDriveToken;
-}
-
-
 const META_FILE_NAME = 'musix-metadata.json';
 let metaFileIdCache = null;
 let centralDbCache = null; // { version: 2, updatedAt, records: { [fileId]: { ... } } }
@@ -478,724 +464,7 @@ async function getDriveSongs(forceRefresh = false) {
   return songsCache;
 }
 
-
-
-
-
-
-
-
-
-
-// === MUSIX V43 ARTWORK ENGINE START ===
-const STATIC_COVERS_DIR = path.join(__dirname, 'public', 'covers');
-const RUNTIME_COVERS_DIR = path.join(require('os').tmpdir(), 'musix-covers-v43');
-[STATIC_COVERS_DIR, RUNTIME_COVERS_DIR].forEach(dir => {
-  if (!fs.existsSync(dir)) {
-    try { fs.mkdirSync(dir, { recursive: true }); } catch (e) {}
-  }
-});
-
-let prebuiltManifest = {};
-try {
-  const manifestPath = path.join(STATIC_COVERS_DIR, 'index.json');
-  if (fs.existsSync(manifestPath)) {
-    prebuiltManifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
-  }
-} catch (e) {}
-
-const songRegistry = {};
-const coverMemoryCache = {};
-const coverInFlight = {};
-
-const CLEAN_VINYL_FALLBACK_SVG = Buffer.from(
-  '<svg xmlns="http://www.w3.org/2000/svg" width="600" height="600" viewBox="0 0 600 600">' +
-    '<defs>' +
-      '<linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">' +
-        '<stop offset="0%" stop-color="#1e1b2e"/>' +
-        '<stop offset="50%" stop-color="#151320"/>' +
-        '<stop offset="100%" stop-color="#0c0b12"/>' +
-      '</linearGradient>' +
-      '<radialGradient id="disc" cx="50%" cy="50%" r="50%">' +
-        '<stop offset="0%" stop-color="#2a273f"/>' +
-        '<stop offset="65%" stop-color="#14121d"/>' +
-        '<stop offset="100%" stop-color="#09080d"/>' +
-      '</radialGradient>' +
-      '<linearGradient id="accent" x1="0%" y1="0%" x2="100%" y2="100%">' +
-        '<stop offset="0%" stop-color="#ff2d55"/>' +
-        '<stop offset="100%" stop-color="#7928ca"/>' +
-      '</linearGradient>' +
-    '</defs>' +
-    '<rect width="600" height="600" fill="url(#bg)"/>' +
-    '<circle cx="300" cy="300" r="220" fill="url(#disc)" stroke="rgba(255,255,255,0.08)" stroke-width="3"/>' +
-    '<circle cx="300" cy="300" r="185" fill="none" stroke="rgba(255,255,255,0.04)" stroke-width="2"/>' +
-    '<circle cx="300" cy="300" r="150" fill="none" stroke="rgba(255,255,255,0.04)" stroke-width="2"/>' +
-    '<circle cx="300" cy="300" r="115" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="2"/>' +
-    '<circle cx="300" cy="300" r="72" fill="url(#accent)"/>' +
-    '<circle cx="300" cy="300" r="22" fill="#0f0e17"/>' +
-  '</svg>',
-  'utf8'
-);
-
-function parseCleanFilenameServer(rawFilename) {
-  const withoutExt = String(rawFilename || '')
-    .replace(/\.(mp3|m4a|flac|wav|ogg|aac)$/i, '')
-    .replace(/^\d+\s*[\-.]\s*/, '')
-    .trim();
-
-  let title = withoutExt;
-  let artist = 'Cloud Artist';
-  let album = 'Single';
-
-  const dashParts = withoutExt.split(/\s+-\s+/);
-  if (dashParts.length >= 2) {
-    title = dashParts[0].trim();
-    artist = dashParts.slice(1).join(', ').trim();
-  } else {
-    const featTail = withoutExt.match(/^(.*?\((?:feat|ft|with)[^)]+\))\s+(.+)$/i);
-    if (featTail) {
-      title = featTail[1].trim();
-      artist = featTail[2].trim();
-    } else if (/\s+KALEO$/i.test(withoutExt)) {
-      title = withoutExt.replace(/\s+KALEO$/i, '').trim();
-      artist = 'KALEO';
-    }
-  }
-
-  const fromMatch = title.match(/^(.*?)\s+From\s+(.+)$/i);
-  if (fromMatch) {
-    title = fromMatch[1].trim();
-    album = fromMatch[2].trim();
-  }
-
-  return { title, artist, album };
-}
-
-function rawScanBufferForEmbeddedArt(b) {
-  if (!b || b.length < 512) return null;
-  const markers = ['APIC', 'covr', 'PICTURE'];
-  for (const mk of markers) {
-    let idx = b.indexOf(Buffer.from(mk));
-    while (idx !== -1) {
-      const winEnd = Math.min(b.length, idx + 512);
-      for (let i = idx + mk.length; i < winEnd - 4; i++) {
-        if (b[i] === 0xFF && b[i + 1] === 0xD8 && b[i + 2] === 0xFF) {
-          let endPos = b.length;
-          for (let j = b.length - 2; j > i + 1024; j--) {
-            if (b[j] === 0xFF && b[j + 1] === 0xD9) {
-              endPos = j + 2;
-              break;
-            }
-          }
-          const slice = b.subarray(i, endPos);
-          if (slice.length > 1024) return { mime: 'image/jpeg', buf: Buffer.from(slice) };
-        }
-        if (b[i] === 0x89 && b[i + 1] === 0x50 && b[i + 2] === 0x4E && b[i + 3] === 0x47) {
-          const iend = b.indexOf(Buffer.from([0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82]), i);
-          const endPos = iend !== -1 ? iend + 8 : b.length;
-          const slice = b.subarray(i, endPos);
-          if (slice.length > 1024) return { mime: 'image/png', buf: Buffer.from(slice) };
-        }
-      }
-      idx = b.indexOf(Buffer.from(mk), idx + 4);
-    }
-  }
-  return null;
-}
-
-const JUNK_ART_RE = /\b(nursery rhyme|nursery rhymes|for kids|kids songs|kidz bop|kids bop|lullaby|karaoke|tribute|ringtone|8-bit)\b/i;
-
-async function resolveGuaranteedCover(fileId, queryTitle, queryArtist) {
-  const cleanId = String(fileId || '').replace(/\.(jpg|png|jpeg|webp)$/i, '');
-  if (coverMemoryCache[cleanId]) return coverMemoryCache[cleanId];
-
-  const staticPath = path.join(STATIC_COVERS_DIR, cleanId + '.jpg');
-  const runtimePath = path.join(RUNTIME_COVERS_DIR, cleanId + '.bin');
-  for (const p of [staticPath, runtimePath]) {
-    if (fs.existsSync(p)) {
-      try {
-        const b = fs.readFileSync(p);
-        if (b.length > 1024) {
-          const mime = (b[0] === 0x89 && b[1] === 0x50) ? 'image/png' : 'image/jpeg';
-          const item = { mime, buf: b };
-          if (Object.keys(coverMemoryCache).length >= 20) { delete coverMemoryCache[Object.keys(coverMemoryCache)[0]]; }
-          coverMemoryCache[cleanId] = item;
-          return item;
-        }
-      } catch (e) {}
-    }
-  }
-
-  if (coverInFlight[cleanId]) return coverInFlight[cleanId];
-
-  coverInFlight[cleanId] = (async () => {
-    try {
-      try {
-        const r1 = await drive.files.get(
-          { fileId: cleanId, alt: 'media' },
-          { responseType: 'arraybuffer', headers: { Range: 'bytes=0-1048575' } }
-        );
-        let buf = Buffer.from(r1.data);
-        if (buf.length >= 10 && buf.toString('ascii', 0, 3) === 'ID3') {
-          const tagSize = ((buf[6] & 0x7f) << 21) | ((buf[7] & 0x7f) << 14) | ((buf[8] & 0x7f) << 7) | (buf[9] & 0x7f);
-          const totalTag = Math.min(10 + tagSize + 4096, 6 * 1024 * 1024);
-          if (totalTag > buf.length) {
-            const r2 = await drive.files.get(
-              { fileId: cleanId, alt: 'media' },
-              { responseType: 'arraybuffer', headers: { Range: 'bytes=' + buf.length + '-' + (totalTag - 1) } }
-            );
-            buf = Buffer.concat([buf, Buffer.from(r2.data)]);
-          }
-        }
-
-        let extracted = null;
-        try {
-          const mm = await import('music-metadata');
-          const meta = await mm.parseBuffer(buf, { mimeType: 'audio/mpeg' }, { duration: false });
-          if (meta && meta.common) {
-            if (songRegistry[cleanId]) {
-              if (meta.common.title) songRegistry[cleanId].title = meta.common.title.trim();
-              if (meta.common.artist) songRegistry[cleanId].artist = meta.common.artist.trim();
-              if (meta.common.album) songRegistry[cleanId].album = meta.common.album.trim();
-            }
-            if (meta.common.picture && meta.common.picture[0] && meta.common.picture[0].data) {
-              const pBuf = Buffer.from(meta.common.picture[0].data);
-              if (pBuf.length > 1024) {
-                extracted = { mime: meta.common.picture[0].format || 'image/jpeg', buf: pBuf };
-              }
-            }
-          }
-        } catch (e) {}
-
-        if (!extracted) {
-          extracted = rawScanBufferForEmbeddedArt(buf);
-        }
-
-        if (extracted && extracted.buf && extracted.buf.length > 1024) {
-          if (Object.keys(coverMemoryCache).length >= 20) { delete coverMemoryCache[Object.keys(coverMemoryCache)[0]]; }
-          coverMemoryCache[cleanId] = extracted;
-          try { fs.writeFileSync(runtimePath, extracted.buf); } catch (e) {}
-          return extracted;
-        }
-      } catch (e) {}
-
-      const info = songRegistry[cleanId] || {};
-      const parsed = parseCleanFilenameServer(info.name || queryTitle || '');
-      const title = (queryTitle || info.title || parsed.title || '').trim();
-      const artist = (queryArtist || info.artist || parsed.artist || '').trim();
-      const album = (info.album && info.album !== 'Single' && info.album !== 'Cloud Drive') ? info.album : parsed.album;
-
-      const cleanTitle = title
-        .replace(/\((?:feat|ft|with|remix|from)[^)]*\)/gi, ' ')
-        .replace(/\b(?:feat\.?|ft\.?|with|ost|original motion picture soundtrack|one side love|lyrical|video|audio)\b/gi, ' ')
-        .replace(/[()\[\]\-_/,]+/g, ' ')
-        .replace(/\s+/g, ' ')
-        .trim();
-
-      const artistParts = (!artist || artist === 'Cloud Artist' || artist === 'Unknown')
-        ? []
-        : artist.split(/[/,&;]|\b(?:feat\.?|ft\.?|with)\b/i).map(s => s.trim()).filter(Boolean);
-      const primaryArtist = artistParts[0] || '';
-
-      const queries = [
-        (album && album !== 'Single') ? (cleanTitle + ' ' + album) : '',
-        (cleanTitle + ' ' + primaryArtist).trim(),
-        (cleanTitle + ' ' + artistParts.join(' ')).trim(),
-        cleanTitle
-      ].map(s => (s || '').trim()).filter(s => s.length >= 2);
-
-      const uniqueQueries = Array.from(new Set(queries));
-
-      for (const store of ['in', 'us']) {
-        for (const q of uniqueQueries) {
-          try {
-            const itRes = await axios.get('https://itunes.apple.com/search?term=' + encodeURIComponent(q) + '&country=' + store + '&media=music&entity=song&limit=5', { timeout: 3800 });
-            const hits = (itRes.data && itRes.data.results) || [];
-            for (const h of hits) {
-              const comb = (h.trackName || '') + ' ' + (h.artistName || '') + ' ' + (h.collectionName || '');
-              if (JUNK_ART_RE.test(comb) || !h.artworkUrl100) continue;
-              const imgRes = await axios.get(h.artworkUrl100.replace('100x100bb', '600x600bb'), { responseType: 'arraybuffer', timeout: 4500 });
-              const b = Buffer.from(imgRes.data);
-              if (b.length > 1024) {
-                const item = { mime: 'image/jpeg', buf: b };
-                if (Object.keys(coverMemoryCache).length >= 20) { delete coverMemoryCache[Object.keys(coverMemoryCache)[0]]; }
-          coverMemoryCache[cleanId] = item;
-                try { fs.writeFileSync(runtimePath, b); } catch (e) {}
-                return item;
-              }
-            }
-          } catch (e) {}
-        }
-      }
-
-      for (const q of uniqueQueries) {
-        try {
-          const dzRes = await axios.get('https://api.deezer.com/search?q=' + encodeURIComponent(q) + '&limit=5', { timeout: 3800 });
-          const hits = (dzRes.data && dzRes.data.data) || [];
-          for (const h of hits) {
-            const comb = (h.title || '') + ' ' + ((h.artist && h.artist.name) || '') + ' ' + ((h.album && h.album.title) || '');
-            if (JUNK_ART_RE.test(comb)) continue;
-            const cover = h.album && (h.album.cover_big || h.album.cover_xl || h.album.cover_medium);
-            if (cover) {
-              const imgRes = await axios.get(cover, { responseType: 'arraybuffer', timeout: 4500 });
-              const b = Buffer.from(imgRes.data);
-              if (b.length > 1024) {
-                const item = { mime: 'image/jpeg', buf: b };
-                if (Object.keys(coverMemoryCache).length >= 20) { delete coverMemoryCache[Object.keys(coverMemoryCache)[0]]; }
-          coverMemoryCache[cleanId] = item;
-                try { fs.writeFileSync(runtimePath, b); } catch (e) {}
-                return item;
-              }
-            }
-          }
-        } catch (e) {}
-      }
-
-      for (const artName of artistParts) {
-        try {
-          const itArt = await axios.get('https://itunes.apple.com/search?term=' + encodeURIComponent(artName) + '&country=in&media=music&entity=song&limit=3', { timeout: 3500 });
-          const hits = (itArt.data && itArt.data.results) || [];
-          if (hits.length > 0 && hits[0].artworkUrl100) {
-            const imgRes = await axios.get(hits[0].artworkUrl100.replace('100x100bb', '600x600bb'), { responseType: 'arraybuffer', timeout: 4000 });
-            const b = Buffer.from(imgRes.data);
-            if (b.length > 1024) {
-              const item = { mime: 'image/jpeg', buf: b };
-              if (Object.keys(coverMemoryCache).length >= 20) { delete coverMemoryCache[Object.keys(coverMemoryCache)[0]]; }
-          coverMemoryCache[cleanId] = item;
-              try { fs.writeFileSync(runtimePath, b); } catch (e) {}
-              return item;
-            }
-          }
-        } catch (e) {}
-      }
-    } catch (e) {} finally {
-      delete coverInFlight[cleanId];
-    }
-
-    return { mime: 'image/svg+xml', buf: CLEAN_VINYL_FALLBACK_SVG, isFallback: true };
-  })();
-
-  return coverInFlight[cleanId];
-}
-
-app.use((req, res, next) => {
-  if (req.path === '/' || req.path === '/index.html' || req.path === '/sw.js') {
-    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-  }
-  if (req.path === '/api/songs') {
-    const origJson = res.json.bind(res);
-    res.json = function (data) {
-      if (Array.isArray(data)) {
-        const malRe = /\b(sushin shyam|jakes bejoy|vishnu vijay|vineeth sreenivasan|shaan rahman|rex vijayan|gopi sundar|dabzee|govind vasantha|fejo|vedan|bibin ashok|varkey|nevin thomas|mbl|lil payyan|azwin|chembarathi|sarvam maya|vellarathaaram|komala thaamara|masthishka maranam|delulu|athi bheekara kaamukan|neeye punchiri|chorkk|vazhikatti|puthu mazha|premavathi|akale)\b/i;
-        const futureTs = Date.now() + 604800000;
-
-        data.forEach(f => {
-          if (!f || !f.id) return;
-
-          if (f.size) {
-            fileMetaCache[f.id] = {
-              size: parseInt(f.size, 10),
-              mimeType: f.mimeType || 'audio/mpeg'
-            };
-          }
-
-          f.cloudMeta = f.cloudMeta || {};
-          const pre = prebuiltManifest[f.id] || {};
-          const fromFile = parseCleanFilenameServer(f.name || '');
-
-          const title = pre.title || fromFile.title || f.cloudMeta.title || f.name;
-          const artist = (pre.artist && pre.artist !== 'Cloud Artist')
-            ? pre.artist
-            : (fromFile.artist !== 'Cloud Artist' ? fromFile.artist : (f.cloudMeta.artist || 'Cloud Artist'));
-          const album = (pre.album && pre.album !== 'Single' && pre.album !== 'Cloud Drive')
-            ? pre.album
-            : (fromFile.album !== 'Single' ? fromFile.album : ((f.cloudMeta.album && f.cloudMeta.album !== 'Cloud Drive') ? f.cloudMeta.album : 'Single'));
-
-          songRegistry[f.id] = { id: f.id, name: f.name || '', title, artist, album };
-
-          if (malRe.test((f.name || '') + ' ' + title + ' ' + artist + ' ' + album)) {
-            f.cloudLang = 'Malayalam';
-            f.cloudMeta.language = 'Malayalam';
-          }
-
-          const coverUrl = '/api/cover/' + encodeURIComponent(f.id) + '?v=43';
-          f.cloudMeta.title = title;
-          f.cloudMeta.artist = artist;
-          f.cloudMeta.album = album;
-          f.cloudMeta.coverArt = coverUrl;
-          f.cloudMeta.artwork = coverUrl;
-          f.cloudMeta.updatedAt = futureTs;
-          f.coverArt = coverUrl;
-          f.artwork = coverUrl;
-        });
-      }
-      return origJson(data);
-    };
-  }
-  next();
-});
-
-app.get(['/api/cover/:fileId', '/api/song-cover/:fileId', '/covers/:fileId'], async (req, res) => {
-  const rawParam = String(req.params.fileId || '');
-  if (rawParam.startsWith('cat_')) {
-    const slug = rawParam.replace(/^cat_/, '').replace(/\.(jpg|png)$/i, '');
-    return res.redirect(302, '/api/category-cover/' + encodeURIComponent(slug));
-  }
-  const cleanId = rawParam.replace(/\.(jpg|png|jpeg|webp)$/i, '');
-  const imgObj = await resolveGuaranteedCover(cleanId, req.query.title, req.query.artist);
-
-  res.set({
-    'Content-Type': (imgObj && imgObj.mime) || 'image/svg+xml',
-    'Cache-Control': (imgObj && !imgObj.isFallback) ? 'public, max-age=604800' : 'public, max-age=300',
-    'Access-Control-Allow-Origin': '*'
-  });
-  return res.status(200).send((imgObj && imgObj.buf) || CLEAN_VINYL_FALLBACK_SVG);
-});
-
-const CATEGORY_COVER_QUERIES = {
-  malayalam: 'Aavesham Sushin Shyam',
-  hindi: 'Aashiqui 2 Arijit Singh',
-  english: 'After Hours The Weeknd',
-  tamil: 'Leo Anirudh Ravichander',
-  love: 'Perfect Ed Sheeran',
-  sleep: 'Weightless Marconi Union',
-  trending: 'Starboy The Weeknd',
-  mood: 'Lovely Billie Eilish Khalid',
-  party: 'Titanium David Guetta Sia'
-};
-const categoryMemCache = {};
-
-app.get('/api/category-cover/:slug', async (req, res) => {
-  const slug = String(req.params.slug || 'malayalam').toLowerCase().replace(/[^a-z0-9]/g, '');
-  res.set({ 'Cache-Control': 'public, max-age=604800', 'Access-Control-Allow-Origin': '*' });
-
-  const staticCat = path.join(STATIC_COVERS_DIR, 'cat_' + slug + '.jpg');
-  if (fs.existsSync(staticCat)) {
-    res.set('Content-Type', 'image/jpeg');
-    return res.sendFile(staticCat);
-  }
-  if (categoryMemCache[slug]) {
-    res.set('Content-Type', categoryMemCache[slug].mime);
-    return res.send(categoryMemCache[slug].buf);
-  }
-
-  const q = CATEGORY_COVER_QUERIES[slug] || 'After Hours The Weeknd';
-  try {
-    const itRes = await axios.get('https://itunes.apple.com/search?term=' + encodeURIComponent(q) + '&country=in&media=music&entity=song&limit=3', { timeout: 4000 });
-    const hits = (itRes.data && itRes.data.results) || [];
-    if (hits.length > 0 && hits[0].artworkUrl100) {
-      const imgRes = await axios.get(hits[0].artworkUrl100.replace('100x100bb', '600x600bb'), { responseType: 'arraybuffer', timeout: 4500 });
-      const b = Buffer.from(imgRes.data);
-      if (b.length > 1024) {
-        categoryMemCache[slug] = { mime: 'image/jpeg', buf: b };
-        res.set('Content-Type', 'image/jpeg');
-        return res.send(b);
-      }
-    }
-  } catch (e) {}
-
-  res.set('Content-Type', 'image/svg+xml');
-  return res.status(200).send(CLEAN_VINYL_FALLBACK_SVG);
-});
-// === MUSIX V43 ARTWORK ENGINE END ===
-
-// === MUSIX TELEGRAM BOT ENGINE START ===
-const { Readable } = require('stream');
-const TELEGRAM_BOT_TOKEN = (process.env.TELEGRAM_BOT_TOKEN || '').trim();
-const TELEGRAM_ALLOWED_CHAT_ID = (process.env.TELEGRAM_ALLOWED_CHAT_ID || '').trim();
-let tgUpdateOffset = 0;
-let tgPollingActive = false;
-
-async function tgApiCall(method, payload) {
-  if (!TELEGRAM_BOT_TOKEN) return null;
-  const url = 'https://api.telegram.org/bot' + TELEGRAM_BOT_TOKEN + '/' + method;
-  const res = await axios.post(url, payload, { timeout: 35000 });
-  return res.data;
-}
-
-function detectLanguageFromCaptionOrMeta(caption, title, artist, album) {
-  const cap = String(caption || '');
-  if (/#malayalam|\bmalayalam\b/i.test(cap)) return 'Malayalam';
-  if (/#hindi|\bhindi\b/i.test(cap)) return 'Hindi';
-  if (/#tamil|\btamil\b/i.test(cap)) return 'Tamil';
-  if (/#english|\benglish\b/i.test(cap)) return 'English';
-
-  const combined = cap + ' ' + title + ' ' + artist + ' ' + album;
-  if (/\b(sushin shyam|jakes bejoy|vishnu vijay|vineeth sreenivasan|shaan rahman|rex vijayan|gopi sundar|dabzee|govind vasantha|fejo|vedan|bibin ashok|varkey|nevin thomas|mbl|lil payyan|azwin|chembarathi|sarvam maya|vellarathaaram|komala thaamara|masthishka maranam|delulu|athi bheekara kaamukan|neeye punchiri|chorkk|vazhikatti|puthu mazha|premavathi|akale)\b/i.test(combined)) {
-    return 'Malayalam';
-  }
-  if (/\b(anirudh|a\.r\. rahman|ar rahman|yuvan|harris jayaraj|gv prakash|santhosh narayanan|ilayaraja|sid sriram|pradeep kumar)\b/i.test(combined)) {
-    return 'Tamil';
-  }
-  if (/\b(arijit singh|pritam|vishal-shekhar|shreya ghoshal|atif aslam|jubin nautiyal|badshah|amit trivedi|sachin-jigar)\b/i.test(combined)) {
-    return 'Hindi';
-  }
-  return '';
-}
-
-async function handleTelegramAudioMessage(msg) {
-  const chatId = msg.chat && msg.chat.id;
-  if (!chatId) return;
-
-  if (TELEGRAM_ALLOWED_CHAT_ID && String(chatId) !== TELEGRAM_ALLOWED_CHAT_ID) {
-    await tgApiCall('sendMessage', {
-      chat_id: chatId,
-      text: '? Unauthorized chat ID (' + chatId + ').'
-    });
-    return;
-  }
-
-  const text = (msg.text || '').trim();
-  if (/^\/(start|help)/i.test(text)) {
-    const count = Object.keys(songRegistry || {}).length;
-    await tgApiCall('sendMessage', {
-      chat_id: chatId,
-      text:
-        '?? *Musix Cloud Telegram Uploader*\n\n' +
-        'Forward or send any *MP3, M4A, FLAC, or WAV* audio file here and I will:\n' +
-        '1. Extract its embedded ID3 title, artist, album & cover art\n' +
-        '2. Upload it directly to your Google Drive Musix folder\n' +
-        '3. Sync it live to https://musix-cloudx.onrender.com\n\n' +
-        '?? *Tip:* Add a caption like `#Malayalam`, `#Hindi`, `#Tamil`, or `#English` to lock its language tag.\n' +
-        '?? *Current Library:* ' + count + ' songs',
-      parse_mode: 'Markdown'
-    });
-    return;
-  }
-
-  const audioObj = msg.audio || msg.voice || (msg.document && /audio|\.(mp3|m4a|flac|wav|ogg|aac)$/i.test((msg.document.mime_type || '') + ' ' + (msg.document.file_name || '')) ? msg.document : null);
-  if (!audioObj) return;
-
-  const fileSize = audioObj.file_size || 0;
-  if (fileSize > 20 * 1024 * 1024) {
-    await tgApiCall('sendMessage', {
-      chat_id: chatId,
-      text: '?? Telegram Bot API limits direct downloads to 20 MB per file. Please send an MP3/M4A under 20 MB.'
-    });
-    return;
-  }
-
-  const statusMsg = await tgApiCall('sendMessage', {
-    chat_id: chatId,
-    text: '? Downloading audio from Telegram & extracting metadata...'
-  });
-  const statusMsgId = statusMsg && statusMsg.result && statusMsg.result.message_id;
-
-  try {
-    // 1. Get file path from Telegram
-    const fileInfo = await tgApiCall('getFile', { file_id: audioObj.file_id });
-    const tgFilePath = fileInfo && fileInfo.result && fileInfo.result.file_path;
-    if (!tgFilePath) throw new Error('Could not resolve Telegram file path');
-
-    const downloadUrl = 'https://api.telegram.org/file/bot' + TELEGRAM_BOT_TOKEN + '/' + tgFilePath;
-    const fileRes = await axios.get(downloadUrl, { responseType: 'arraybuffer', timeout: 60000 });
-    const audioBuf = Buffer.from(fileRes.data);
-
-    // 2. Parse embedded ID3/M4A tags & cover art using music-metadata
-    let parsedTitle = (audioObj.title || '').trim();
-    let parsedArtist = (audioObj.performer || '').trim();
-    let parsedAlbum = '';
-    let coverBuf = null;
-    let coverMime = 'image/jpeg';
-
-    try {
-      const mm = await import('music-metadata');
-      const meta = await mm.parseBuffer(audioBuf, { mimeType: audioObj.mime_type || 'audio/mpeg' }, { duration: false });
-      if (meta && meta.common) {
-        if (meta.common.title) parsedTitle = meta.common.title.trim();
-        if (meta.common.artists && meta.common.artists.length > 0) {
-          parsedArtist = meta.common.artists.join(', ').trim();
-        } else if (meta.common.artist) {
-          parsedArtist = meta.common.artist.trim();
-        }
-        if (meta.common.album) parsedAlbum = meta.common.album.trim();
-        if (meta.common.picture && meta.common.picture[0] && meta.common.picture[0].data) {
-          const p = Buffer.from(meta.common.picture[0].data);
-          if (p.length > 1024) {
-            coverBuf = p;
-            coverMime = meta.common.picture[0].format || 'image/jpeg';
-          }
-        }
-      }
-    } catch (e) {}
-
-    if (!coverBuf) {
-      const rawArt = rawScanBufferForEmbeddedArt(audioBuf);
-      if (rawArt && rawArt.buf) {
-        coverBuf = rawArt.buf;
-        coverMime = rawArt.mime || 'image/jpeg';
-      }
-    }
-
-    // 3. If no embedded cover in file, check Telegram audio thumbnail
-    const thumbObj = audioObj.thumbnail || audioObj.thumb;
-    if (!coverBuf && thumbObj && thumbObj.file_id) {
-      try {
-        const thInfo = await tgApiCall('getFile', { file_id: thumbObj.file_id });
-        const thPath = thInfo && thInfo.result && thInfo.result.file_path;
-        if (thPath) {
-          const thRes = await axios.get('https://api.telegram.org/file/bot' + TELEGRAM_BOT_TOKEN + '/' + thPath, { responseType: 'arraybuffer', timeout: 10000 });
-          const tb = Buffer.from(thRes.data);
-          if (tb.length > 512) coverBuf = tb;
-        }
-      } catch (e) {}
-    }
-
-    // 4. Clean fallback title/artist from filename if tags were blank
-    const rawFileName = audioObj.file_name || (parsedTitle ? parsedTitle + '.mp3' : 'Track_' + Date.now() + '.mp3');
-    const extMatch = rawFileName.match(/\.(mp3|m4a|flac|wav|ogg|aac)$/i);
-    const ext = extMatch ? extMatch[0].toLowerCase() : '.mp3';
-    const fromName = parseCleanFilenameServer(rawFileName);
-
-    const finalTitle = (parsedTitle || fromName.title || 'Unknown Track').replace(/[\\/:*?"<>|]/g, '').trim();
-    const finalArtist = (parsedArtist || (fromName.artist !== 'Cloud Artist' ? fromName.artist : '') || 'Cloud Artist').replace(/[\\/:*?"<>|]/g, '').trim();
-    const finalAlbum = (parsedAlbum || (fromName.album !== 'Single' ? fromName.album : '') || 'Single').trim();
-    const cleanDriveName = finalArtist && finalArtist !== 'Cloud Artist'
-      ? (finalTitle + ' - ' + finalArtist + ext)
-      : (finalTitle + ext);
-
-    const detectedLang = detectLanguageFromCaptionOrMeta(msg.caption || '', finalTitle, finalArtist, finalAlbum);
-
-    if (statusMsgId) {
-      try {
-        await tgApiCall('editMessageText', {
-          chat_id: chatId,
-          message_id: statusMsgId,
-          text: '?? Uploading *' + finalTitle + '* to Google Drive...',
-          parse_mode: 'Markdown'
-        });
-      } catch (e) {}
-    }
-
-    // 5. Upload audio buffer to Google Drive folder
-    const folderId = process.env.DRIVE_FOLDER_ID || DRIVE_FOLDER_ID;
-    const driveCreateRes = await drive.files.create({
-      requestBody: {
-        name: cleanDriveName,
-        parents: [folderId],
-        appProperties: detectedLang ? { tagLang: detectedLang } : undefined
-      },
-      media: {
-        mimeType: audioObj.mime_type || 'audio/mpeg',
-        body: Readable.from(audioBuf)
-      },
-      fields: 'id, name, size, mimeType'
-    });
-
-    const newFile = driveCreateRes.data;
-    const newId = newFile.id;
-
-    // 6. Register metadata, size, and cover immediately in memory & disk cache
-    fileMetaCache[newId] = {
-      size: parseInt(newFile.size || String(audioBuf.length), 10),
-      mimeType: newFile.mimeType || 'audio/mpeg'
-    };
-    songRegistry[newId] = {
-      id: newId,
-      name: cleanDriveName,
-      title: finalTitle,
-      artist: finalArtist,
-      album: finalAlbum
-    };
-
-    if (coverBuf && coverBuf.length > 512) {
-      coverMemoryCache[newId] = { mime: coverMime, buf: coverBuf };
-      try {
-        fs.writeFileSync(path.join(RUNTIME_COVERS_DIR, newId + '.bin'), coverBuf);
-        fs.writeFileSync(path.join(STATIC_COVERS_DIR, newId + '.jpg'), coverBuf);
-      } catch (e) {}
-    }
-
-    // 7. Trigger internal library refresh so open Musix browsers see the song immediately
-    try {
-      const localPort = process.env.PORT || 3000;
-      await axios.get('http://127.0.0.1:' + localPort + '/api/songs?refresh=1', { timeout: 8000 });
-    } catch (e) {}
-
-    const coverStatus = coverBuf ? '? Extracted from file' : '?? Auto-matched online';
-    const doneText =
-      '? *Uploaded to Musix Cloud!*\n\n' +
-      '?? *Title:* ' + finalTitle + '\n' +
-      '?? *Artist:* ' + finalArtist + '\n' +
-      '?? *Album:* ' + finalAlbum + '\n' +
-      (detectedLang ? '?? *Language:* ' + detectedLang + '\n' : '') +
-      '??? *Cover Art:* ' + coverStatus + '\n\n' +
-      '?? [Open Musix Player](https://musix-cloudx.onrender.com)';
-
-    if (statusMsgId) {
-      await tgApiCall('editMessageText', {
-        chat_id: chatId,
-        message_id: statusMsgId,
-        text: doneText,
-        parse_mode: 'Markdown',
-        disable_web_page_preview: true
-      });
-    } else {
-      await tgApiCall('sendMessage', {
-        chat_id: chatId,
-        text: doneText,
-        parse_mode: 'Markdown',
-        disable_web_page_preview: true
-      });
-    }
-  } catch (err) {
-    const errMsg = '? Upload failed: ' + ((err && err.message) || 'Unknown error');
-    if (statusMsgId) {
-      try {
-        await tgApiCall('editMessageText', { chat_id: chatId, message_id: statusMsgId, text: errMsg });
-        return;
-      } catch (e) {}
-    }
-    try { await tgApiCall('sendMessage', { chat_id: chatId, text: errMsg }); } catch (e) {}
-  }
-}
-
-async function startTelegramBotPolling() {
-  if (!TELEGRAM_BOT_TOKEN || tgPollingActive) return;
-  tgPollingActive = true;
-  console.log('Telegram-to-Drive Uploader Bot active and polling...');
-
-  try {
-    await tgApiCall('deleteWebhook', { drop_pending_updates: false });
-  } catch (e) {}
-
-  while (tgPollingActive) {
-    try {
-      const res = await axios.get(
-        'https://api.telegram.org/bot' + TELEGRAM_BOT_TOKEN + '/getUpdates?timeout=25&offset=' + tgUpdateOffset,
-        { timeout: 32000 }
-      );
-      const updates = (res.data && res.data.result) || [];
-      for (const u of updates) {
-        tgUpdateOffset = u.update_id + 1;
-        const msg = u.message || u.channel_post;
-        if (msg) {
-          await handleTelegramAudioMessage(msg);
-        }
-      }
-    } catch (err) {
-      // Back off for 15s if another instance is temporarily polling during Render deploy overlap
-      const status = err && err.response && err.response.status;
-      await new Promise(r => setTimeout(r, status === 409 ? 15000 : 4000));
-    }
-  }
-}
-
-setTimeout(startTelegramBotPolling, 3000);
-// === MUSIX TELEGRAM BOT ENGINE END ===
-
 app.get('/api/ping', (req, res) => res.json({ status: 'awake' }));
-
-app.get('/api/drive-token', async (req, res) => {
-  try {
-    const token = await getDriveAccessToken();
-    res.set('Cache-Control', 'private, max-age=1800');
-    res.json({ token: token, folderId: DRIVE_FOLDER_ID });
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to issue Drive token' });
-  }
-});
-
 
 // Update or upload song binary + metadata from local PC sync agent or web upload
 app.post('/api/upload', upload.single('audio'), async (req, res) => {
@@ -1328,9 +597,8 @@ app.post('/api/sync-metadata', async (req, res) => {
     Object.keys(incomingRecords).forEach(function (songId) {
       const rec = incomingRecords[songId];
       if (!rec) return;
-      const prevLang = db.records[songId] && db.records[songId].language;
       db.records[songId] = mergeSongRecord(db.records[songId], Object.assign({ id: songId }, rec), rec.updatedAt || Date.now());
-      if (db.records[songId].language !== prevLang) updatedAny = true;
+      updatedAny = true;
     });
 
     if (updatedAny) {
@@ -1434,6 +702,8 @@ app.post('/api/rescan-drive-tags', async (req, res) => {
   }
 });
 
+require('./musix-v46-engine')(app, drive, __dirname);
+
 app.get('/api/songs', async (req, res) => {
   try {
     const force = req.query.refresh === '1';
@@ -1448,9 +718,10 @@ app.get('/api/stream/:fileId', async (req, res) => {
   try {
     const fileId = req.params.fileId;
     const range = req.headers.range;
+    const isFullFetch = req.query.download === '1' || req.query.warm === '1';
 
-    let meta = fileMetaCache[fileId];
-    if (!meta || !meta.size) {
+    let meta = (global.musixFileMetaCache && global.musixFileMetaCache[fileId]) || fileMetaCache[fileId];
+    if (!meta) {
       const gMeta = await drive.files.get({
         fileId: fileId,
         fields: 'size, mimeType',
@@ -1463,13 +734,14 @@ app.get('/api/stream/:fileId', async (req, res) => {
     }
 
     const fileSize = meta.size;
-    const mimeType = meta.mimeType || 'audio/mpeg';
+    const mimeType = meta.mimeType;
 
-    if (range) {
+    if (range && !isFullFetch) {
       const parts = range.replace(/bytes=/, '').split('-');
-      const start = Math.max(0, parseInt(parts[0], 10) || 0);
-      const end = parts[1] ? Math.min(parseInt(parts[1], 10), fileSize - 1) : (fileSize - 1);
-      const chunkSize = Math.max(1, end - start + 1);
+      const start = parseInt(parts[0], 10);
+      const requestedEnd = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+      const end = Math.min(requestedEnd, fileSize - 1);
+      const chunkSize = end - start + 1;
 
       const driveStream = await drive.files.get(
         { fileId: fileId, alt: 'media' },
@@ -1484,12 +756,10 @@ app.get('/api/stream/:fileId', async (req, res) => {
         'Accept-Ranges': 'bytes',
         'Content-Length': chunkSize,
         'Content-Type': mimeType,
-        'Access-Control-Allow-Origin': '*',
         'Cache-Control': 'public, max-age=31536000, immutable'
       });
 
-      driveStream.data.on('error', () => { try { if (!res.writableEnded) res.end(); } catch (e) {} });
-      res.on('error', () => { try { if (driveStream.data && driveStream.data.destroy) driveStream.data.destroy(); } catch (e) {} });
+      driveStream.data.on('error', () => { if (!res.writableEnded) res.end(); });
       req.on('close', () => { if (driveStream.data && driveStream.data.destroy) driveStream.data.destroy(); });
       driveStream.data.pipe(res);
     } else {
@@ -1497,7 +767,6 @@ app.get('/api/stream/:fileId', async (req, res) => {
         'Content-Length': fileSize,
         'Content-Type': mimeType,
         'Accept-Ranges': 'bytes',
-        'Access-Control-Allow-Origin': '*',
         'Cache-Control': 'public, max-age=31536000, immutable'
       });
 
@@ -1505,8 +774,7 @@ app.get('/api/stream/:fileId', async (req, res) => {
         { fileId: fileId, alt: 'media' },
         { responseType: 'stream' }
       );
-      driveStream.data.on('error', () => { try { if (!res.writableEnded) res.end(); } catch (e) {} });
-      res.on('error', () => { try { if (driveStream.data && driveStream.data.destroy) driveStream.data.destroy(); } catch (e) {} });
+      driveStream.data.on('error', () => { if (!res.writableEnded) res.end(); });
       req.on('close', () => { if (driveStream.data && driveStream.data.destroy) driveStream.data.destroy(); });
       driveStream.data.pipe(res);
     }
@@ -1514,10 +782,6 @@ app.get('/api/stream/:fileId', async (req, res) => {
     if (!res.headersSent) res.status(500).send('Error streaming audio');
   }
 });
-
-
-
-
 
 app.get('/api/artist-image', async (req, res) => {
   const name = (req.query.name || '').trim();
