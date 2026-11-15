@@ -479,18 +479,189 @@ async function getDriveSongs(forceRefresh = false) {
 }
 
 
-// === MUSIX V37 GUARANTEED COVER ENGINE START ===
+
+// === MUSIX V38 GUARANTEED COVER ENGINE START ===
+const os = require('os');
+const COVER_CACHE_DIR = path.join(os.tmpdir(), 'musix-embedded-covers-v38');
+if (!fs.existsSync(COVER_CACHE_DIR)) {
+  try { fs.mkdirSync(COVER_CACHE_DIR, { recursive: true }); } catch (e) {}
+}
+
 const knownDriveSongs = {};
 const resolvedCoverCache = {};
-let externalApiQueue = Promise.resolve();
+let activeAudioStreams = 0;
 
-function enqueueExternalLookup(fn) {
-  const next = externalApiQueue.then(async () => {
-    await new Promise(r => setTimeout(r, 90));
-    return fn();
+// Concurrency-limited queue (max 2 concurrent Drive reads) that yields to audio streaming
+const coverQueue = [];
+let activeCoverWorkers = 0;
+const MAX_COVER_WORKERS = 2;
+
+function runInCoverQueue(taskFn) {
+  return new Promise((resolve, reject) => {
+    coverQueue.push({ taskFn, resolve, reject });
+    processCoverQueue();
   });
-  externalApiQueue = next.catch(() => {});
-  return next;
+}
+
+async function processCoverQueue() {
+  if (activeCoverWorkers >= MAX_COVER_WORKERS || coverQueue.length === 0) return;
+  activeCoverWorkers++;
+  while (coverQueue.length > 0) {
+    // Yield bandwidth immediately if user is starting an audio stream
+    while (activeAudioStreams > 0) {
+      await new Promise(r => setTimeout(r, 250));
+    }
+    const item = coverQueue.shift();
+    if (!item) break;
+    try {
+      const result = await item.taskFn();
+      item.resolve(result);
+    } catch (err) {
+      item.reject(err);
+    }
+    await new Promise(r => setTimeout(r, 40));
+  }
+  activeCoverWorkers--;
+}
+
+// Track active audio streams so cover extraction never blocks playback
+app.use('/api/stream/:fileId', (req, res, next) => {
+  activeAudioStreams++;
+  let decremented = false;
+  const done = () => {
+    if (!decremented) {
+      decremented = true;
+      activeAudioStreams = Math.max(0, activeAudioStreams - 1);
+    }
+  };
+  setTimeout(done, 4000);
+  res.on('close', done);
+  res.on('finish', done);
+  next();
+});
+
+function extractImageFromTagBuffer(b) {
+  // Scan for APIC (ID3v2.3/2.4), PIC (ID3v2.2), or covr (M4A)
+  let searchStart = 0;
+  const apicPos = b.indexOf(Buffer.from('APIC'));
+  const picPos = apicPos === -1 ? b.indexOf(Buffer.from('PIC')) : -1;
+  const covrPos = (apicPos === -1 && picPos === -1) ? b.indexOf(Buffer.from('covr')) : -1;
+
+  let frameStart = apicPos !== -1 ? apicPos : (picPos !== -1 ? picPos : covrPos);
+  if (frameStart === -1) return null;
+
+  let frameEnd = b.length;
+  if (apicPos !== -1 && apicPos + 10 < b.length) {
+    const ver = b[3];
+    const syncSize = ((b[apicPos + 4] & 0x7f) << 21) | ((b[apicPos + 5] & 0x7f) << 14) | ((b[apicPos + 6] & 0x7f) << 7) | (b[apicPos + 7] & 0x7f);
+    const stdSize = b.readUInt32BE(apicPos + 4);
+    let fSize = stdSize;
+    if (ver === 4) {
+      // Some v2.4 taggers write synchsafe, others write standard 32-bit BE; pick the one that lands inside the tag
+      const syncEnd = apicPos + 10 + syncSize;
+      const stdEnd = apicPos + 10 + stdSize;
+      if (stdEnd <= b.length && stdSize > syncSize && b[stdEnd - 2] === 0xFF && b[stdEnd - 1] === 0xD9) {
+        fSize = stdSize;
+      } else if (syncEnd <= b.length && syncSize > 512) {
+        fSize = syncSize;
+      }
+    }
+    if (fSize > 512 && apicPos + 10 + fSize <= b.length) {
+      frameEnd = apicPos + 10 + fSize;
+    }
+    searchStart = apicPos + 10;
+  } else {
+    searchStart = frameStart + 4;
+  }
+
+  const headerWindow = b.subarray(searchStart, Math.min(frameEnd, searchStart + 180));
+  for (let i = 0; i < headerWindow.length - 4; i++) {
+    // JPEG magic bytes: FF D8 FF
+    if (headerWindow[i] === 0xFF && headerWindow[i + 1] === 0xD8 && headerWindow[i + 2] === 0xFF) {
+      const imgStart = searchStart + i;
+      const imgBuf = b.subarray(imgStart, frameEnd);
+      if (imgBuf.length > 512) {
+        return { mime: 'image/jpeg', buf: Buffer.from(imgBuf) };
+      }
+    }
+    // PNG magic bytes: 89 50 4E 47
+    if (headerWindow[i] === 0x89 && headerWindow[i + 1] === 0x50 && headerWindow[i + 2] === 0x4E && headerWindow[i + 3] === 0x47) {
+      const imgStart = searchStart + i;
+      const iendIdx = b.indexOf(Buffer.from([0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82]), imgStart);
+      const endPos = iendIdx !== -1 ? iendIdx + 8 : frameEnd;
+      const imgBuf = b.subarray(imgStart, endPos);
+      if (imgBuf.length > 512) {
+        return { mime: 'image/png', buf: Buffer.from(imgBuf) };
+      }
+    }
+  }
+  return null;
+}
+
+async function getEmbeddedCoverFromDrive(fileId) {
+  const binPath = path.join(COVER_CACHE_DIR, fileId + '.bin');
+  const metaPath = path.join(COVER_CACHE_DIR, fileId + '.json');
+
+  // 1. Serve immediately if already extracted to disk
+  if (fs.existsSync(binPath) && fs.existsSync(metaPath)) {
+    try {
+      const meta = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
+      if (meta.none) return null;
+      const buf = fs.readFileSync(binPath);
+      if (buf.length > 512) return { type: 'buffer', mime: meta.mime || 'image/jpeg', buf };
+    } catch (e) {}
+  } else if (fs.existsSync(metaPath)) {
+    try {
+      const meta = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
+      if (meta.none) return null;
+    } catch (e) {}
+  }
+
+  return runInCoverQueue(async () => {
+    // Re-check disk cache inside queue
+    if (fs.existsSync(binPath) && fs.existsSync(metaPath)) {
+      try {
+        const meta = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
+        const buf = fs.readFileSync(binPath);
+        if (buf.length > 512) return { type: 'buffer', mime: meta.mime || 'image/jpeg', buf };
+      } catch (e) {}
+    }
+
+    try {
+      // Step A: Fetch first 256 KB to inspect ID3 header & tag size
+      const firstChunkEnd = 262143;
+      const res1 = await drive.files.get(
+        { fileId: fileId, alt: 'media' },
+        { responseType: 'arraybuffer', headers: { Range: 'bytes=0-' + firstChunkEnd } }
+      );
+      let b = Buffer.from(res1.data);
+
+      // Step B: If ID3 tag is larger than 256 KB (up to 6 MB for high-res covers), fetch the rest of the tag
+      if (b.length >= 10 && b.toString('ascii', 0, 3) === 'ID3') {
+        const tagSize = ((b[6] & 0x7f) << 21) | ((b[7] & 0x7f) << 14) | ((b[8] & 0x7f) << 7) | (b[9] & 0x7f);
+        const totalTagBytes = Math.min(10 + tagSize, 6 * 1024 * 1024);
+        if (totalTagBytes > b.length) {
+          const res2 = await drive.files.get(
+            { fileId: fileId, alt: 'media' },
+            { responseType: 'arraybuffer', headers: { Range: 'bytes=' + b.length + '-' + (totalTagBytes - 1) } }
+          );
+          b = Buffer.concat([b, Buffer.from(res2.data)]);
+        }
+      }
+
+      const extracted = extractImageFromTagBuffer(b);
+      if (extracted && extracted.buf && extracted.buf.length > 512) {
+        try {
+          fs.writeFileSync(binPath, extracted.buf);
+          fs.writeFileSync(metaPath, JSON.stringify({ mime: extracted.mime }), 'utf8');
+        } catch (e) {}
+        return { type: 'buffer', mime: extracted.mime, buf: extracted.buf };
+      }
+
+      try { fs.writeFileSync(metaPath, JSON.stringify({ none: true }), 'utf8'); } catch (e) {}
+    } catch (e) {}
+    return null;
+  });
 }
 
 function makeSvgAlbumCover(title, artist) {
@@ -531,109 +702,6 @@ function makeSvgAlbumCover(title, artist) {
   return Buffer.from(svg, 'utf8');
 }
 
-function buildSmartQueries(rawName, rawTitle, rawArtist) {
-  const baseName = String(rawTitle || rawName || '')
-    .replace(/\.(mp3|m4a|flac|wav|ogg|aac)$/i, '')
-    .replace(/^\d+\s*[\-.]\s*/, '')
-    .trim();
-
-  let movieName = '';
-  let mainTitle = baseName;
-  const fromMatch = baseName.match(/^(.*?)\s+From\s+(.+)$/i);
-  if (fromMatch) {
-    mainTitle = fromMatch[1].trim();
-    movieName = fromMatch[2].trim();
-  }
-
-  // Keep collaborator names ("Playboi Carti Madonna", "The Weeknd", "KIDDO") by only removing connector words
-  const titleWithCollabs = mainTitle
-    .replace(/\b(?:feat\.?|ft\.?|with|prod\.?|by|ost|original motion picture soundtrack|one side love|lyrical|video|audio|320kbps|128kbps)\b/gi, ' ')
-    .replace(/[()\[\]\-_/,]+/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-
-  // Core title without "with ..." or "(feat ...)" for scoring
-  const coreTitle = mainTitle
-    .replace(/\([^)]*\)/g, ' ')
-    .replace(/\[[^\]]*\]/g, ' ')
-    .replace(/\b(?:feat\.?|ft\.?|with)\b.*$/i, ' ')
-    .replace(/\b(?:remix|ost|original motion picture soundtrack|one side love|lyrical|video|audio)\b/gi, ' ')
-    .replace(/[()\[\]\-_/,]+/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-
-  const artistClean = (!rawArtist || rawArtist === 'Cloud Artist' || rawArtist === 'Unknown')
-    ? ''
-    : String(rawArtist).replace(/[/,&;]+/g, ' ').replace(/\s+/g, ' ').trim();
-
-  const primaryArtist = (!rawArtist || rawArtist === 'Cloud Artist' || rawArtist === 'Unknown')
-    ? ''
-    : String(rawArtist).split(/[/,&;]|\b(?:feat\.?|ft\.?|with)\b/i)[0].trim();
-
-  const queries = [
-    movieName ? (coreTitle + ' ' + movieName) : '',
-    (titleWithCollabs + ' ' + primaryArtist).trim(),
-    (coreTitle + ' ' + artistClean).trim(),
-    (coreTitle + ' ' + primaryArtist).trim(),
-    titleWithCollabs,
-    coreTitle
-  ].map(s => (s || '').trim()).filter(s => s.length >= 2);
-
-  return {
-    queries: Array.from(new Set(queries)),
-    coreTitle: coreTitle || titleWithCollabs || 'Musix',
-    titleWithCollabs: titleWithCollabs,
-    primaryArtist: primaryArtist,
-    artistClean: artistClean,
-    movieName: movieName
-  };
-}
-
-const JUNK_RESULT_RE = /\b(nursery rhyme|nursery rhymes|for kids|kids songs|kidz bop|kids bop|lullaby|lullabies|karaoke|tribute|ringtone|8-bit|instrumental version|piano version|made famous by)\b/i;
-
-function scoreTrackCandidate(hitTitle, hitArtist, hitAlbum, parsed) {
-  const combinedHit = (hitTitle + ' ' + hitArtist + ' ' + hitAlbum).toLowerCase();
-  if (JUNK_RESULT_RE.test(combinedHit)) return -999;
-
-  let score = 0;
-  const hTitle = String(hitTitle || '').toLowerCase();
-  const hArtist = String(hitArtist || '').toLowerCase();
-  const hAlbum = String(hitAlbum || '').toLowerCase();
-
-  const targetCore = parsed.coreTitle.toLowerCase();
-  if (hTitle === targetCore || hTitle.startsWith(targetCore)) score += 40;
-  else if (hTitle.includes(targetCore) || targetCore.includes(hTitle)) score += 25;
-
-  // Match artist and collaborator tokens
-  const artistTokens = (parsed.artistClean + ' ' + parsed.titleWithCollabs)
-    .toLowerCase()
-    .split(/\s+/)
-    .filter(w => w.length >= 3 && !['the', 'and', 'remix', 'from'].includes(w));
-
-  let matchedArtistTokens = 0;
-  artistTokens.forEach(tok => {
-    if (hArtist.includes(tok) || hTitle.includes(tok) || hAlbum.includes(tok)) {
-      matchedArtistTokens++;
-      score += 20;
-    }
-  });
-
-  if (parsed.primaryArtist && hArtist.includes(parsed.primaryArtist.toLowerCase())) {
-    score += 45;
-  }
-
-  if (parsed.movieName && hAlbum.includes(parsed.movieName.toLowerCase())) {
-    score += 45;
-  }
-
-  // If we know the artist or collaborators and the result matched NONE of them on a short 1-word title, reject it
-  if (parsed.coreTitle.split(' ').length === 1 && artistTokens.length > 0 && matchedArtistTokens === 0) {
-    return -500;
-  }
-
-  return score;
-}
-
 app.use((req, res, next) => {
   if (req.path === '/' || req.path === '/index.html' || req.path === '/sw.js') {
     res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
@@ -643,7 +711,7 @@ app.use((req, res, next) => {
     res.json = function (data) {
       if (Array.isArray(data)) {
         const malRe = /\b(sushin shyam|jakes bejoy|vishnu vijay|vineeth sreenivasan|shaan rahman|rex vijayan|gopi sundar|dabzee|govind vasantha|fejo|vedan|bibin ashok|varkey|nevin thomas|mbl|sarvam maya|vellarathaaram|komala thaamara|masthishka maranam|delulu|athi bheekara kaamukan|neeye punchiri|chorkk|vazhikatti|puthu mazha|premavathi|akale)\b/i;
-        const futureTs = Date.now() + 172800000;
+        const futureTs = Date.now() + 259200000;
 
         data.forEach(f => {
           if (!f || !f.id) return;
@@ -657,7 +725,6 @@ app.use((req, res, next) => {
           let title = f.cloudMeta.title || fallbackTitle;
           let artist = f.cloudMeta.artist || fallbackArtist;
 
-          // Fix Popular with Playboi Carti Madonna if its artist was wrongly saved as Ariana Grande
           if (/popular\s+with\s+playboi/i.test(cleanName + ' ' + title) && /ariana/i.test(artist)) {
             artist = 'The Weeknd, Playboi Carti, Madonna';
             f.cloudMeta.artist = artist;
@@ -670,10 +737,7 @@ app.use((req, res, next) => {
             f.cloudMeta.language = 'Malayalam';
           }
 
-          const coverUrl = '/api/song-cover/' + encodeURIComponent(f.id) +
-            '?title=' + encodeURIComponent(title) +
-            '&artist=' + encodeURIComponent(artist) +
-            '&v=37';
+          const coverUrl = '/api/song-cover/' + encodeURIComponent(f.id) + '?v=38';
           f.cloudMeta.coverArt = coverUrl;
           f.cloudMeta.artwork = coverUrl;
           f.cloudMeta.updatedAt = futureTs;
@@ -689,92 +753,52 @@ app.use((req, res, next) => {
 
 app.get('/api/song-cover/:fileId', async (req, res) => {
   const fileId = req.params.fileId;
-  const qTitle = (req.query.title || '').trim();
-  const qArtist = (req.query.artist || '').trim();
-  const cacheKey = fileId + '__' + qTitle.toLowerCase() + '__' + qArtist.toLowerCase();
-
   res.set({
-    'Cache-Control': 'public, max-age=86400',
+    'Cache-Control': 'public, max-age=31536000, immutable',
     'Access-Control-Allow-Origin': '*'
   });
 
-  if (resolvedCoverCache[cacheKey]) {
-    const c = resolvedCoverCache[cacheKey];
+  if (resolvedCoverCache[fileId]) {
+    const c = resolvedCoverCache[fileId];
     if (c.type === 'redirect') return res.redirect(302, c.url);
     res.set('Content-Type', c.mime);
     return res.send(c.buf);
   }
 
-  const info = knownDriveSongs[fileId] || { id: fileId, name: qTitle, title: qTitle || 'Musix', artist: qArtist };
-  const parsed = buildSmartQueries(info.name, qTitle || info.title, qArtist || info.artist);
-
-  const onlineResult = await enqueueExternalLookup(async () => {
-    let bestArtUrl = '';
-    let bestScore = -100;
-
-    // 1. Search Apple Music (US & IN stores) and score top candidates
-    for (const store of ['us', 'in']) {
-      for (const q of parsed.queries.slice(0, 4)) {
-        try {
-          const itUrl = 'https://itunes.apple.com/search?term=' + encodeURIComponent(q) + '&country=' + store + '&media=music&entity=song&limit=8';
-          const itRes = await axios.get(itUrl, { timeout: 3800 });
-          const hits = (itRes.data && itRes.data.results) || [];
-          for (const hit of hits) {
-            if (!hit.artworkUrl100) continue;
-            const s = scoreTrackCandidate(hit.trackName, hit.artistName, hit.collectionName, parsed);
-            if (s > bestScore) {
-              bestScore = s;
-              bestArtUrl = hit.artworkUrl100.replace('100x100bb', '600x600bb');
-            }
-          }
-          if (bestScore >= 55 && bestArtUrl) {
-            return { type: 'redirect', url: bestArtUrl };
-          }
-        } catch (e) {}
-      }
-    }
-
-    if (bestScore >= 20 && bestArtUrl) {
-      return { type: 'redirect', url: bestArtUrl };
-    }
-
-    // 2. Fallback to scored Deezer search (proxied as bytes so Indian ISPs never block)
-    for (const q of parsed.queries.slice(0, 3)) {
-      try {
-        const dzRes = await axios.get('https://api.deezer.com/search?q=' + encodeURIComponent(q) + '&limit=5', { timeout: 3800 });
-        const dzHits = (dzRes.data && dzRes.data.data) || [];
-        for (const h of dzHits) {
-          const coverUrl = h.album && (h.album.cover_big || h.album.cover_medium);
-          if (!coverUrl) continue;
-          const s = scoreTrackCandidate(h.title, h.artist && h.artist.name, h.album && h.album.title, parsed);
-          if (s >= 20) {
-            const imgRes = await axios.get(coverUrl, { responseType: 'arraybuffer', timeout: 4000 });
-            const ct = (imgRes.headers && imgRes.headers['content-type']) || 'image/jpeg';
-            if (ct.startsWith('image/')) {
-              return { type: 'buffer', mime: ct, buf: Buffer.from(imgRes.data) };
-            }
-          }
-        }
-      } catch (e) {}
-    }
-    return null;
-  });
-
-  if (onlineResult) {
-    resolvedCoverCache[cacheKey] = onlineResult;
-    if (onlineResult.type === 'redirect') return res.redirect(302, onlineResult.url);
-    res.set('Content-Type', onlineResult.mime);
-    return res.send(onlineResult.buf);
+  // 1. PRIMARY: Extract exact embedded album cover from your uploaded MP3/M4A file on Google Drive
+  const embedded = await getEmbeddedCoverFromDrive(fileId);
+  if (embedded) {
+    resolvedCoverCache[fileId] = embedded;
+    res.set('Content-Type', embedded.mime);
+    return res.send(embedded.buf);
   }
 
-  // 3. Guaranteed clean SVG gradient cover fallback
-  const svgBuf = makeSvgAlbumCover(parsed.coreTitle, parsed.primaryArtist);
-  const fallbackObj = { type: 'buffer', mime: 'image/svg+xml', buf: svgBuf };
-  resolvedCoverCache[cacheKey] = fallbackObj;
+  // 2. FALLBACK ONLY IF FILE HAS NO EMBEDDED COVER: Query Apple Music (with kids/karaoke filter)
+  const info = knownDriveSongs[fileId] || { id: fileId, name: '', title: req.query.title || 'Musix', artist: req.query.artist || '' };
+  const qText = ((info.title || '') + ' ' + (info.artist !== 'Cloud Artist' ? info.artist : '')).replace(/[()\[\]\-_/,]+/g, ' ').trim();
+  const junkRe = /\b(nursery rhyme|nursery rhymes|for kids|kids songs|kidz bop|karaoke|tribute|lullaby)\b/i;
+
+  for (const store of ['us', 'in']) {
+    try {
+      const itRes = await axios.get('https://itunes.apple.com/search?term=' + encodeURIComponent(qText) + '&country=' + store + '&media=music&entity=song&limit=5', { timeout: 3500 });
+      const hits = (itRes.data && itRes.data.results) || [];
+      for (const hit of hits) {
+        if (hit.artworkUrl100 && !junkRe.test((hit.trackName || '') + ' ' + (hit.collectionName || '') + ' ' + (hit.artistName || ''))) {
+          const artUrl = hit.artworkUrl100.replace('100x100bb', '600x600bb');
+          resolvedCoverCache[fileId] = { type: 'redirect', url: artUrl };
+          return res.redirect(302, artUrl);
+        }
+      }
+    } catch (e) {}
+  }
+
+  // 3. FINAL FALLBACK: Custom SVG cover
+  const svgBuf = makeSvgAlbumCover(info.title, info.artist);
+  resolvedCoverCache[fileId] = { type: 'buffer', mime: 'image/svg+xml', buf: svgBuf };
   res.set('Content-Type', 'image/svg+xml');
   return res.send(svgBuf);
 });
-// === MUSIX V37 GUARANTEED COVER ENGINE END ===
+// === MUSIX V38 GUARANTEED COVER ENGINE END ===
 
 app.get('/api/ping', (req, res) => res.json({ status: 'awake' }));
 

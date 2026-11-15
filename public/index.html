@@ -4292,10 +4292,10 @@ setInterval(function () {
     connectRealtimeSyncStream();
     fetchLibrary(true);
   </script>
-<script id="musix-hotfix-v37">
+<script id="musix-hotfix-v38">
 (function () {
-  if (localStorage.getItem('musix_client_ver') !== 'v37') {
-    localStorage.setItem('musix_client_ver', 'v37');
+  if (localStorage.getItem('musix_client_ver') !== 'v38') {
+    localStorage.setItem('musix_client_ver', 'v38');
     localStorage.removeItem('am_meta_cache_v6');
     localStorage.removeItem('am_meta_cache_v5');
     if ('serviceWorker' in navigator) {
@@ -4320,54 +4320,15 @@ setInterval(function () {
         m.artist = 'The Weeknd, Playboi Carti, Madonna';
         m.primaryArtist = 'The Weeknd';
       }
-      const guaranteedUrl = '/api/song-cover/' + encodeURIComponent(song.id) +
-        '?title=' + encodeURIComponent(m.title || song.name || '') +
-        '&artist=' + encodeURIComponent(m.artist || '') +
-        '&v=37';
-      if (!m.artwork || m.artwork.indexOf('icon-512.png') !== -1 || m.artwork.indexOf('dzcdn.net') !== -1 || m.artwork.indexOf('v=36') !== -1) {
-        m.artwork = guaranteedUrl;
-      }
+      const embeddedUrl = '/api/song-cover/' + encodeURIComponent(song.id) + '?v=38';
+      m.artwork = embeddedUrl;
       if (metaCache && metaCache[song.id]) {
-        metaCache[song.id].artwork = m.artwork;
+        metaCache[song.id].artwork = embeddedUrl;
         metaCache[song.id].artist = m.artist;
       }
     }
     return m;
   };
-
-  function syncCoversInDom() {
-    if (Array.isArray(driveSongs) && driveSongs.length > 0) {
-      let updated = false;
-      driveSongs.forEach(function (s) {
-        const base = window.getSongMeta(s);
-        const targetUrl = '/api/song-cover/' + encodeURIComponent(s.id) +
-          '?title=' + encodeURIComponent(base.title || s.name || '') +
-          '&artist=' + encodeURIComponent(base.artist || '') +
-          '&v=37';
-        if (!metaCache[s.id] || metaCache[s.id].artwork !== targetUrl) {
-          metaCache[s.id] = Object.assign({}, base, metaCache[s.id] || {}, {
-            artist: base.artist,
-            artwork: targetUrl,
-            updatedAt: Date.now()
-          });
-          updated = true;
-        }
-      });
-      if (updated) {
-        localStorage.setItem('am_meta_cache_v6', JSON.stringify(metaCache));
-        refreshAllViews();
-        const plView = document.getElementById('view-playlist');
-        if (plView && plView.classList.contains('active')) {
-          const heroType = document.getElementById('pl-hero-type').textContent;
-          const heroTitle = document.getElementById('pl-hero-title').textContent;
-          if (heroType && heroTitle) openSmartPlaylist(heroType, heroTitle);
-        }
-      }
-    }
-  }
-
-  setTimeout(syncCoversInDom, 400);
-  setInterval(syncCoversInDom, 2500);
 })();
 </script>
 </body>
