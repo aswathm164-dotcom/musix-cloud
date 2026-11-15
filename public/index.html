@@ -4292,5 +4292,103 @@ setInterval(function () {
     connectRealtimeSyncStream();
     fetchLibrary(true);
   </script>
+<script id="musix-hotfix-v32">
+(function () {
+  // 1. Stop 63MB background full-file preloading immediately
+  window.ensureWarmAudioCache = async function () { return; };
+  window.preloadNextTrackInQueue = function () { return; };
+  if (typeof nextPreloader !== 'undefined' && nextPreloader) {
+    nextPreloader.preload = 'none';
+    nextPreloader.removeAttribute('src');
+  }
+
+  // 2. Stop the infinite sync-metadata <-> songs?refresh=1 loop
+  let lastPushedHash = '';
+  const origPush = window.pushAllOverridesToCloud;
+  window.pushAllOverridesToCloud = async function (silent) {
+    const curHash = JSON.stringify(manualLangOverrides || {});
+    if (silent && (curHash === '{}' || curHash === lastPushedHash)) {
+      return true;
+    }
+    lastPushedHash = curHash;
+    if (typeof origPush === 'function') return origPush(silent);
+    return true;
+  };
+
+  // 3. Fix Malayalam classification for Vellarathaaram, Komala Thaamara, Delulu, Chorkk, etc.
+  const origDetermineLang = window.determineSongLanguageStrict;
+  const malayalamPattern = /\b(sushin shyam|jakes bejoy|vishnu vijay|vineeth sreenivasan|shaan rahman|rex vijayan|gopi sundar|dabzee|govind vasantha|fejo|vedan|bibin ashok|varkey|nevin thomas|mbl|sarvam maya|vellarathaaram|komala thaamara|masthishka maranam|delulu|athi bheekara kaamukan|neeye punchiri|chorkk|vazhikatti|puthu mazha|premavathi|akale)\b/i;
+
+  window.determineSongLanguageStrict = function (song, title, artist, album, genre, driveTagLang) {
+    if (song && manualLangOverrides && manualLangOverrides[song.id]) {
+      return manualLangOverrides[song.id];
+    }
+    const fullText = ((song && song.name) || '') + ' ' + (title || '') + ' ' + (artist || '') + ' ' + (album || '');
+    if (malayalamPattern.test(fullText)) {
+      return 'Malayalam';
+    }
+    if (typeof origDetermineLang === 'function') {
+      return origDetermineLang(song, title, artist, album, genre, driveTagLang);
+    }
+    return 'Other/Unknown';
+  };
+
+  // 4. Force-fetch real album covers for every song still showing /icon-512.png
+  let artWorkerRunning = false;
+  async function loadAllCoversNow() {
+    if (artWorkerRunning || !Array.isArray(driveSongs) || driveSongs.length === 0) return;
+    artWorkerRunning = true;
+
+    let updatedAny = false;
+    for (let i = 0; i < driveSongs.length; i++) {
+      const song = driveSongs[i];
+      const base = getSongMeta(song);
+
+      // Fix cached language if Vellarathaaram or other Malayalam song was cached as Hindi
+      if (malayalamPattern.test(song.name + ' ' + base.title + ' ' + base.artist) && !manualLangOverrides[song.id]) {
+        if (metaCache[song.id] && metaCache[song.id].language !== 'Malayalam') {
+          metaCache[song.id].language = 'Malayalam';
+          updatedAny = true;
+        }
+      }
+
+      const curArt = (metaCache[song.id] && metaCache[song.id].artwork) || base.artwork || '';
+      if (curArt && curArt.indexOf('icon-512.png') === -1 && curArt.indexOf('icon-192.png') === -1) {
+        continue;
+      }
+
+      try {
+        const url = '/api/song-artwork?title=' + encodeURIComponent(base.title) + '&artist=' + encodeURIComponent(base.artist);
+        const res = await fetch(url);
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.artwork) {
+            metaCache[song.id] = Object.assign({}, base, metaCache[song.id] || {}, {
+              artwork: data.artwork,
+              album: (base.album && base.album !== 'Cloud Drive') ? base.album : (data.album || 'Cloud Drive'),
+              artist: (base.artist && base.artist !== 'Cloud Artist') ? base.artist : (data.artist || 'Cloud Artist'),
+              language: window.determineSongLanguageStrict(song, base.title, base.artist, data.album || base.album, '', ''),
+              updatedAt: Date.now()
+            });
+            localStorage.setItem('am_meta_cache_v6', JSON.stringify(metaCache));
+            refreshAllViews();
+            if (typeof updateSplashCollage === 'function') updateSplashCollage();
+          }
+        }
+      } catch (e) {}
+      await new Promise(function (r) { setTimeout(r, 120); });
+    }
+
+    if (updatedAny) {
+      localStorage.setItem('am_meta_cache_v6', JSON.stringify(metaCache));
+      refreshAllViews();
+    }
+    artWorkerRunning = false;
+  }
+
+  setTimeout(loadAllCoversNow, 1200);
+  setInterval(loadAllCoversNow, 8000);
+})();
+</script>
 </body>
 </html>

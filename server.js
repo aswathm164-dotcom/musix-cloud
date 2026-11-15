@@ -622,8 +622,9 @@ app.post('/api/sync-metadata', async (req, res) => {
     Object.keys(incomingRecords).forEach(function (songId) {
       const rec = incomingRecords[songId];
       if (!rec) return;
+      const prevLang = db.records[songId] && db.records[songId].language;
       db.records[songId] = mergeSongRecord(db.records[songId], Object.assign({ id: songId }, rec), rec.updatedAt || Date.now());
-      updatedAny = true;
+      if (db.records[songId].language !== prevLang) updatedAny = true;
     });
 
     if (updatedAny) {
@@ -806,64 +807,89 @@ app.get('/api/stream/:fileId', async (req, res) => {
 });
 
 
+
+
+
 const songArtworkCache = {};
 app.get('/api/song-artwork', async (req, res) => {
   const rawTitle = (req.query.title || '').trim();
   const rawArtist = (req.query.artist || '').trim();
-  if (!rawTitle) return res.json({ artwork: '' });
+  if (!rawTitle && !rawArtist) return res.json({ artwork: '' });
 
-  const cleanTitle = rawTitle
-    .replace(/\b(from|ost|original motion picture soundtrack|one side love)\b/gi, ' ')
+  let movieName = '';
+  const fromMatch = rawTitle.match(/^(.*?)\s+From\s+(.+)$/i);
+  let mainTitle = rawTitle;
+  if (fromMatch) {
+    mainTitle = fromMatch[1].trim();
+    movieName = fromMatch[2].trim();
+  }
+
+  const cleanTitle = mainTitle
+    .replace(/\b(from|ost|original motion picture soundtrack|one side love|song)\b/gi, ' ')
     .replace(/[()\[\]\-_]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
-  const shortTitle = cleanTitle.split(' ').slice(0, 2).join(' ');
-  const cleanArtist = (rawArtist === 'Cloud Artist' || rawArtist === 'Unknown') ? '' : rawArtist.split(/,|&/)[0].trim();
+  const firstTwoWords = cleanTitle.split(' ').slice(0, 2).join(' ');
+  const cleanArtist = (rawArtist === 'Cloud Artist' || rawArtist === 'Unknown') ? '' : rawArtist.split(/,|&|feat|ft/i)[0].trim();
 
-  const candidateQueries = [
+  const queries = [
+    movieName ? (cleanTitle + ' ' + movieName) : '',
     (cleanTitle + ' ' + cleanArtist).trim(),
-    (shortTitle + ' ' + cleanArtist).trim(),
-    cleanTitle,
-    cleanArtist
-  ].filter(Boolean);
+    movieName,
+    (firstTwoWords + ' ' + cleanArtist).trim(),
+    cleanTitle
+  ].map(s => (s || '').trim()).filter(Boolean);
 
-  const cacheKey = candidateQueries[0].toLowerCase();
+  const cacheKey = (rawTitle + '__' + cleanArtist).toLowerCase();
   if (songArtworkCache[cacheKey]) return res.json(songArtworkCache[cacheKey]);
 
-  for (const q of candidateQueries) {
+  // 1. Search iTunes Songs & Albums (India store)
+  for (const q of queries) {
     try {
-      const itUrl = 'https://itunes.apple.com/search?term=' + encodeURIComponent(q) + '&country=in&media=music&entity=song&limit=5';
+      const itUrl = 'https://itunes.apple.com/search?term=' + encodeURIComponent(q) + '&country=in&media=music&limit=5';
       const itRes = await axios.get(itUrl, { timeout: 4000 });
-      const results = (itRes.data && itRes.data.results) || [];
-      if (results.length > 0 && results[0].artworkUrl100) {
-        const hit = results[0];
+      const hits = (itRes.data && itRes.data.results) || [];
+      if (hits.length > 0 && hits[0].artworkUrl100) {
+        const hit = hits[0];
         const payload = {
           artwork: hit.artworkUrl100.replace('100x100bb', '600x600bb'),
-          album: hit.collectionName || '',
-          artist: cleanArtist || hit.artistName || '',
-          genre: hit.primaryGenreName || '',
-          year: hit.releaseDate ? String(hit.releaseDate).slice(0, 4) : ''
+          album: movieName || hit.collectionName || '',
+          artist: cleanArtist || hit.artistName || ''
         };
         songArtworkCache[cacheKey] = payload;
         return res.json(payload);
       }
     } catch (e) {}
 
+    // 2. Search Deezer Tracks
     try {
       const dzUrl = 'https://api.deezer.com/search?q=' + encodeURIComponent(q) + '&limit=3';
       const dzRes = await axios.get(dzUrl, { timeout: 4000 });
-      const dzList = (dzRes.data && dzRes.data.data) || [];
-      if (dzList.length > 0 && dzList[0].album) {
-        const dHit = dzList[0];
-        const cover = dHit.album.cover_big || dHit.album.cover_xl || dHit.album.cover_medium;
+      const dzHits = (dzRes.data && dzRes.data.data) || [];
+      if (dzHits.length > 0 && dzHits[0].album) {
+        const cover = dzHits[0].album.cover_big || dzHits[0].album.cover_xl || dzHits[0].album.cover_medium;
         if (cover) {
           const payload = {
             artwork: cover,
-            album: dHit.album.title || '',
-            artist: cleanArtist || (dHit.artist && dHit.artist.name) || '',
-            genre: '',
-            year: ''
+            album: movieName || dzHits[0].album.title || '',
+            artist: cleanArtist || (dzHits[0].artist && dzHits[0].artist.name) || ''
           };
+          songArtworkCache[cacheKey] = payload;
+          return res.json(payload);
+        }
+      }
+    } catch (e) {}
+  }
+
+  // 3. Fallback to Artist Portrait on Deezer/iTunes if single is too new for album DB
+  if (cleanArtist) {
+    try {
+      const arRes = await axios.get('https://api.deezer.com/search/artist?q=' + encodeURIComponent(cleanArtist) + '&limit=1', { timeout: 3500 });
+      const arList = (arRes.data && arRes.data.data) || [];
+      if (arList.length > 0) {
+        const pic = arList[0].picture_big || arList[0].picture_medium;
+        if (pic && !pic.includes('/images/artist//')) {
+          const payload = { artwork: pic, album: movieName || 'Single', artist: cleanArtist };
           songArtworkCache[cacheKey] = payload;
           return res.json(payload);
         }
