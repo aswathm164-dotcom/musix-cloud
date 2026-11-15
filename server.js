@@ -899,6 +899,291 @@ app.get('/api/category-cover/:slug', async (req, res) => {
 });
 // === MUSIX V43 ARTWORK ENGINE END ===
 
+// === MUSIX TELEGRAM BOT ENGINE START ===
+const { Readable } = require('stream');
+const TELEGRAM_BOT_TOKEN = (process.env.TELEGRAM_BOT_TOKEN || '').trim();
+const TELEGRAM_ALLOWED_CHAT_ID = (process.env.TELEGRAM_ALLOWED_CHAT_ID || '').trim();
+let tgUpdateOffset = 0;
+let tgPollingActive = false;
+
+async function tgApiCall(method, payload) {
+  if (!TELEGRAM_BOT_TOKEN) return null;
+  const url = 'https://api.telegram.org/bot' + TELEGRAM_BOT_TOKEN + '/' + method;
+  const res = await axios.post(url, payload, { timeout: 35000 });
+  return res.data;
+}
+
+function detectLanguageFromCaptionOrMeta(caption, title, artist, album) {
+  const cap = String(caption || '');
+  if (/#malayalam|\bmalayalam\b/i.test(cap)) return 'Malayalam';
+  if (/#hindi|\bhindi\b/i.test(cap)) return 'Hindi';
+  if (/#tamil|\btamil\b/i.test(cap)) return 'Tamil';
+  if (/#english|\benglish\b/i.test(cap)) return 'English';
+
+  const combined = cap + ' ' + title + ' ' + artist + ' ' + album;
+  if (/\b(sushin shyam|jakes bejoy|vishnu vijay|vineeth sreenivasan|shaan rahman|rex vijayan|gopi sundar|dabzee|govind vasantha|fejo|vedan|bibin ashok|varkey|nevin thomas|mbl|lil payyan|azwin|chembarathi|sarvam maya|vellarathaaram|komala thaamara|masthishka maranam|delulu|athi bheekara kaamukan|neeye punchiri|chorkk|vazhikatti|puthu mazha|premavathi|akale)\b/i.test(combined)) {
+    return 'Malayalam';
+  }
+  if (/\b(anirudh|a\.r\. rahman|ar rahman|yuvan|harris jayaraj|gv prakash|santhosh narayanan|ilayaraja|sid sriram|pradeep kumar)\b/i.test(combined)) {
+    return 'Tamil';
+  }
+  if (/\b(arijit singh|pritam|vishal-shekhar|shreya ghoshal|atif aslam|jubin nautiyal|badshah|amit trivedi|sachin-jigar)\b/i.test(combined)) {
+    return 'Hindi';
+  }
+  return '';
+}
+
+async function handleTelegramAudioMessage(msg) {
+  const chatId = msg.chat && msg.chat.id;
+  if (!chatId) return;
+
+  if (TELEGRAM_ALLOWED_CHAT_ID && String(chatId) !== TELEGRAM_ALLOWED_CHAT_ID) {
+    await tgApiCall('sendMessage', {
+      chat_id: chatId,
+      text: '? Unauthorized chat ID (' + chatId + ').'
+    });
+    return;
+  }
+
+  const text = (msg.text || '').trim();
+  if (/^\/(start|help)/i.test(text)) {
+    const count = Object.keys(songRegistry || {}).length;
+    await tgApiCall('sendMessage', {
+      chat_id: chatId,
+      text:
+        '?? *Musix Cloud Telegram Uploader*\n\n' +
+        'Forward or send any *MP3, M4A, FLAC, or WAV* audio file here and I will:\n' +
+        '1. Extract its embedded ID3 title, artist, album & cover art\n' +
+        '2. Upload it directly to your Google Drive Musix folder\n' +
+        '3. Sync it live to https://musix-cloudx.onrender.com\n\n' +
+        '?? *Tip:* Add a caption like `#Malayalam`, `#Hindi`, `#Tamil`, or `#English` to lock its language tag.\n' +
+        '?? *Current Library:* ' + count + ' songs',
+      parse_mode: 'Markdown'
+    });
+    return;
+  }
+
+  const audioObj = msg.audio || msg.voice || (msg.document && /audio|\.(mp3|m4a|flac|wav|ogg|aac)$/i.test((msg.document.mime_type || '') + ' ' + (msg.document.file_name || '')) ? msg.document : null);
+  if (!audioObj) return;
+
+  const fileSize = audioObj.file_size || 0;
+  if (fileSize > 20 * 1024 * 1024) {
+    await tgApiCall('sendMessage', {
+      chat_id: chatId,
+      text: '?? Telegram Bot API limits direct downloads to 20 MB per file. Please send an MP3/M4A under 20 MB.'
+    });
+    return;
+  }
+
+  const statusMsg = await tgApiCall('sendMessage', {
+    chat_id: chatId,
+    text: '? Downloading audio from Telegram & extracting metadata...'
+  });
+  const statusMsgId = statusMsg && statusMsg.result && statusMsg.result.message_id;
+
+  try {
+    // 1. Get file path from Telegram
+    const fileInfo = await tgApiCall('getFile', { file_id: audioObj.file_id });
+    const tgFilePath = fileInfo && fileInfo.result && fileInfo.result.file_path;
+    if (!tgFilePath) throw new Error('Could not resolve Telegram file path');
+
+    const downloadUrl = 'https://api.telegram.org/file/bot' + TELEGRAM_BOT_TOKEN + '/' + tgFilePath;
+    const fileRes = await axios.get(downloadUrl, { responseType: 'arraybuffer', timeout: 60000 });
+    const audioBuf = Buffer.from(fileRes.data);
+
+    // 2. Parse embedded ID3/M4A tags & cover art using music-metadata
+    let parsedTitle = (audioObj.title || '').trim();
+    let parsedArtist = (audioObj.performer || '').trim();
+    let parsedAlbum = '';
+    let coverBuf = null;
+    let coverMime = 'image/jpeg';
+
+    try {
+      const mm = await import('music-metadata');
+      const meta = await mm.parseBuffer(audioBuf, { mimeType: audioObj.mime_type || 'audio/mpeg' }, { duration: false });
+      if (meta && meta.common) {
+        if (meta.common.title) parsedTitle = meta.common.title.trim();
+        if (meta.common.artists && meta.common.artists.length > 0) {
+          parsedArtist = meta.common.artists.join(', ').trim();
+        } else if (meta.common.artist) {
+          parsedArtist = meta.common.artist.trim();
+        }
+        if (meta.common.album) parsedAlbum = meta.common.album.trim();
+        if (meta.common.picture && meta.common.picture[0] && meta.common.picture[0].data) {
+          const p = Buffer.from(meta.common.picture[0].data);
+          if (p.length > 1024) {
+            coverBuf = p;
+            coverMime = meta.common.picture[0].format || 'image/jpeg';
+          }
+        }
+      }
+    } catch (e) {}
+
+    if (!coverBuf) {
+      const rawArt = rawScanBufferForEmbeddedArt(audioBuf);
+      if (rawArt && rawArt.buf) {
+        coverBuf = rawArt.buf;
+        coverMime = rawArt.mime || 'image/jpeg';
+      }
+    }
+
+    // 3. If no embedded cover in file, check Telegram audio thumbnail
+    const thumbObj = audioObj.thumbnail || audioObj.thumb;
+    if (!coverBuf && thumbObj && thumbObj.file_id) {
+      try {
+        const thInfo = await tgApiCall('getFile', { file_id: thumbObj.file_id });
+        const thPath = thInfo && thInfo.result && thInfo.result.file_path;
+        if (thPath) {
+          const thRes = await axios.get('https://api.telegram.org/file/bot' + TELEGRAM_BOT_TOKEN + '/' + thPath, { responseType: 'arraybuffer', timeout: 10000 });
+          const tb = Buffer.from(thRes.data);
+          if (tb.length > 512) coverBuf = tb;
+        }
+      } catch (e) {}
+    }
+
+    // 4. Clean fallback title/artist from filename if tags were blank
+    const rawFileName = audioObj.file_name || (parsedTitle ? parsedTitle + '.mp3' : 'Track_' + Date.now() + '.mp3');
+    const extMatch = rawFileName.match(/\.(mp3|m4a|flac|wav|ogg|aac)$/i);
+    const ext = extMatch ? extMatch[0].toLowerCase() : '.mp3';
+    const fromName = parseCleanFilenameServer(rawFileName);
+
+    const finalTitle = (parsedTitle || fromName.title || 'Unknown Track').replace(/[\\/:*?"<>|]/g, '').trim();
+    const finalArtist = (parsedArtist || (fromName.artist !== 'Cloud Artist' ? fromName.artist : '') || 'Cloud Artist').replace(/[\\/:*?"<>|]/g, '').trim();
+    const finalAlbum = (parsedAlbum || (fromName.album !== 'Single' ? fromName.album : '') || 'Single').trim();
+    const cleanDriveName = finalArtist && finalArtist !== 'Cloud Artist'
+      ? (finalTitle + ' - ' + finalArtist + ext)
+      : (finalTitle + ext);
+
+    const detectedLang = detectLanguageFromCaptionOrMeta(msg.caption || '', finalTitle, finalArtist, finalAlbum);
+
+    if (statusMsgId) {
+      try {
+        await tgApiCall('editMessageText', {
+          chat_id: chatId,
+          message_id: statusMsgId,
+          text: '?? Uploading *' + finalTitle + '* to Google Drive...',
+          parse_mode: 'Markdown'
+        });
+      } catch (e) {}
+    }
+
+    // 5. Upload audio buffer to Google Drive folder
+    const folderId = process.env.DRIVE_FOLDER_ID || DRIVE_FOLDER_ID;
+    const driveCreateRes = await drive.files.create({
+      requestBody: {
+        name: cleanDriveName,
+        parents: [folderId],
+        appProperties: detectedLang ? { tagLang: detectedLang } : undefined
+      },
+      media: {
+        mimeType: audioObj.mime_type || 'audio/mpeg',
+        body: Readable.from(audioBuf)
+      },
+      fields: 'id, name, size, mimeType'
+    });
+
+    const newFile = driveCreateRes.data;
+    const newId = newFile.id;
+
+    // 6. Register metadata, size, and cover immediately in memory & disk cache
+    fileMetaCache[newId] = {
+      size: parseInt(newFile.size || String(audioBuf.length), 10),
+      mimeType: newFile.mimeType || 'audio/mpeg'
+    };
+    songRegistry[newId] = {
+      id: newId,
+      name: cleanDriveName,
+      title: finalTitle,
+      artist: finalArtist,
+      album: finalAlbum
+    };
+
+    if (coverBuf && coverBuf.length > 512) {
+      coverMemoryCache[newId] = { mime: coverMime, buf: coverBuf };
+      try {
+        fs.writeFileSync(path.join(RUNTIME_COVERS_DIR, newId + '.bin'), coverBuf);
+        fs.writeFileSync(path.join(STATIC_COVERS_DIR, newId + '.jpg'), coverBuf);
+      } catch (e) {}
+    }
+
+    // 7. Trigger internal library refresh so open Musix browsers see the song immediately
+    try {
+      const localPort = process.env.PORT || 3000;
+      await axios.get('http://127.0.0.1:' + localPort + '/api/songs?refresh=1', { timeout: 8000 });
+    } catch (e) {}
+
+    const coverStatus = coverBuf ? '? Extracted from file' : '?? Auto-matched online';
+    const doneText =
+      '? *Uploaded to Musix Cloud!*\n\n' +
+      '?? *Title:* ' + finalTitle + '\n' +
+      '?? *Artist:* ' + finalArtist + '\n' +
+      '?? *Album:* ' + finalAlbum + '\n' +
+      (detectedLang ? '?? *Language:* ' + detectedLang + '\n' : '') +
+      '??? *Cover Art:* ' + coverStatus + '\n\n' +
+      '?? [Open Musix Player](https://musix-cloudx.onrender.com)';
+
+    if (statusMsgId) {
+      await tgApiCall('editMessageText', {
+        chat_id: chatId,
+        message_id: statusMsgId,
+        text: doneText,
+        parse_mode: 'Markdown',
+        disable_web_page_preview: true
+      });
+    } else {
+      await tgApiCall('sendMessage', {
+        chat_id: chatId,
+        text: doneText,
+        parse_mode: 'Markdown',
+        disable_web_page_preview: true
+      });
+    }
+  } catch (err) {
+    const errMsg = '? Upload failed: ' + ((err && err.message) || 'Unknown error');
+    if (statusMsgId) {
+      try {
+        await tgApiCall('editMessageText', { chat_id: chatId, message_id: statusMsgId, text: errMsg });
+        return;
+      } catch (e) {}
+    }
+    try { await tgApiCall('sendMessage', { chat_id: chatId, text: errMsg }); } catch (e) {}
+  }
+}
+
+async function startTelegramBotPolling() {
+  if (!TELEGRAM_BOT_TOKEN || tgPollingActive) return;
+  tgPollingActive = true;
+  console.log('Telegram-to-Drive Uploader Bot active and polling...');
+
+  try {
+    await tgApiCall('deleteWebhook', { drop_pending_updates: false });
+  } catch (e) {}
+
+  while (tgPollingActive) {
+    try {
+      const res = await axios.get(
+        'https://api.telegram.org/bot' + TELEGRAM_BOT_TOKEN + '/getUpdates?timeout=25&offset=' + tgUpdateOffset,
+        { timeout: 32000 }
+      );
+      const updates = (res.data && res.data.result) || [];
+      for (const u of updates) {
+        tgUpdateOffset = u.update_id + 1;
+        const msg = u.message || u.channel_post;
+        if (msg) {
+          await handleTelegramAudioMessage(msg);
+        }
+      }
+    } catch (err) {
+      // Back off for 15s if another instance is temporarily polling during Render deploy overlap
+      const status = err && err.response && err.response.status;
+      await new Promise(r => setTimeout(r, status === 409 ? 15000 : 4000));
+    }
+  }
+}
+
+setTimeout(startTelegramBotPolling, 3000);
+// === MUSIX TELEGRAM BOT ENGINE END ===
+
 app.get('/api/ping', (req, res) => res.json({ status: 'awake' }));
 
 app.get('/api/drive-token', async (req, res) => {
