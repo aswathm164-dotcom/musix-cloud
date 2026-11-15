@@ -481,8 +481,7 @@ async function getDriveSongs(forceRefresh = false) {
 
 
 // === MUSIX V38 GUARANTEED COVER ENGINE START ===
-const os = require('os');
-const COVER_CACHE_DIR = path.join(os.tmpdir(), 'musix-embedded-covers-v38');
+const COVER_CACHE_DIR = path.join(require('os').tmpdir(), 'musix-embedded-covers-v38');
 if (!fs.existsSync(COVER_CACHE_DIR)) {
   try { fs.mkdirSync(COVER_CACHE_DIR, { recursive: true }); } catch (e) {}
 }
