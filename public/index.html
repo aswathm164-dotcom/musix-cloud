@@ -1458,17 +1458,15 @@
       .mobile-nav { display: flex; }
     }
   </style>
-<style id="musix-v41-styles">
+<style id="musix-v42-styles">
   .song-art img, .card-art img, .mini-art img, .sheet-art-box img, #pl-hero-art img {
     width: 100% !important;
     height: 100% !important;
     object-fit: cover !important;
     aspect-ratio: 1 / 1 !important;
     display: block !important;
-    background: #1c1c22 !important;
+    background: #18181f !important;
   }
-
-  /* Spotify-Style Smart Mix Rectangular Category Tiles */
   .spotify-category-grid {
     display: grid !important;
     grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)) !important;
@@ -4267,11 +4265,10 @@
     connectRealtimeSyncStream();
     fetchLibrary(true);
   </script>
-<script id="musix-v41-engine">
+<script id="musix-v42-engine">
 (function () {
-  // 1. One-time clean migration to v41
-  if (localStorage.getItem('musix_client_ver') !== 'v41') {
-    localStorage.setItem('musix_client_ver', 'v41');
+  if (localStorage.getItem('musix_client_ver') !== 'v42') {
+    localStorage.setItem('musix_client_ver', 'v42');
     localStorage.removeItem('am_meta_cache_v6');
     localStorage.removeItem('am_meta_cache_v5');
     localStorage.removeItem('am_cached_drive_songs');
@@ -4285,13 +4282,12 @@
     }
   }
 
-  // 2. Disable all old client-side background iTunes guessers & audio preloading
   window.ensureWarmAudioCache = async function () { return; };
   window.preloadNextTrackInQueue = function () { return; };
   window.enrichMissingMetadata = async function () { return; };
   window.fetchAllMissingAlbumArt = async function () { return; };
 
-  // Block direct browser calls to itunes.apple.com from the old base script so it never corrupts metaCache
+  // Block old client-side iTunes search in base script from overwriting embedded covers
   const origFetch = window.fetch.bind(window);
   window.fetch = function (input, init) {
     const urlStr = typeof input === 'string' ? input : (input && input.url) || '';
@@ -4314,6 +4310,15 @@
     return true;
   };
 
+  let staticCoverManifest = {};
+  origFetch('/covers/index.json?v=42')
+    .then(function (r) { return r.ok ? r.json() : {}; })
+    .then(function (data) {
+      staticCoverManifest = data || {};
+      if (typeof refreshAllViews === 'function') refreshAllViews();
+    })
+    .catch(function () {});
+
   const origDetermineLang = window.determineSongLanguageStrict;
   const malayalamPattern = /\b(sushin shyam|jakes bejoy|vishnu vijay|vineeth sreenivasan|shaan rahman|rex vijayan|gopi sundar|dabzee|govind vasantha|fejo|vedan|bibin ashok|varkey|nevin thomas|mbl|sarvam maya|vellarathaaram|komala thaamara|masthishka maranam|delulu|athi bheekara kaamukan|neeye punchiri|chorkk|vazhikatti|puthu mazha|premavathi|akale)\b/i;
 
@@ -4325,59 +4330,30 @@
     return 'Other/Unknown';
   };
 
-  function parseCleanFilenameClient(rawFilename) {
-    const withoutExt = String(rawFilename || '')
-      .replace(/\.(mp3|m4a|flac|wav|ogg|aac)$/i, '')
-      .replace(/^\d+\s*[\-.]\s*/, '')
-      .trim();
-
-    let title = withoutExt;
-    let artist = 'Cloud Artist';
-    let album = 'Single';
-
-    const dashParts = withoutExt.split(/\s+-\s+/);
-    if (dashParts.length >= 2) {
-      title = dashParts[0].trim();
-      artist = dashParts.slice(1).join(', ').trim();
-    } else {
-      const featTail = withoutExt.match(/^(.*?\((?:feat|ft|with)[^)]+\))\s+(.+)$/i);
-      if (featTail) {
-        title = featTail[1].trim();
-        artist = featTail[2].trim();
-      } else if (/\s+KALEO$/i.test(withoutExt)) {
-        title = withoutExt.replace(/\s+KALEO$/i, '').trim();
-        artist = 'KALEO';
-      }
-    }
-
-    const fromMatch = title.match(/^(.*?)\s+From\s+(.+)$/i);
-    if (fromMatch) {
-      title = fromMatch[1].trim();
-      album = fromMatch[2].trim();
-    }
-    return { title: title, artist: artist, album: album };
-  }
-
-  // Always derive song metadata from the server's clean ID3/filename payload and point artwork to /api/cover/:fileId?v=41
   const origGetSongMeta = window.getSongMeta;
   window.getSongMeta = function (song) {
     const m = origGetSongMeta ? origGetSongMeta(song) : { title: 'Unknown', artist: 'Cloud Artist', album: 'Single', language: 'Other/Unknown', vibe: 'Feel Good' };
     if (!song || !song.id) return m;
 
-    const fromFile = parseCleanFilenameClient(song.name || '');
+    const pre = staticCoverManifest[song.id] || {};
     const cm = song.cloudMeta || {};
 
-    const cleanTitle = cm.title || fromFile.title || m.title || song.name;
-    const cleanArtist = (cm.artist && cm.artist !== 'Cloud Artist') ? cm.artist : (fromFile.artist !== 'Cloud Artist' ? fromFile.artist : (m.artist || 'Cloud Artist'));
-    const cleanAlbum = (cm.album && cm.album !== 'Cloud Drive' && cm.album !== 'Single') ? cm.album : (fromFile.album !== 'Single' ? fromFile.album : 'Single');
-    const coverUrl = '/api/cover/' + encodeURIComponent(song.id) + '?v=41';
+    const cleanTitle = pre.title || cm.title || m.title || song.name;
+    const cleanArtist = (pre.artist && pre.artist !== 'Cloud Artist')
+      ? pre.artist
+      : ((cm.artist && cm.artist !== 'Cloud Artist') ? cm.artist : (m.artist || 'Cloud Artist'));
+    const cleanAlbum = (pre.album && pre.album !== 'Single' && pre.album !== 'Cloud Drive')
+      ? pre.album
+      : ((cm.album && cm.album !== 'Cloud Drive') ? cm.album : 'Single');
+
+    const coverUrl = pre.coverUrl || cm.coverArt || ('/covers/' + encodeURIComponent(song.id) + '.jpg?v=42');
 
     m.title = cleanTitle;
     m.artist = cleanArtist;
     m.primaryArtist = cleanArtist.split(/[,/&]|\b(?:feat|ft|with)\b/i)[0].trim() || 'Cloud Artist';
     m.album = cleanAlbum;
     m.artwork = coverUrl;
-    m.language = window.determineSongLanguageStrict(song, cleanTitle, cleanArtist, cleanAlbum, m.genre || '', '');
+    m.language = pre.language || window.determineSongLanguageStrict(song, cleanTitle, cleanArtist, cleanAlbum, m.genre || '', '');
 
     if (typeof metaCache !== 'undefined' && metaCache) {
       metaCache[song.id] = Object.assign({}, metaCache[song.id] || {}, m, { artwork: coverUrl });
@@ -4385,32 +4361,17 @@
     return m;
   };
 
-  // Automatic retry if an <img> tag hits the queue while the server is still extracting its cover from Google Drive
-  window.addEventListener('error', function (e) {
-    const el = e.target;
-    if (el && el.tagName === 'IMG' && el.src && el.src.indexOf('/api/cover/') !== -1) {
-      const retries = parseInt(el.getAttribute('data-retry') || '0', 10);
-      if (retries < 5) {
-        el.setAttribute('data-retry', String(retries + 1));
-        setTimeout(function () {
-          const baseSrc = el.src.split('&r=')[0];
-          el.src = baseSrc + '&r=' + (retries + 1);
-        }, 1800 * (retries + 1));
-      }
-    }
-  }, true);
-
-  // Spotify-Style Smart Mix Categories
+  // Smart Mix Categories with static pre-extracted covers
   const SMART_MIX_CATEGORIES = [
-    { id: 'Malayalam', title: 'Malayalam', type: 'Language', color: '#4A8094', cover: '/api/category-cover/malayalam?v=41' },
-    { id: 'Hindi',     title: 'Hindi',     type: 'Language', color: '#D84818', cover: '/api/category-cover/hindi?v=41' },
-    { id: 'English',   title: 'English',   type: 'Language', color: '#4C7A8C', cover: '/api/category-cover/english?v=41' },
-    { id: 'Tamil',     title: 'Tamil',     type: 'Language', color: '#2D826E', cover: '/api/category-cover/tamil?v=41' },
-    { id: 'Love',      title: 'Love',      type: 'Category', color: '#DC148C', cover: '/api/category-cover/love?v=41' },
-    { id: 'Sleep',     title: 'Sleep',     type: 'Category', color: '#1E3264', cover: '/api/category-cover/sleep?v=41' },
-    { id: 'Trending',  title: 'Trending',  type: 'Category', color: '#A8328E', cover: '/api/category-cover/trending?v=41' },
-    { id: 'Mood',      title: 'Mood',      type: 'Category', color: '#E1118B', cover: '/api/category-cover/mood?v=41' },
-    { id: 'Party',     title: 'Party',     type: 'Category', color: '#7D4B94', cover: '/api/category-cover/party?v=41' }
+    { id: 'Malayalam', title: 'Malayalam', type: 'Language', color: '#4A8094', cover: '/covers/cat_malayalam.jpg?v=42' },
+    { id: 'Hindi',     title: 'Hindi',     type: 'Language', color: '#D84818', cover: '/covers/cat_hindi.jpg?v=42' },
+    { id: 'English',   title: 'English',   type: 'Language', color: '#4C7A8C', cover: '/covers/cat_english.jpg?v=42' },
+    { id: 'Tamil',     title: 'Tamil',     type: 'Language', color: '#2D826E', cover: '/covers/cat_tamil.jpg?v=42' },
+    { id: 'Love',      title: 'Love',      type: 'Category', color: '#DC148C', cover: '/covers/cat_love.jpg?v=42' },
+    { id: 'Sleep',     title: 'Sleep',     type: 'Category', color: '#1E3264', cover: '/covers/cat_sleep.jpg?v=42' },
+    { id: 'Trending',  title: 'Trending',  type: 'Category', color: '#A8328E', cover: '/covers/cat_trending.jpg?v=42' },
+    { id: 'Mood',      title: 'Mood',      type: 'Category', color: '#E1118B', cover: '/covers/cat_mood.jpg?v=42' },
+    { id: 'Party',     title: 'Party',     type: 'Category', color: '#7D4B94', cover: '/covers/cat_party.jpg?v=42' }
   ];
 
   function filterSongsForSmartMix(catId) {
@@ -4467,8 +4428,8 @@
     const homeContainers = document.querySelectorAll('#home-smart-mixes, #smart-mix-row, #home-mix-grid');
     homeContainers.forEach(function (el) {
       el.className = 'spotify-category-grid';
-      if (el.getAttribute('data-v41-rendered') !== 'home') {
-        el.setAttribute('data-v41-rendered', 'home');
+      if (el.getAttribute('data-v42-rendered') !== 'home') {
+        el.setAttribute('data-v42-rendered', 'home');
         el.innerHTML = homeHtml;
       }
     });
@@ -4482,8 +4443,8 @@
           const isHome = gridEl.closest('#view-home') !== null;
           const key = isHome ? 'home' : 'all';
           gridEl.className = 'spotify-category-grid';
-          if (gridEl.getAttribute('data-v41-rendered') !== key) {
-            gridEl.setAttribute('data-v41-rendered', key);
+          if (gridEl.getAttribute('data-v42-rendered') !== key) {
+            gridEl.setAttribute('data-v42-rendered', key);
             gridEl.innerHTML = isHome ? homeHtml : allHtml;
           }
         }
@@ -4495,8 +4456,8 @@
       const innerGrids = smartView.querySelectorAll('.smart-grid, .mix-grid, #smart-lang-grid, #smart-vibe-grid, .spotify-category-grid');
       if (innerGrids.length > 0) {
         innerGrids[0].className = 'spotify-category-grid';
-        if (innerGrids[0].getAttribute('data-v41-rendered') !== 'all') {
-          innerGrids[0].setAttribute('data-v41-rendered', 'all');
+        if (innerGrids[0].getAttribute('data-v42-rendered') !== 'all') {
+          innerGrids[0].setAttribute('data-v42-rendered', 'all');
           innerGrids[0].innerHTML = allHtml;
         }
         for (let i = 1; i < innerGrids.length; i++) {
@@ -4540,7 +4501,7 @@
       title: catId,
       type: 'Smart Mix',
       color: '#4A8094',
-      cover: '/api/category-cover/' + String(catId || 'other').toLowerCase() + '?v=41'
+      cover: '/covers/cat_' + String(catId || 'malayalam').toLowerCase() + '.jpg?v=42'
     };
 
     const songs = filterSongsForSmartMix(cat.id);
@@ -4598,7 +4559,7 @@
       const meta = window.getSongMeta(song);
 
       const img = row.querySelector('img');
-      if (img && img.getAttribute('src') && img.getAttribute('src').indexOf('/api/cover/') === -1) {
+      if (img && img.getAttribute('src') !== meta.artwork) {
         img.src = meta.artwork;
       }
 

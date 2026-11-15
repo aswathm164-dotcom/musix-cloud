@@ -482,543 +482,16 @@ async function getDriveSongs(forceRefresh = false) {
 
 
 
-// === MUSIX V41 ARTWORK ENGINE START ===
-const COVER_CACHE_DIR = path.join(require('os').tmpdir(), 'musix-covers-v41');
-if (!fs.existsSync(COVER_CACHE_DIR)) {
-  try { fs.mkdirSync(COVER_CACHE_DIR, { recursive: true }); } catch (e) {}
-}
 
-const songInfoRegistry = {};
-const extractedId3Meta = {};
-const memoryCoverCache = {};
-const categoryCoverCache = {};
-const inFlightCoverPromises = {};
-
-// True FIFO Queue so ZERO embedded cover reads are ever skipped or dropped
-const driveReadQueue = [];
-let activeDriveWorkers = 0;
-const MAX_DRIVE_WORKERS = 4;
-
-function enqueueDriveCoverRead(taskFn, highPriority) {
-  return new Promise((resolve, reject) => {
-    if (highPriority) {
-      driveReadQueue.unshift({ taskFn, resolve, reject });
-    } else {
-      driveReadQueue.push({ taskFn, resolve, reject });
-    }
-    pumpDriveReadQueue();
-  });
-}
-
-async function pumpDriveReadQueue() {
-  if (activeDriveWorkers >= MAX_DRIVE_WORKERS || driveReadQueue.length === 0) return;
-  activeDriveWorkers++;
-  while (driveReadQueue.length > 0) {
-    const job = driveReadQueue.shift();
-    if (!job) break;
-    try {
-      const res = await job.taskFn();
-      job.resolve(res);
-    } catch (err) {
-      job.reject(err);
-    }
-    await new Promise(r => setTimeout(r, 50));
+// === MUSIX V42 ARTWORK ENGINE START ===
+const STATIC_COVERS_DIR = path.join(__dirname, 'public', 'covers');
+let prebuiltManifest = {};
+try {
+  const manifestPath = path.join(STATIC_COVERS_DIR, 'index.json');
+  if (fs.existsSync(manifestPath)) {
+    prebuiltManifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
   }
-  activeDriveWorkers--;
-}
-
-function removeUnsynchronisation(buf) {
-  let count = 0;
-  for (let i = 0; i < buf.length - 1; i++) {
-    if (buf[i] === 0xFF && buf[i + 1] === 0x00) count++;
-  }
-  if (count === 0) return buf;
-  const out = Buffer.allocUnsafe(buf.length - count);
-  let w = 0;
-  for (let i = 0; i < buf.length; i++) {
-    out[w++] = buf[i];
-    if (buf[i] === 0xFF && i + 1 < buf.length && buf[i + 1] === 0x00) {
-      i++;
-    }
-  }
-  return out.subarray(0, w);
-}
-
-function decodeId3Text(payload) {
-  if (!payload || payload.length < 2) return '';
-  const enc = payload[0];
-  const body = payload.subarray(1);
-  let text = '';
-  try {
-    if (enc === 0) {
-      text = body.toString('latin1');
-    } else if (enc === 1 || enc === 2) {
-      if (body.length >= 2 && body[0] === 0xFE && body[1] === 0xFF) {
-        const swapped = Buffer.alloc(body.length - 2);
-        for (let i = 2; i < body.length - 1; i += 2) {
-          swapped[i - 2] = body[i + 1];
-          swapped[i - 1] = body[i];
-        }
-        text = swapped.toString('utf16le');
-      } else {
-        const start = (body.length >= 2 && body[0] === 0xFF && body[1] === 0xFE) ? 2 : 0;
-        text = body.subarray(start).toString('utf16le');
-      }
-    } else {
-      text = body.toString('utf8');
-    }
-  } catch (e) {}
-  return text.replace(/\0/g, '').trim();
-}
-
-function sliceImageFromBuffer(buf, startSearchOffset) {
-  const maxWin = Math.min(buf.length, startSearchOffset + 256);
-  for (let i = startSearchOffset; i < maxWin - 4; i++) {
-    // 1. JPEG (FF D8 FF ... FF D9)
-    if (buf[i] === 0xFF && buf[i + 1] === 0xD8 && buf[i + 2] === 0xFF) {
-      let endPos = buf.length;
-      for (let j = buf.length - 2; j > i + 512; j--) {
-        if (buf[j] === 0xFF && buf[j + 1] === 0xD9) {
-          endPos = j + 2;
-          break;
-        }
-      }
-      const imgBuf = buf.subarray(i, endPos);
-      if (imgBuf.length > 512) return { mime: 'image/jpeg', buf: Buffer.from(imgBuf) };
-    }
-    // 2. PNG (89 50 4E 47 ... IEND)
-    if (buf[i] === 0x89 && buf[i + 1] === 0x50 && buf[i + 2] === 0x4E && buf[i + 3] === 0x47) {
-      const iendIdx = buf.indexOf(Buffer.from([0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82]), i);
-      const endPos = iendIdx !== -1 ? iendIdx + 8 : buf.length;
-      const imgBuf = buf.subarray(i, endPos);
-      if (imgBuf.length > 512) return { mime: 'image/png', buf: Buffer.from(imgBuf) };
-    }
-    // 3. WebP (RIFF....WEBP)
-    if (buf[i] === 0x52 && buf[i + 1] === 0x49 && buf[i + 2] === 0x46 && buf[i + 3] === 0x46 &&
-        i + 12 < buf.length && buf[i + 8] === 0x57 && buf[i + 9] === 0x45 && buf[i + 10] === 0x42 && buf[i + 11] === 0x50) {
-      const riffLen = buf.readUInt32LE(i + 4) + 8;
-      const endPos = Math.min(buf.length, i + riffLen);
-      const imgBuf = buf.subarray(i, endPos);
-      if (imgBuf.length > 512) return { mime: 'image/webp', buf: Buffer.from(imgBuf) };
-    }
-  }
-  return null;
-}
-
-function parseFullId3AndCover(rawBuf) {
-  const out = { title: '', artist: '', album: '', year: '', image: null };
-  if (!rawBuf || rawBuf.length < 16) return out;
-
-  let b = rawBuf;
-  if (b.toString('ascii', 0, 3) === 'ID3') {
-    const ver = b[3];
-    const flags = b[5];
-    const tagUnsync = (flags & 0x80) !== 0;
-    const tagSize = ((b[6] & 0x7f) << 21) | ((b[7] & 0x7f) << 14) | ((b[8] & 0x7f) << 7) | (b[9] & 0x7f);
-    const limit = Math.min(b.length, 10 + tagSize);
-    let tagBody = b.subarray(0, limit);
-    if (tagUnsync) {
-      tagBody = Buffer.concat([tagBody.subarray(0, 10), removeUnsynchronisation(tagBody.subarray(10))]);
-    }
-
-    // Parse text frames (TIT2, TPE1, TALB, TYER/TDRC) and APIC
-    let pos = 10;
-    while (pos + 10 < tagBody.length) {
-      const frameId = tagBody.toString('ascii', pos, pos + 4);
-      if (!/^[A-Z0-9]{4}$/.test(frameId)) break;
-
-      const syncSize = ((tagBody[pos + 4] & 0x7f) << 21) | ((tagBody[pos + 5] & 0x7f) << 14) | ((tagBody[pos + 6] & 0x7f) << 7) | (tagBody[pos + 7] & 0x7f);
-      const stdSize = tagBody.readUInt32BE(pos + 4);
-      const frameFlags = tagBody[pos + 9];
-
-      let fSize = stdSize;
-      if (ver === 4) {
-        // Check if next frame header exists after stdSize vs syncSize to handle non-compliant v2.4 encoders
-        const nextAfterStd = pos + 10 + stdSize;
-        const nextAfterSync = pos + 10 + syncSize;
-        if (nextAfterStd + 4 <= tagBody.length && /^[A-Z0-9]{4}$/.test(tagBody.toString('ascii', nextAfterStd, nextAfterStd + 4))) {
-          fSize = stdSize;
-        } else if (nextAfterSync + 4 <= tagBody.length && /^[A-Z0-9]{4}$/.test(tagBody.toString('ascii', nextAfterSync, nextAfterSync + 4))) {
-          fSize = syncSize;
-        } else {
-          fSize = Math.max(syncSize, stdSize);
-        }
-      }
-
-      if (fSize <= 0 || pos + 10 >= tagBody.length) break;
-      const frameEnd = Math.min(tagBody.length, pos + 10 + fSize);
-      let payload = tagBody.subarray(pos + 10, frameEnd);
-      if ((frameFlags & 0x02) !== 0) {
-        payload = removeUnsynchronisation(payload);
-      }
-
-      if (frameId === 'TIT2' && !out.title) out.title = decodeId3Text(payload);
-      else if (frameId === 'TPE1' && !out.artist) out.artist = decodeId3Text(payload);
-      else if (frameId === 'TALB' && !out.album) out.album = decodeId3Text(payload);
-      else if ((frameId === 'TYER' || frameId === 'TDRC') && !out.year) out.year = decodeId3Text(payload).slice(0, 4);
-      else if (frameId === 'APIC' && !out.image) {
-        out.image = sliceImageFromBuffer(payload, 0);
-      }
-
-      pos += 10 + fSize;
-    }
-
-    // Direct marker scan inside tagBody in case a non-standard frame preceded APIC/PIC
-    if (!out.image) {
-      const apicIdx = tagBody.indexOf(Buffer.from('APIC'));
-      const picIdx = apicIdx === -1 ? tagBody.indexOf(Buffer.from('PIC')) : -1;
-      const marker = apicIdx !== -1 ? apicIdx : picIdx;
-      if (marker !== -1) {
-        let sub = tagBody.subarray(marker);
-        if (sub.indexOf(Buffer.from([0xFF, 0x00, 0xD8, 0xFF])) !== -1) {
-          sub = removeUnsynchronisation(sub);
-        }
-        out.image = sliceImageFromBuffer(sub, 4);
-      }
-    }
-  }
-
-  // Fallback for M4A / MP4 'covr' atom
-  if (!out.image) {
-    const covrIdx = b.indexOf(Buffer.from('covr'));
-    if (covrIdx !== -1) {
-      out.image = sliceImageFromBuffer(b.subarray(covrIdx), 4);
-    }
-  }
-
-  return out;
-}
-
-// Queued Google Drive reader: NEVER drops a request, fetches full ID3 tag up to 10MB
-async function extractFromDriveQueued(fileId, highPriority) {
-  return enqueueDriveCoverRead(async () => {
-    const binPath = path.join(COVER_CACHE_DIR, fileId + '.bin');
-    const metaPath = path.join(COVER_CACHE_DIR, fileId + '.json');
-
-    if (fs.existsSync(binPath) && fs.existsSync(metaPath)) {
-      try {
-        const m = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
-        const buf = fs.readFileSync(binPath);
-        if (buf.length > 512) {
-          const item = { mime: m.mime || 'image/jpeg', buf: buf };
-          memoryCoverCache[fileId] = item;
-          return item;
-        }
-      } catch (e) {}
-    }
-
-    try {
-      const firstChunkEnd = 393215; // 384 KB initial chunk
-      const r1 = await drive.files.get(
-        { fileId: fileId, alt: 'media' },
-        { responseType: 'arraybuffer', headers: { Range: 'bytes=0-' + firstChunkEnd } }
-      );
-      let b = Buffer.from(r1.data);
-
-      // If ID3v2 tag is larger than 384 KB, fetch the exact remainder of the ID3 tag (up to 10 MB)
-      if (b.length >= 10 && b.toString('ascii', 0, 3) === 'ID3') {
-        const tagSize = ((b[6] & 0x7f) << 21) | ((b[7] & 0x7f) << 14) | ((b[8] & 0x7f) << 7) | (b[9] & 0x7f);
-        const totalNeeded = Math.min(10 + tagSize, 10 * 1024 * 1024);
-        if (totalNeeded > b.length) {
-          const r2 = await drive.files.get(
-            { fileId: fileId, alt: 'media' },
-            { responseType: 'arraybuffer', headers: { Range: 'bytes=' + b.length + '-' + (totalNeeded - 1) } }
-          );
-          b = Buffer.concat([b, Buffer.from(r2.data)]);
-        }
-      }
-
-      const parsed = parseFullId3AndCover(b);
-      if (parsed.title || parsed.artist || parsed.album) {
-        extractedId3Meta[fileId] = {
-          title: parsed.title || '',
-          artist: parsed.artist || '',
-          album: parsed.album || '',
-          year: parsed.year || ''
-        };
-        if (songInfoRegistry[fileId]) {
-          if (parsed.title) songInfoRegistry[fileId].title = parsed.title;
-          if (parsed.artist) songInfoRegistry[fileId].artist = parsed.artist;
-          if (parsed.album) songInfoRegistry[fileId].album = parsed.album;
-        }
-      }
-
-      if (parsed.image && parsed.image.buf && parsed.image.buf.length > 512) {
-        memoryCoverCache[fileId] = parsed.image;
-        try {
-          fs.writeFileSync(binPath, parsed.image.buf);
-          fs.writeFileSync(metaPath, JSON.stringify({
-            mime: parsed.image.mime,
-            source: 'embedded',
-            title: parsed.title || '',
-            artist: parsed.artist || '',
-            album: parsed.album || ''
-          }), 'utf8');
-        } catch (e) {}
-        return parsed.image;
-      }
-    } catch (err) {}
-    return null;
-  }, highPriority);
-}
-
-// Parse clean title, artist, and album from the raw Google Drive filename (ignoring polluted sync DB)
-function parseCleanFilename(rawFilename) {
-  const withoutExt = String(rawFilename || '')
-    .replace(/\.(mp3|m4a|flac|wav|ogg|aac)$/i, '')
-    .replace(/^\d+\s*[\-.]\s*/, '')
-    .trim();
-
-  let title = withoutExt;
-  let artist = 'Cloud Artist';
-  let album = 'Single';
-
-  const dashParts = withoutExt.split(/\s+-\s+/);
-  if (dashParts.length >= 2) {
-    title = dashParts[0].trim();
-    artist = dashParts.slice(1).join(', ').trim();
-  } else {
-    // Handle filenames where artist is appended after (feat. X) or at the end, e.g.:
-    // "Headlights (feat. KIDDO) Alok, Alan Walker, KIDDO" or "Way down We Go KALEO"
-    const featTail = withoutExt.match(/^(.*?\((?:feat|ft|with)[^)]+\))\s+(.+)$/i);
-    if (featTail) {
-      title = featTail[1].trim();
-      artist = featTail[2].trim();
-    } else if (/\s+KALEO$/i.test(withoutExt)) {
-      title = withoutExt.replace(/\s+KALEO$/i, '').trim();
-      artist = 'KALEO';
-    }
-  }
-
-  const fromMatch = title.match(/^(.*?)\s+From\s+(.+)$/i);
-  if (fromMatch) {
-    title = fromMatch[1].trim();
-    album = fromMatch[2].trim();
-  }
-
-  return { title, artist, album };
-}
-
-const JUNK_COVER_RE = /\b(nursery rhyme|nursery rhymes|for kids|kids songs|kidz bop|kids bop|lullaby|lullabies|karaoke|tribute|ringtone|8-bit|made famous by)\b/i;
-
-async function fetchImageBytes(url) {
-  const res = await axios.get(url, {
-    responseType: 'arraybuffer',
-    timeout: 5000,
-    headers: { 'User-Agent': 'Mozilla/5.0' }
-  });
-  const ct = (res.headers && res.headers['content-type']) || 'image/jpeg';
-  const buf = Buffer.from(res.data);
-  if (ct.startsWith('image/') && buf.length > 512) {
-    return { mime: ct, buf: buf };
-  }
-  return null;
-}
-
-// Strict online fallback ONLY if the audio file genuinely has no embedded image inside it
-async function searchStrictOnlineFallback(fileId) {
-  const info = songInfoRegistry[fileId] || {};
-  const id3 = extractedId3Meta[fileId] || {};
-  const fromFile = parseCleanFilename(info.name || info.title || '');
-
-  const rawTitle = id3.title || fromFile.title || info.title || '';
-  const rawArtist = (id3.artist && id3.artist !== 'Cloud Artist')
-    ? id3.artist
-    : (fromFile.artist !== 'Cloud Artist' ? fromFile.artist : (info.artist || ''));
-  const movieOrAlbum = (id3.album && id3.album !== 'Single' && id3.album !== 'Cloud Drive')
-    ? id3.album
-    : (fromFile.album !== 'Single' ? fromFile.album : '');
-
-  const titleWithCollabs = rawTitle
-    .replace(/\b(?:feat\.?|ft\.?|with|prod\.?|by|ost|original motion picture soundtrack|one side love|lyrical|video|audio|320kbps|128kbps)\b/gi, ' ')
-    .replace(/[()\[\]\-_/,]+/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-
-  const coreTitle = rawTitle
-    .replace(/\([^)]*\)/g, ' ')
-    .replace(/\[[^\]]*\]/g, ' ')
-    .replace(/\b(?:feat\.?|ft\.?|with)\b.*$/i, ' ')
-    .replace(/\b(?:remix|ost|original motion picture soundtrack|one side love|lyrical|video|audio)\b/gi, ' ')
-    .replace(/[()\[\]\-_/,]+/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-
-  const primaryArtist = (!rawArtist || rawArtist === 'Cloud Artist' || rawArtist === 'Unknown')
-    ? ''
-    : String(rawArtist).split(/[/,&;]|\b(?:feat\.?|ft\.?|with)\b/i)[0].trim();
-
-  const queries = [
-    movieOrAlbum ? (coreTitle + ' ' + movieOrAlbum) : '',
-    (titleWithCollabs + ' ' + primaryArtist).trim(),
-    (coreTitle + ' ' + primaryArtist).trim(),
-    titleWithCollabs,
-    coreTitle
-  ].map(s => (s || '').trim()).filter(s => s.length >= 2);
-
-  const uniqueQueries = Array.from(new Set(queries));
-  const targetLower = (coreTitle || titleWithCollabs).toLowerCase();
-  const artistTokens = (rawArtist + ' ' + titleWithCollabs + ' ' + movieOrAlbum)
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, ' ')
-    .split(/\s+/)
-    .filter(w => w.length >= 3 && !['the', 'and', 'from', 'with', 'feat', 'remix', 'cloud', 'artist'].includes(w));
-
-  function scoreHit(hTitle, hArtist, hAlbum) {
-    const comb = (hTitle + ' ' + hArtist + ' ' + hAlbum).toLowerCase();
-    if (JUNK_COVER_RE.test(comb)) return -999;
-    const tLow = String(hTitle || '').toLowerCase();
-    const aLow = String(hArtist || '').toLowerCase();
-    const alLow = String(hAlbum || '').toLowerCase();
-
-    let sc = 0;
-    if (tLow === targetLower || tLow.startsWith(targetLower)) sc += 45;
-    else if (tLow.includes(targetLower) || targetLower.includes(tLow)) sc += 25;
-    else return -200; // Title must match
-
-    let tokenHits = 0;
-    artistTokens.forEach(tok => {
-      if (aLow.includes(tok) || tLow.includes(tok) || alLow.includes(tok)) {
-        tokenHits++;
-        sc += 25;
-      }
-    });
-
-    if (primaryArtist && aLow.includes(primaryArtist.toLowerCase())) sc += 50;
-    if (movieOrAlbum && alLow.includes(movieOrAlbum.toLowerCase())) sc += 50;
-
-    if (primaryArtist && tokenHits === 0) return -300;
-    return sc;
-  }
-
-  let bestUrl = '';
-  let bestScore = -999;
-
-  for (const q of uniqueQueries.slice(0, 4)) {
-    try {
-      const dzRes = await axios.get('https://api.deezer.com/search?q=' + encodeURIComponent(q) + '&limit=6', { timeout: 4000 });
-      const hits = (dzRes.data && dzRes.data.data) || [];
-      for (const h of hits) {
-        const cover = h.album && (h.album.cover_big || h.album.cover_xl || h.album.cover_medium);
-        if (!cover) continue;
-        const sc = scoreHit(h.title, h.artist && h.artist.name, h.album && h.album.title);
-        if (sc > bestScore) {
-          bestScore = sc;
-          bestUrl = cover;
-        }
-      }
-      if (bestScore >= 60 && bestUrl) break;
-    } catch (e) {}
-  }
-
-  if (bestScore < 60) {
-    for (const store of ['in', 'us']) {
-      for (const q of uniqueQueries.slice(0, 3)) {
-        try {
-          const itRes = await axios.get('https://itunes.apple.com/search?term=' + encodeURIComponent(q) + '&country=' + store + '&media=music&entity=song&limit=6', { timeout: 4000 });
-          const hits = (itRes.data && itRes.data.results) || [];
-          for (const h of hits) {
-            if (!h.artworkUrl100) continue;
-            const sc = scoreHit(h.trackName, h.artistName, h.collectionName);
-            if (sc > bestScore) {
-              bestScore = sc;
-              bestUrl = h.artworkUrl100.replace('100x100bb', '600x600bb');
-            }
-          }
-          if (bestScore >= 60 && bestUrl) break;
-        } catch (e) {}
-      }
-      if (bestScore >= 60 && bestUrl) break;
-    }
-  }
-
-  if (bestScore >= 25 && bestUrl) {
-    try {
-      return await fetchImageBytes(bestUrl);
-    } catch (e) {}
-  }
-  return null;
-}
-
-async function resolveCoverForSong(fileId) {
-  if (memoryCoverCache[fileId]) return memoryCoverCache[fileId];
-
-  const binPath = path.join(COVER_CACHE_DIR, fileId + '.bin');
-  const metaPath = path.join(COVER_CACHE_DIR, fileId + '.json');
-
-  if (fs.existsSync(binPath) && fs.existsSync(metaPath)) {
-    try {
-      const m = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
-      const buf = fs.readFileSync(binPath);
-      if (buf.length > 512) {
-        if (m.title || m.artist || m.album) {
-          extractedId3Meta[fileId] = { title: m.title || '', artist: m.artist || '', album: m.album || '' };
-        }
-        const item = { mime: m.mime || 'image/jpeg', buf: buf };
-        memoryCoverCache[fileId] = item;
-        return item;
-      }
-    } catch (e) {}
-  }
-
-  if (inFlightCoverPromises[fileId]) {
-    return inFlightCoverPromises[fileId];
-  }
-
-  inFlightCoverPromises[fileId] = (async () => {
-    try {
-      // 1. ALWAYS wait in the FIFO queue to extract the real embedded cover from Google Drive
-      let imgObj = await extractFromDriveQueued(fileId, true);
-
-      // 2. ONLY if the file on Google Drive had zero embedded image, run strict online match
-      if (!imgObj) {
-        imgObj = await searchStrictOnlineFallback(fileId);
-        if (imgObj && imgObj.buf && imgObj.buf.length > 512) {
-          memoryCoverCache[fileId] = imgObj;
-          try {
-            fs.writeFileSync(binPath, imgObj.buf);
-            fs.writeFileSync(metaPath, JSON.stringify({ mime: imgObj.mime, source: 'online_strict' }), 'utf8');
-          } catch (e) {}
-        }
-      }
-      return imgObj;
-    } catch (e) {
-      return null;
-    } finally {
-      delete inFlightCoverPromises[fileId];
-    }
-  })();
-
-  return inFlightCoverPromises[fileId];
-}
-
-// Background pre-warmer: automatically extracts embedded covers and ID3 tags for all songs
-let isPrewarming = false;
-async function prewarmAllSongCovers(songIds) {
-  if (isPrewarming) return;
-  isPrewarming = true;
-  for (const id of songIds) {
-    const binPath = path.join(COVER_CACHE_DIR, id + '.bin');
-    if (!memoryCoverCache[id] && !fs.existsSync(binPath)) {
-      try { await resolveCoverForSong(id); } catch (e) {}
-    }
-  }
-  isPrewarming = false;
-}
-
-const CATEGORY_QUERIES = {
-  malayalam: 'Aavesham Sushin Shyam',
-  hindi: 'Aashiqui 2 Arijit Singh',
-  english: 'After Hours The Weeknd',
-  tamil: 'Leo Anirudh Ravichander',
-  love: 'Perfect Ed Sheeran',
-  sleep: 'Weightless Marconi Union Ambient',
-  trending: 'Starboy The Weeknd',
-  mood: 'Lovely Billie Eilish Khalid',
-  party: 'Titanium David Guetta Sia',
-  melody: 'Kun Faya Kun A.R. Rahman',
-  other: 'Random Access Memories Daft Punk'
-};
+} catch (e) {}
 
 app.use((req, res, next) => {
   if (req.path === '/' || req.path === '/index.html' || req.path === '/sw.js') {
@@ -1028,46 +501,31 @@ app.use((req, res, next) => {
     const origJson = res.json.bind(res);
     res.json = function (data) {
       if (Array.isArray(data)) {
-        const malRe = /\b(sushin shyam|jakes bejoy|vishnu vijay|vineeth sreenivasan|shaan rahman|rex vijayan|gopi sundar|dabzee|govind vasantha|fejo|vedan|bibin ashok|varkey|nevin thomas|mbl|sarvam maya|vellarathaaram|komala thaamara|masthishka maranam|delulu|athi bheekara kaamukan|neeye punchiri|chorkk|vazhikatti|puthu mazha|premavathi|akale)\b/i;
-        const futureTs = Date.now() + 432000000;
-        const idsToWarm = [];
-
+        const futureTs = Date.now() + 518400000;
         data.forEach(f => {
           if (!f || !f.id) return;
-          idsToWarm.push(f.id);
           f.cloudMeta = f.cloudMeta || {};
+          const pre = prebuiltManifest[f.id] || {};
+          const staticCoverFile = path.join(STATIC_COVERS_DIR, f.id + '.jpg');
+          const coverUrl = fs.existsSync(staticCoverFile)
+            ? ('/covers/' + encodeURIComponent(f.id) + '.jpg?v=42')
+            : ('/api/cover/' + encodeURIComponent(f.id) + '?v=42');
 
-          // Prioritize real ID3 tags + clean filename over polluted sync DB records
-          const fromFile = parseCleanFilename(f.name || '');
-          const id3 = extractedId3Meta[f.id] || {};
-
-          const title = id3.title || fromFile.title || f.cloudMeta.title || f.name;
-          const artist = (id3.artist && id3.artist !== 'Cloud Artist')
-            ? id3.artist
-            : (fromFile.artist !== 'Cloud Artist' ? fromFile.artist : (f.cloudMeta.artist || 'Cloud Artist'));
-          const album = (id3.album && id3.album !== 'Cloud Drive' && id3.album !== 'Single')
-            ? id3.album
-            : (fromFile.album !== 'Single' ? fromFile.album : ((f.cloudMeta.album && f.cloudMeta.album !== 'Cloud Drive') ? f.cloudMeta.album : 'Single'));
-
-          songInfoRegistry[f.id] = { id: f.id, name: f.name || '', title: title, artist: artist, album: album };
-
-          if (malRe.test((f.name || '') + ' ' + title + ' ' + artist + ' ' + album)) {
-            f.cloudLang = 'Malayalam';
-            f.cloudMeta.language = 'Malayalam';
+          if (pre.title) f.cloudMeta.title = pre.title;
+          if (pre.artist && pre.artist !== 'Cloud Artist') f.cloudMeta.artist = pre.artist;
+          if (pre.album && pre.album !== 'Cloud Drive') f.cloudMeta.album = pre.album;
+          if (pre.year) f.cloudMeta.year = pre.year;
+          if (pre.language) {
+            f.cloudLang = pre.language;
+            f.cloudMeta.language = pre.language;
           }
 
-          const coverUrl = '/api/cover/' + encodeURIComponent(f.id) + '?v=41';
-          f.cloudMeta.title = title;
-          f.cloudMeta.artist = artist;
-          f.cloudMeta.album = album;
           f.cloudMeta.coverArt = coverUrl;
           f.cloudMeta.artwork = coverUrl;
           f.cloudMeta.updatedAt = futureTs;
           f.coverArt = coverUrl;
           f.artwork = coverUrl;
         });
-
-        setTimeout(() => prewarmAllSongCovers(idsToWarm), 200);
       }
       return origJson(data);
     };
@@ -1075,88 +533,54 @@ app.use((req, res, next) => {
   next();
 });
 
+// Serve cover for any song (static pre-extracted cover first, dynamic extraction for newly uploaded songs)
 app.get(['/api/cover/:fileId', '/api/song-cover/:fileId'], async (req, res) => {
   const fileId = req.params.fileId;
-
-  const imgObj = await resolveCoverForSong(fileId);
-  if (imgObj && imgObj.buf) {
-    res.set({
-      'Content-Type': imgObj.mime || 'image/jpeg',
-      'Cache-Control': 'public, max-age=604800',
-      'Access-Control-Allow-Origin': '*'
-    });
-    return res.send(imgObj.buf);
-  }
-
-  // Never cache a fallback response so the browser retries once extraction completes
-  res.set({
-    'Cache-Control': 'no-store, no-cache, must-revalidate',
-    'Access-Control-Allow-Origin': '*'
-  });
-  return res.status(503).end();
-});
-
-app.get('/api/category-cover/:slug', async (req, res) => {
-  const slug = String(req.params.slug || 'other').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const staticPath = path.join(STATIC_COVERS_DIR, fileId + '.jpg');
   res.set({
     'Cache-Control': 'public, max-age=604800',
     'Access-Control-Allow-Origin': '*'
   });
 
-  if (categoryCoverCache[slug]) {
-    res.set('Content-Type', categoryCoverCache[slug].mime);
-    return res.send(categoryCoverCache[slug].buf);
+  if (fs.existsSync(staticPath)) {
+    res.set('Content-Type', 'image/jpeg');
+    return res.sendFile(staticPath);
   }
 
-  const binPath = path.join(COVER_CACHE_DIR, 'cat_' + slug + '.bin');
-  if (fs.existsSync(binPath)) {
-    try {
-      const buf = fs.readFileSync(binPath);
-      if (buf.length > 512) {
-        categoryCoverCache[slug] = { mime: 'image/jpeg', buf: buf };
-        res.set('Content-Type', 'image/jpeg');
-        return res.send(buf);
-      }
-    } catch (e) {}
-  }
-
-  const query = CATEGORY_QUERIES[slug] || CATEGORY_QUERIES.other;
+  // Dynamic extraction for any new song uploaded after build
   try {
-    const dzRes = await axios.get('https://api.deezer.com/search?q=' + encodeURIComponent(query) + '&limit=3', { timeout: 4500 });
-    const hits = (dzRes.data && dzRes.data.data) || [];
-    for (const h of hits) {
-      const cover = h.album && (h.album.cover_big || h.album.cover_xl || h.album.cover_medium);
-      if (cover) {
-        const imgObj = await fetchImageBytes(cover);
-        if (imgObj) {
-          categoryCoverCache[slug] = imgObj;
-          try { fs.writeFileSync(binPath, imgObj.buf); } catch (e) {}
-          res.set('Content-Type', imgObj.mime);
-          return res.send(imgObj.buf);
-        }
-      }
+    const mm = await import('music-metadata');
+    const r1 = await drive.files.get(
+      { fileId, alt: 'media' },
+      { responseType: 'arraybuffer', headers: { Range: 'bytes=0-1048575' } }
+    );
+    const buf = Buffer.from(r1.data);
+    const meta = await mm.parseBuffer(buf, { mimeType: 'audio/mpeg' }, { duration: false });
+    if (meta && meta.common && meta.common.picture && meta.common.picture[0] && meta.common.picture[0].data) {
+      const picBuf = Buffer.from(meta.common.picture[0].data);
+      try { fs.writeFileSync(staticPath, picBuf); } catch (e) {}
+      res.set('Content-Type', meta.common.picture[0].format || 'image/jpeg');
+      return res.send(picBuf);
     }
   } catch (e) {}
 
-  try {
-    const itRes = await axios.get('https://itunes.apple.com/search?term=' + encodeURIComponent(query) + '&country=in&media=music&entity=song&limit=3', { timeout: 4500 });
-    const hits = (itRes.data && itRes.data.results) || [];
-    for (const h of hits) {
-      if (h.artworkUrl100) {
-        const imgObj = await fetchImageBytes(h.artworkUrl100.replace('100x100bb', '600x600bb'));
-        if (imgObj) {
-          categoryCoverCache[slug] = imgObj;
-          try { fs.writeFileSync(binPath, imgObj.buf); } catch (e) {}
-          res.set('Content-Type', imgObj.mime);
-          return res.send(imgObj.buf);
-        }
-      }
-    }
-  } catch (e) {}
-
-  return res.status(404).end();
+  return res.redirect(302, '/icon-512.png');
 });
-// === MUSIX V41 ARTWORK ENGINE END ===
+
+app.get('/api/category-cover/:slug', (req, res) => {
+  const slug = String(req.params.slug || 'malayalam').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const staticCat = path.join(STATIC_COVERS_DIR, 'cat_' + slug + '.jpg');
+  res.set({
+    'Cache-Control': 'public, max-age=604800',
+    'Access-Control-Allow-Origin': '*'
+  });
+  if (fs.existsSync(staticCat)) {
+    res.set('Content-Type', 'image/jpeg');
+    return res.sendFile(staticCat);
+  }
+  return res.redirect(302, '/icon-512.png');
+});
+// === MUSIX V42 ARTWORK ENGINE END ===
 
 app.get('/api/ping', (req, res) => res.json({ status: 'awake' }));
 
