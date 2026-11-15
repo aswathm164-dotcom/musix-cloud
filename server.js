@@ -484,6 +484,8 @@ async function getDriveSongs(forceRefresh = false) {
 
 
 
+
+
 // === MUSIX V43 ARTWORK ENGINE START ===
 const STATIC_COVERS_DIR = path.join(__dirname, 'public', 'covers');
 const RUNTIME_COVERS_DIR = path.join(require('os').tmpdir(), 'musix-covers-v43');
@@ -505,7 +507,6 @@ const songRegistry = {};
 const coverMemoryCache = {};
 const coverInFlight = {};
 
-// Clean, text-free dark vinyl fallback SVG (never shows text or broken icon if a song has no cover anywhere)
 const CLEAN_VINYL_FALLBACK_SVG = Buffer.from(
   '<svg xmlns="http://www.w3.org/2000/svg" width="600" height="600" viewBox="0 0 600 600">' +
     '<defs>' +
@@ -607,7 +608,6 @@ async function resolveGuaranteedCover(fileId, queryTitle, queryArtist) {
   const cleanId = String(fileId || '').replace(/\.(jpg|png|jpeg|webp)$/i, '');
   if (coverMemoryCache[cleanId]) return coverMemoryCache[cleanId];
 
-  // 1. Check static public/covers/<id>.jpg or runtime /tmp cache
   const staticPath = path.join(STATIC_COVERS_DIR, cleanId + '.jpg');
   const runtimePath = path.join(RUNTIME_COVERS_DIR, cleanId + '.bin');
   for (const p of [staticPath, runtimePath]) {
@@ -628,7 +628,6 @@ async function resolveGuaranteedCover(fileId, queryTitle, queryArtist) {
 
   coverInFlight[cleanId] = (async () => {
     try {
-      // 2. Extract embedded cover directly from the Google Drive audio file
       try {
         const r1 = await drive.files.get(
           { fileId: cleanId, alt: 'media' },
@@ -677,7 +676,6 @@ async function resolveGuaranteedCover(fileId, queryTitle, queryArtist) {
         }
       } catch (e) {}
 
-      // 3. Online search fallback (iTunes IN/US + Deezer Track + Artist Portrait for indie tracks like Chembarathi)
       const info = songRegistry[cleanId] || {};
       const parsed = parseCleanFilenameServer(info.name || queryTitle || '');
       const title = (queryTitle || info.title || parsed.title || '').trim();
@@ -748,7 +746,6 @@ async function resolveGuaranteedCover(fileId, queryTitle, queryArtist) {
         } catch (e) {}
       }
 
-      // 4. Indie Artist Portrait fallback (e.g. LiL PAYYAN / AZWIN)
       for (const artName of artistParts) {
         try {
           const itArt = await axios.get('https://itunes.apple.com/search?term=' + encodeURIComponent(artName) + '&country=in&media=music&entity=song&limit=3', { timeout: 3500 });
@@ -769,7 +766,6 @@ async function resolveGuaranteedCover(fileId, queryTitle, queryArtist) {
       delete coverInFlight[cleanId];
     }
 
-    // 5. Clean text-free vinyl fallback (HTTP 200 so browser NEVER displays a broken image icon)
     return { mime: 'image/svg+xml', buf: CLEAN_VINYL_FALLBACK_SVG, isFallback: true };
   })();
 
@@ -790,7 +786,6 @@ app.use((req, res, next) => {
         data.forEach(f => {
           if (!f || !f.id) return;
 
-          // Pre-populate fileMetaCache so /api/stream/:fileId starts immediately with 0 extra Drive calls!
           if (f.size) {
             fileMetaCache[f.id] = {
               size: parseInt(f.size, 10),
@@ -834,7 +829,6 @@ app.use((req, res, next) => {
   next();
 });
 
-// Unified Cover Route: handles /api/cover/:fileId, /api/song-cover/:fileId, AND /covers/:fileId.jpg
 app.get(['/api/cover/:fileId', '/api/song-cover/:fileId', '/covers/:fileId'], async (req, res) => {
   const rawParam = String(req.params.fileId || '');
   if (rawParam.startsWith('cat_')) {
@@ -1183,7 +1177,6 @@ app.get('/api/stream/:fileId', async (req, res) => {
     if (range) {
       const parts = range.replace(/bytes=/, '').split('-');
       const start = Math.max(0, parseInt(parts[0], 10) || 0);
-      // Stream all the way to fileSize - 1 on open-ended range requests so playback never stops at 2MB
       const end = parts[1] ? Math.min(parseInt(parts[1], 10), fileSize - 1) : (fileSize - 1);
       const chunkSize = Math.max(1, end - start + 1);
 
