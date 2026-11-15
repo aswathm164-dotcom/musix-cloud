@@ -702,7 +702,7 @@ app.post('/api/rescan-drive-tags', async (req, res) => {
   }
 });
 
-require('./musix-v46-engine')(app, drive, __dirname);
+require('./musix-v47-engine')(app, drive, __dirname);
 
 app.get('/api/songs', async (req, res) => {
   try {
