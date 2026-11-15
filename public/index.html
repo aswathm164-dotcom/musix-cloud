@@ -1458,15 +1458,19 @@
       .mobile-nav { display: flex; }
     }
   </style>
-<style id="musix-v42-styles">
+<style id="musix-v43-styles">
   .song-art img, .card-art img, .mini-art img, .sheet-art-box img, #pl-hero-art img {
     width: 100% !important;
     height: 100% !important;
     object-fit: cover !important;
     aspect-ratio: 1 / 1 !important;
     display: block !important;
-    background: #18181f !important;
+    background: #16151d !important;
+    color: transparent !important;
+    font-size: 0 !important;
   }
+  /* Hide broken image icon in WebKit/Blink if offline */
+  img:-moz-loading, img::-moz-broken { opacity: 0; }
   .spotify-category-grid {
     display: grid !important;
     grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)) !important;
@@ -1827,7 +1831,7 @@
   <!-- MINI PLAYER BAR -->
   <footer id="bottom-player" class="am-player-bar" onclick="openFullscreenPlayer()">
     <div class="am-lcd">
-      <img id="lcd-cover" src="/icon-512.png" class="lcd-cover" alt="Cover" />
+      <img id="lcd-cover" src="/icon-512.png" class="lcd-cover" alt="" />
       <div class="lcd-body">
         <div id="lcd-title" class="lcd-title">Now Playing</div>
         <div id="lcd-artist" class="lcd-artist">Musix</div>
@@ -1843,8 +1847,8 @@
       </button>
     </div>
 
-    <audio id="audio-player" preload="auto" playsinline crossorigin="anonymous"></audio>
-    <audio id="next-audio-preloader" preload="auto" style="display:none;" crossorigin="anonymous"></audio>
+    <audio id="audio-player" preload="auto" playsinline></audio>
+    <audio id="next-audio-preloader" preload="auto" style="display:none;"></audio>
   </footer>
 
   <!-- SMARTPHONE BOTTOM NAVIGATION BAR -->
@@ -1888,7 +1892,7 @@
     <!-- 3. Large square album art -->
     <div class="np-art-stage">
       <div class="np-art-box" id="fs-art-box">
-        <img id="fs-cover" src="/icon-512.png" alt="Album Cover" crossorigin="anonymous" />
+        <img id="fs-cover" src="/icon-512.png" alt="" crossorigin="anonymous" />
       </div>
     </div>
 
@@ -3430,7 +3434,7 @@
       if (category === 'Artist' && artistFaceCache[name]) {
         coverBox.innerHTML = '<img src="' + artistFaceCache[name] + '" alt="Artist" />';
       } else if (list.length > 0) {
-        coverBox.innerHTML = '<img src="' + getSongMeta(list[0]).artwork + '" alt="Cover" />';
+        coverBox.innerHTML = '<img src="' + getSongMeta(list[0]).artwork + '" alt="" />';
       } else {
         coverBox.innerHTML = '';
       }
@@ -3481,7 +3485,7 @@
         return (
           '<div class="album-card" onclick="playSpecificSong(\'' + song.id + '\')">' +
             '<div class="album-art-wrap">' +
-              '<img src="' + meta.artwork + '" alt="Art" loading="lazy" />' +
+              '<img src="' + meta.artwork + '" alt="" loading="lazy" />' +
             '</div>' +
             '<div class="card-title">' + meta.title + '</div>' +
             '<div class="card-sub">' + meta.artist + '</div>' +
@@ -3507,7 +3511,7 @@
         return (
           '<div class="track-row ' + (isPlaying ? 'playing' : '') + '" onclick="playSpecificSong(\'' + song.id + '\')">' +
             '<div class="track-num">' + (isPlaying ? '&#9654;' : idx + 1) + '</div>' +
-            '<img src="' + meta.artwork + '" class="track-thumb" alt="Art" loading="lazy" />' +
+            '<img src="' + meta.artwork + '" class="track-thumb" alt="" loading="lazy" />' +
             '<div class="track-main">' +
               '<div class="track-name">' + meta.title + '</div>' +
               '<div class="track-artist">' +
@@ -3657,7 +3661,7 @@
 
       const coverBox = document.getElementById('pl-hero-cover');
       if (plSongs.length > 0) {
-        coverBox.innerHTML = '<img src="' + getSongMeta(plSongs[0]).artwork + '" alt="Cover" />';
+        coverBox.innerHTML = '<img src="' + getSongMeta(plSongs[0]).artwork + '" alt="" />';
       } else {
         coverBox.innerHTML = '';
       }
@@ -3746,7 +3750,7 @@
           return (
             '<div class="track-row ' + (isCur ? 'playing' : '') + '" onclick="startPlaybackAtIndex(' + idx + '); closeModals();">' +
               '<div class="track-num">' + (isCur ? '&#9654;' : idx + 1) + '</div>' +
-              '<img src="' + m.artwork + '" class="track-thumb" alt="Art" />' +
+              '<img src="' + m.artwork + '" class="track-thumb" alt="" />' +
               '<div class="track-main">' +
                 '<div class="track-name">' + m.title + '</div>' +
                 '<div class="track-artist"><span>' + m.artist + '</span></div>' +
@@ -4121,7 +4125,7 @@
         return (
           '<div class="track-row" onclick="copyTrendingSongLink(' + idx + ', event)">' +
             '<div class="track-num">#' + (idx + 1) + '</div>' +
-            '<img src="' + item.artwork + '" class="track-thumb" alt="Art" loading="lazy" />' +
+            '<img src="' + item.artwork + '" class="track-thumb" alt="" loading="lazy" />' +
             '<div class="track-main">' +
               '<div class="track-name">' + item.title + '</div>' +
               '<div class="track-artist">' +
@@ -4265,10 +4269,11 @@
     connectRealtimeSyncStream();
     fetchLibrary(true);
   </script>
-<script id="musix-v42-engine">
+<script id="musix-v43-master-engine">
 (function () {
-  if (localStorage.getItem('musix_client_ver') !== 'v42') {
-    localStorage.setItem('musix_client_ver', 'v42');
+  // 1. One-time clean migration to v43 (preserves user playlists, favorites, and playback session)
+  if (localStorage.getItem('musix_client_ver') !== 'v43') {
+    localStorage.setItem('musix_client_ver', 'v43');
     localStorage.removeItem('am_meta_cache_v6');
     localStorage.removeItem('am_meta_cache_v5');
     localStorage.removeItem('am_cached_drive_songs');
@@ -4282,12 +4287,36 @@
     }
   }
 
+  // Clean Vinyl Data URI fallback so no <img> ever displays a broken icon even when completely offline
+  const FALLBACK_VINYL_DATA_URI =
+    'data:image/svg+xml;charset=utf-8,' +
+    encodeURIComponent(
+      '<svg xmlns="http://www.w3.org/2000/svg" width="600" height="600" viewBox="0 0 600 600">' +
+        '<rect width="600" height="600" fill="#14121d"/>' +
+        '<circle cx="300" cy="300" r="210" fill="#1d1a2b" stroke="rgba(255,255,255,0.08)" stroke-width="3"/>' +
+        '<circle cx="300" cy="300" r="150" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="2"/>' +
+        '<circle cx="300" cy="300" r="70" fill="#ff2d55"/>' +
+        '<circle cx="300" cy="300" r="20" fill="#14121d"/>' +
+      '</svg>'
+    );
+
+  // Global image error interceptor: strips alt text and replaces any failed image with clean vinyl art
+  window.addEventListener('error', function (e) {
+    const el = e.target;
+    if (el && el.tagName === 'IMG') {
+      el.alt = '';
+      if (el.src && !el.src.startsWith('data:')) {
+        el.src = FALLBACK_VINYL_DATA_URI;
+      }
+    }
+  }, true);
+
+  // Disable legacy background warmers and client-side iTunes guessers
   window.ensureWarmAudioCache = async function () { return; };
   window.preloadNextTrackInQueue = function () { return; };
   window.enrichMissingMetadata = async function () { return; };
   window.fetchAllMissingAlbumArt = async function () { return; };
 
-  // Block old client-side iTunes search in base script from overwriting embedded covers
   const origFetch = window.fetch.bind(window);
   window.fetch = function (input, init) {
     const urlStr = typeof input === 'string' ? input : (input && input.url) || '';
@@ -4310,17 +4339,9 @@
     return true;
   };
 
-  let staticCoverManifest = {};
-  origFetch('/covers/index.json?v=42')
-    .then(function (r) { return r.ok ? r.json() : {}; })
-    .then(function (data) {
-      staticCoverManifest = data || {};
-      if (typeof refreshAllViews === 'function') refreshAllViews();
-    })
-    .catch(function () {});
-
+  // Accurate Malayalam & Language Classifier
   const origDetermineLang = window.determineSongLanguageStrict;
-  const malayalamPattern = /\b(sushin shyam|jakes bejoy|vishnu vijay|vineeth sreenivasan|shaan rahman|rex vijayan|gopi sundar|dabzee|govind vasantha|fejo|vedan|bibin ashok|varkey|nevin thomas|mbl|sarvam maya|vellarathaaram|komala thaamara|masthishka maranam|delulu|athi bheekara kaamukan|neeye punchiri|chorkk|vazhikatti|puthu mazha|premavathi|akale)\b/i;
+  const malayalamPattern = /\b(sushin shyam|jakes bejoy|vishnu vijay|vineeth sreenivasan|shaan rahman|rex vijayan|gopi sundar|dabzee|govind vasantha|fejo|vedan|bibin ashok|varkey|nevin thomas|mbl|lil payyan|azwin|chembarathi|sarvam maya|vellarathaaram|komala thaamara|masthishka maranam|delulu|athi bheekara kaamukan|neeye punchiri|chorkk|vazhikatti|puthu mazha|premavathi|akale)\b/i;
 
   window.determineSongLanguageStrict = function (song, title, artist, album, genre, driveTagLang) {
     if (song && manualLangOverrides && manualLangOverrides[song.id]) return manualLangOverrides[song.id];
@@ -4330,6 +4351,49 @@
     return 'Other/Unknown';
   };
 
+  function parseCleanFilenameClient(rawFilename) {
+    const withoutExt = String(rawFilename || '')
+      .replace(/\.(mp3|m4a|flac|wav|ogg|aac)$/i, '')
+      .replace(/^\d+\s*[\-.]\s*/, '')
+      .trim();
+
+    let title = withoutExt;
+    let artist = 'Cloud Artist';
+    let album = 'Single';
+
+    const dashParts = withoutExt.split(/\s+-\s+/);
+    if (dashParts.length >= 2) {
+      title = dashParts[0].trim();
+      artist = dashParts.slice(1).join(', ').trim();
+    } else {
+      const featTail = withoutExt.match(/^(.*?\((?:feat|ft|with)[^)]+\))\s+(.+)$/i);
+      if (featTail) {
+        title = featTail[1].trim();
+        artist = featTail[2].trim();
+      } else if (/\s+KALEO$/i.test(withoutExt)) {
+        title = withoutExt.replace(/\s+KALEO$/i, '').trim();
+        artist = 'KALEO';
+      }
+    }
+
+    const fromMatch = title.match(/^(.*?)\s+From\s+(.+)$/i);
+    if (fromMatch) {
+      title = fromMatch[1].trim();
+      album = fromMatch[2].trim();
+    }
+    return { title, artist, album };
+  }
+
+  let staticCoverManifest = {};
+  origFetch('/covers/index.json?v=43')
+    .then(function (r) { return r.ok ? r.json() : {}; })
+    .then(function (data) {
+      staticCoverManifest = data || {};
+      if (typeof refreshAllViews === 'function') refreshAllViews();
+    })
+    .catch(function () {});
+
+  // Single-source-of-truth metadata & artwork getter (always uses /api/cover/:fileId?v=43)
   const origGetSongMeta = window.getSongMeta;
   window.getSongMeta = function (song) {
     const m = origGetSongMeta ? origGetSongMeta(song) : { title: 'Unknown', artist: 'Cloud Artist', album: 'Single', language: 'Other/Unknown', vibe: 'Feel Good' };
@@ -4337,16 +4401,20 @@
 
     const pre = staticCoverManifest[song.id] || {};
     const cm = song.cloudMeta || {};
+    const fromFile = parseCleanFilenameClient(song.name || '');
 
-    const cleanTitle = pre.title || cm.title || m.title || song.name;
+    const cleanTitle = pre.title || cm.title || fromFile.title || m.title || song.name;
     const cleanArtist = (pre.artist && pre.artist !== 'Cloud Artist')
       ? pre.artist
-      : ((cm.artist && cm.artist !== 'Cloud Artist') ? cm.artist : (m.artist || 'Cloud Artist'));
+      : ((cm.artist && cm.artist !== 'Cloud Artist') ? cm.artist : (fromFile.artist !== 'Cloud Artist' ? fromFile.artist : (m.artist || 'Cloud Artist')));
     const cleanAlbum = (pre.album && pre.album !== 'Single' && pre.album !== 'Cloud Drive')
       ? pre.album
-      : ((cm.album && cm.album !== 'Cloud Drive') ? cm.album : 'Single');
+      : ((cm.album && cm.album !== 'Cloud Drive' && cm.album !== 'Single') ? cm.album : (fromFile.album !== 'Single' ? fromFile.album : 'Single'));
 
-    const coverUrl = pre.coverUrl || cm.coverArt || ('/covers/' + encodeURIComponent(song.id) + '.jpg?v=42');
+    const coverUrl = '/api/cover/' + encodeURIComponent(song.id) +
+      '?title=' + encodeURIComponent(cleanTitle) +
+      '&artist=' + encodeURIComponent(cleanArtist) +
+      '&v=43';
 
     m.title = cleanTitle;
     m.artist = cleanArtist;
@@ -4361,17 +4429,599 @@
     return m;
   };
 
-  // Smart Mix Categories with static pre-extracted covers
+  // ==========================================================================
+  // MASTER PLAYBACK, QUEUE & SESSION ENGINE (Single Source of Truth)
+  // ==========================================================================
+  const SESSION_KEY = 'musix_playback_session_v43';
+  const audioEl = document.getElementById('audio-player');
+  if (audioEl) {
+    audioEl.removeAttribute('crossorigin');
+    audioEl.preload = 'auto';
+    audioEl.setAttribute('playsinline', '');
+  }
+
+  let playRequestCounter = 0;
+  let unshuffledQueueBackup = [];
+  let pendingSeekTime = null;
+  let sessionRestored = false;
+  let consecutiveLoadErrors = 0;
+
+  function formatClock(sec) {
+    if (!isFinite(sec) || sec < 0) return '0:00';
+    const total = Math.floor(sec);
+    const mins = Math.floor(total / 60);
+    const rem = total % 60;
+    return mins + ':' + (rem < 10 ? '0' : '') + rem;
+  }
+
+  function savePlaybackSession(overridePlaying) {
+    try {
+      if (!currentSong || !currentSong.id) return;
+      const curTime = (pendingSeekTime !== null && pendingSeekTime > 0)
+        ? pendingSeekTime
+        : ((audioEl && isFinite(audioEl.currentTime) && audioEl.currentTime > 0) ? audioEl.currentTime : 0);
+      const dur = (audioEl && isFinite(audioEl.duration) && audioEl.duration > 0)
+        ? audioEl.duration
+        : (loadSavedSession() && loadSavedSession().duration) || 0;
+
+      const queueIds = Array.isArray(currentQueue) ? currentQueue.map(function (s) { return s && s.id; }).filter(Boolean) : [];
+      const origIds = Array.isArray(unshuffledQueueBackup) && unshuffledQueueBackup.length > 0
+        ? unshuffledQueueBackup.map(function (s) { return s && s.id; }).filter(Boolean)
+        : queueIds;
+
+      const payload = {
+        songId: currentSong.id,
+        currentTime: curTime,
+        duration: dur,
+        isPlaying: typeof overridePlaying === 'boolean' ? overridePlaying : Boolean(isPlaying && audioEl && !audioEl.paused),
+        queueIds: queueIds,
+        originalQueueIds: origIds,
+        currentIndex: typeof currentIndex === 'number' ? currentIndex : 0,
+        isShuffle: Boolean(typeof isShuffle !== 'undefined' && isShuffle),
+        repeatMode: typeof repeatMode !== 'undefined' ? repeatMode : 0,
+        updatedAt: Date.now()
+      };
+      localStorage.setItem(SESSION_KEY, JSON.stringify(payload));
+    } catch (e) {}
+  }
+
+  function loadSavedSession() {
+    try {
+      const raw = localStorage.getItem(SESSION_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function syncPlayerSeekUI(curSec, durSec) {
+    const safeCur = isFinite(curSec) && curSec >= 0 ? curSec : 0;
+    const safeDur = isFinite(durSec) && durSec > 0 ? durSec : 0;
+    const pct = safeDur > 0 ? Math.min(100, Math.max(0, (safeCur / safeDur) * 100)) : 0;
+
+    const curEl = document.getElementById('current-time') || document.getElementById('time-current');
+    const totEl = document.getElementById('total-time') || document.getElementById('duration-time') || document.getElementById('time-total');
+    if (curEl) curEl.textContent = formatClock(safeCur);
+    if (totEl) totEl.textContent = safeDur > 0 ? ('-' + formatClock(Math.max(0, safeDur - safeCur))) : '-0:00';
+
+    const seekBar = document.getElementById('seek-bar');
+    if (seekBar && !seekBar.matches(':active')) {
+      if (seekBar.tagName === 'INPUT') {
+        const maxVal = parseFloat(seekBar.max) || 100;
+        seekBar.value = maxVal === 100 ? pct : safeCur;
+      }
+    }
+    const seekFill = document.getElementById('seek-fill');
+    if (seekFill) seekFill.style.width = pct + '%';
+    const miniFill = document.getElementById('mini-progress-fill') || document.getElementById('mini-bar-fill');
+    if (miniFill) miniFill.style.width = pct + '%';
+  }
+
+  function syncAllPlayerArtworkAndLabels(song) {
+    if (!song) return;
+    const meta = window.getSongMeta(song);
+
+    const miniPlayer = document.getElementById('mini-player');
+    if (miniPlayer) miniPlayer.classList.remove('hidden');
+
+    const miniTitle = document.getElementById('mini-title');
+    const miniArtist = document.getElementById('mini-artist');
+    const miniArt = document.getElementById('mini-art');
+    if (miniTitle) miniTitle.textContent = meta.title;
+    if (miniArtist) miniArtist.textContent = meta.artist;
+    if (miniArt) {
+      miniArt.alt = '';
+      if (miniArt.getAttribute('src') !== meta.artwork) miniArt.src = meta.artwork;
+    }
+
+    const sheetTitle = document.getElementById('sheet-title');
+    const sheetArtist = document.getElementById('sheet-artist');
+    const sheetArt = document.getElementById('sheet-art');
+    if (sheetTitle) sheetTitle.textContent = meta.title;
+    if (sheetArtist) {
+      const albumPart = (meta.album && meta.album !== 'Cloud Drive') ? (' ? ' + meta.album) : '';
+      sheetArtist.textContent = meta.artist + albumPart;
+    }
+    if (sheetArt) {
+      sheetArt.alt = '';
+      if (sheetArt.getAttribute('src') !== meta.artwork) sheetArt.src = meta.artwork;
+    }
+
+    if (typeof applyDynamicSheetColor === 'function') {
+      try { applyDynamicSheetColor(meta.artwork); } catch (e) {}
+    }
+    if (typeof updateFavButtonState === 'function') {
+      try { updateFavButtonState(); } catch (e) {}
+    }
+
+    // Highlight active song row across all lists
+    document.querySelectorAll('.song-row').forEach(function (r) {
+      const rid = r.getAttribute('data-id') || '';
+      if (rid === song.id) r.classList.add('playing');
+      else r.classList.remove('playing');
+    });
+
+    // Update Lock Screen MediaSession metadata
+    if ('mediaSession' in navigator && typeof MediaMetadata !== 'undefined') {
+      try {
+        const absArt = new URL(meta.artwork, window.location.origin).href;
+        navigator.mediaSession.metadata = new MediaMetadata({
+          title: meta.title,
+          artist: meta.artist,
+          album: meta.album || 'Musix',
+          artwork: [
+            { src: absArt, sizes: '512x512', type: 'image/jpeg' }
+          ]
+        });
+      } catch (e) {}
+    }
+  }
+
+  function syncShuffleAndRepeatUI() {
+    const shufBtn = document.getElementById('shuffle-btn');
+    if (shufBtn) {
+      shufBtn.classList.toggle('active', Boolean(isShuffle));
+      shufBtn.style.opacity = isShuffle ? '1' : '0.55';
+    }
+    const repBtn = document.getElementById('repeat-btn');
+    if (repBtn) {
+      const active = repeatMode === 1 || repeatMode === 2 || repeatMode === 'all' || repeatMode === 'one';
+      repBtn.classList.toggle('active', active);
+      repBtn.style.opacity = active ? '1' : '0.55';
+    }
+  }
+
+  // Core Master Function: Load & Play (or Restore Paused) a Track
+  async function masterLoadAndPlaySong(song, options) {
+    if (!song || !song.id || !audioEl) return;
+    const opts = options || {};
+    const autoPlay = opts.autoPlay !== false;
+    const startTime = (typeof opts.startTime === 'number' && opts.startTime > 0) ? opts.startTime : 0;
+    const savedDuration = (typeof opts.savedDuration === 'number' && opts.savedDuration > 0) ? opts.savedDuration : 0;
+
+    const reqId = ++playRequestCounter;
+
+    // 1. Synchronize Single-Source-of-Truth Queue & Index
+    if (!Array.isArray(currentQueue) || currentQueue.length === 0) {
+      currentQueue = (Array.isArray(activeSmartSongs) && activeSmartSongs.length > 0)
+        ? activeSmartSongs.slice()
+        : (Array.isArray(driveSongs) ? driveSongs.slice() : [song]);
+      unshuffledQueueBackup = currentQueue.slice();
+    }
+
+    const foundIdx = currentQueue.findIndex(function (s) { return s && s.id === song.id; });
+    if (foundIdx !== -1) {
+      currentIndex = foundIdx;
+    } else {
+      currentQueue.push(song);
+      currentIndex = currentQueue.length - 1;
+    }
+    currentSong = song;
+
+    // 2. Update UI & Lock Screen Metadata immediately
+    syncAllPlayerArtworkAndLabels(song);
+    pendingSeekTime = startTime > 0 ? startTime : null;
+    syncPlayerSeekUI(startTime, savedDuration);
+
+    const targetStreamUrl = '/api/stream/' + encodeURIComponent(song.id);
+    const currentSrcPath = audioEl.getAttribute('src') || '';
+
+    if (currentSrcPath !== targetStreamUrl) {
+      audioEl.src = targetStreamUrl;
+      audioEl.load();
+    }
+
+    if (!autoPlay) {
+      // Restoring a PAUSED session: do not start playing, keep exact timestamp
+      isPlaying = false;
+      try { audioEl.pause(); } catch (e) {}
+      if (typeof updatePlayButtons === 'function') updatePlayButtons();
+      if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
+      savePlaybackSession(false);
+      return;
+    }
+
+    // 3. Start Playback with Race-Condition Protection
+    isPlaying = true;
+    if (typeof updatePlayButtons === 'function') updatePlayButtons();
+    if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
+    savePlaybackSession(true);
+
+    try {
+      await audioEl.play();
+      if (reqId !== playRequestCounter) return;
+      consecutiveLoadErrors = 0;
+      isPlaying = true;
+      if (typeof updatePlayButtons === 'function') updatePlayButtons();
+      if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
+    } catch (err) {
+      // Ignore AbortError caused by user pressing Next/Previous rapidly
+      if (reqId !== playRequestCounter || (err && err.name === 'AbortError')) {
+        return;
+      }
+      // If browser blocked autoplay on cold session restore, stay at saved timestamp ready for 1st tap
+      if (err && err.name === 'NotAllowedError') {
+        isPlaying = false;
+        if (typeof updatePlayButtons === 'function') updatePlayButtons();
+        return;
+      }
+      // Retry once after 500ms on transient network glitch, then skip to next playable song
+      setTimeout(async function () {
+        if (reqId !== playRequestCounter) return;
+        try {
+          audioEl.load();
+          await audioEl.play();
+          consecutiveLoadErrors = 0;
+          isPlaying = true;
+          if (typeof updatePlayButtons === 'function') updatePlayButtons();
+        } catch (retryErr) {
+          if (reqId !== playRequestCounter) return;
+          consecutiveLoadErrors++;
+          if (consecutiveLoadErrors < currentQueue.length && currentQueue.length > 1) {
+            window.nextTrack(true);
+          } else {
+            isPlaying = false;
+            if (typeof updatePlayButtons === 'function') updatePlayButtons();
+          }
+        }
+      }, 500);
+    }
+  }
+
+  // Override playSong & playSongById globally
+  window.playSong = function (song, customQueue, customIdx) {
+    if (!song) return;
+    if (Array.isArray(customQueue) && customQueue.length > 0) {
+      currentQueue = customQueue.slice();
+      unshuffledQueueBackup = customQueue.slice();
+    }
+    if (typeof customIdx === 'number' && customIdx >= 0) {
+      currentIndex = customIdx;
+    }
+    if (typeof addToRecent === 'function') {
+      try { addToRecent(song.id); } catch (e) {}
+    }
+    return masterLoadAndPlaySong(song, { autoPlay: true, startTime: 0 });
+  };
+
+  window.playSongById = function (songId, queueSource) {
+    if (!Array.isArray(driveSongs) || driveSongs.length === 0) return;
+    const song = driveSongs.find(function (s) { return s.id === songId; });
+    if (!song) return;
+
+    const plView = document.getElementById('view-playlist');
+    if (queueSource === 'smart' || (plView && plView.classList.contains('active') && Array.isArray(activeSmartSongs) && activeSmartSongs.length > 0)) {
+      if (activeSmartSongs.some(function (s) { return s.id === songId; })) {
+        currentQueue = activeSmartSongs.slice();
+        unshuffledQueueBackup = activeSmartSongs.slice();
+      }
+    } else if (!Array.isArray(currentQueue) || currentQueue.length === 0 || !currentQueue.some(function (s) { return s.id === songId; })) {
+      currentQueue = driveSongs.slice();
+      unshuffledQueueBackup = driveSongs.slice();
+    }
+
+    if (isShuffle && currentQueue.length > 1) {
+      const rest = currentQueue.filter(function (s) { return s.id !== songId; });
+      for (let i = rest.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        const tmp = rest[i]; rest[i] = rest[j]; rest[j] = tmp;
+      }
+      currentQueue = [song].concat(rest);
+      currentIndex = 0;
+    }
+
+    return window.playSong(song);
+  };
+
+  // Override Play / Pause toggle (respects pendingSeekTime from restored session)
+  window.togglePlay = window.togglePlayPause = function (event) {
+    if (event && event.stopPropagation) event.stopPropagation();
+    if (!audioEl) return;
+
+    if (!currentSong && Array.isArray(driveSongs) && driveSongs.length > 0) {
+      return window.playSong(driveSongs[0], driveSongs, 0);
+    }
+
+    if (audioEl.paused || !isPlaying) {
+      if (pendingSeekTime !== null && pendingSeekTime > 0 && isFinite(audioEl.duration)) {
+        try { audioEl.currentTime = pendingSeekTime; } catch (e) {}
+        pendingSeekTime = null;
+      }
+      isPlaying = true;
+      if (typeof updatePlayButtons === 'function') updatePlayButtons();
+      savePlaybackSession(true);
+      audioEl.play().catch(function () {
+        audioEl.load();
+        if (pendingSeekTime !== null && pendingSeekTime > 0) {
+          try { audioEl.currentTime = pendingSeekTime; } catch (e) {}
+        }
+        audioEl.play().catch(function () {});
+      });
+    } else {
+      isPlaying = false;
+      audioEl.pause();
+      if (typeof updatePlayButtons === 'function') updatePlayButtons();
+      savePlaybackSession(false);
+    }
+  };
+
+  // Override Next Track (Immediate load + play, never gets stuck on UI-only update)
+  window.nextTrack = window.playNext = function (fromAutoEnded) {
+    if (!Array.isArray(currentQueue) || currentQueue.length === 0) {
+      if (Array.isArray(driveSongs) && driveSongs.length > 0) {
+        currentQueue = driveSongs.slice();
+        unshuffledQueueBackup = driveSongs.slice();
+      } else {
+        return;
+      }
+    }
+
+    // Sync currentIndex with currentSong in case queue changed
+    if (currentSong) {
+      const idx = currentQueue.findIndex(function (s) { return s && s.id === currentSong.id; });
+      if (idx !== -1) currentIndex = idx;
+    }
+
+    // Handle Repeat-One when song finishes naturally
+    if (fromAutoEnded === true && (repeatMode === 2 || repeatMode === 'one')) {
+      if (audioEl) {
+        audioEl.currentTime = 0;
+        audioEl.play().catch(function () {});
+      }
+      return;
+    }
+
+    let nextIdx = (typeof currentIndex === 'number' ? currentIndex : 0) + 1;
+    if (nextIdx >= currentQueue.length) {
+      nextIdx = 0; // Wrap around smoothly so continuous playback never stops
+    }
+
+    currentIndex = nextIdx;
+    const nextSong = currentQueue[currentIndex];
+    if (nextSong) {
+      masterLoadAndPlaySong(nextSong, { autoPlay: true, startTime: 0 });
+    }
+  };
+
+  // Override Previous Track
+  window.prevTrack = window.playPrev = function () {
+    if (!Array.isArray(currentQueue) || currentQueue.length === 0) {
+      if (Array.isArray(driveSongs) && driveSongs.length > 0) {
+        currentQueue = driveSongs.slice();
+        unshuffledQueueBackup = driveSongs.slice();
+      } else {
+        return;
+      }
+    }
+
+    // If more than 3.5 seconds into the song, restart current song; if pressed again within 3.5s, go to previous song
+    if (audioEl && audioEl.currentTime > 3.5) {
+      audioEl.currentTime = 0;
+      syncPlayerSeekUI(0, audioEl.duration);
+      if (audioEl.paused) {
+        audioEl.play().catch(function () {});
+      }
+      savePlaybackSession(true);
+      return;
+    }
+
+    if (currentSong) {
+      const idx = currentQueue.findIndex(function (s) { return s && s.id === currentSong.id; });
+      if (idx !== -1) currentIndex = idx;
+    }
+
+    let prevIdx = (typeof currentIndex === 'number' ? currentIndex : 0) - 1;
+    if (prevIdx < 0) prevIdx = currentQueue.length - 1;
+
+    currentIndex = prevIdx;
+    const prevSong = currentQueue[currentIndex];
+    if (prevSong) {
+      masterLoadAndPlaySong(prevSong, { autoPlay: true, startTime: 0 });
+    }
+  };
+
+  // Override Shuffle Toggle
+  window.toggleShuffle = function () {
+    isShuffle = !isShuffle;
+    if (isShuffle) {
+      unshuffledQueueBackup = Array.isArray(currentQueue) ? currentQueue.slice() : [];
+      if (currentQueue.length > 1) {
+        const cur = currentSong || currentQueue[currentIndex] || currentQueue[0];
+        const others = currentQueue.filter(function (s) { return !cur || s.id !== cur.id; });
+        for (let i = others.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          const t = others[i]; others[i] = others[j]; others[j] = t;
+        }
+        currentQueue = cur ? [cur].concat(others) : others;
+        currentIndex = 0;
+      }
+      if (typeof showToast === 'function') showToast('Shuffle On');
+    } else {
+      if (Array.isArray(unshuffledQueueBackup) && unshuffledQueueBackup.length > 0) {
+        currentQueue = unshuffledQueueBackup.slice();
+      }
+      if (currentSong) {
+        const idx = currentQueue.findIndex(function (s) { return s && s.id === currentSong.id; });
+        if (idx !== -1) currentIndex = idx;
+      }
+      if (typeof showToast === 'function') showToast('Shuffle Off');
+    }
+    syncShuffleAndRepeatUI();
+    savePlaybackSession();
+  };
+
+  // Override Repeat Toggle (0 = Off, 1 = Repeat All, 2 = Repeat One)
+  window.toggleRepeat = function () {
+    if (typeof repeatMode !== 'number') repeatMode = 0;
+    repeatMode = (repeatMode + 1) % 3;
+    const labels = ['Repeat Off', 'Repeat All', 'Repeat One'];
+    if (typeof showToast === 'function') showToast(labels[repeatMode]);
+    syncShuffleAndRepeatUI();
+    savePlaybackSession();
+  };
+
+  // Attach Master Audio Lifecycle Listeners
+  if (audioEl) {
+    // Apply pending restored timestamp as soon as metadata is ready
+    audioEl.addEventListener('loadedmetadata', function () {
+      if (pendingSeekTime !== null && pendingSeekTime > 0) {
+        const target = Math.min(pendingSeekTime, Math.max(0, (audioEl.duration || pendingSeekTime) - 0.5));
+        try { audioEl.currentTime = target; } catch (e) {}
+        syncPlayerSeekUI(target, audioEl.duration);
+        pendingSeekTime = null;
+      } else {
+        syncPlayerSeekUI(audioEl.currentTime, audioEl.duration);
+      }
+      savePlaybackSession();
+    });
+
+    // Continuous auto-advance when current track finishes (works with screen locked)
+    audioEl.onended = null;
+    audioEl.addEventListener('ended', function (e) {
+      e.stopImmediatePropagation();
+      window.nextTrack(true);
+    }, true);
+
+    // Save exact playback position every 1 second & update seek UI + lock screen position
+    let lastSaveTick = 0;
+    audioEl.addEventListener('timeupdate', function () {
+      const cur = pendingSeekTime !== null ? pendingSeekTime : audioEl.currentTime;
+      const dur = audioEl.duration;
+      syncPlayerSeekUI(cur, dur);
+
+      const now = Date.now();
+      if (now - lastSaveTick >= 1000 && cur > 0) {
+        lastSaveTick = now;
+        savePlaybackSession();
+        if ('mediaSession' in navigator && navigator.mediaSession.setPositionState && isFinite(dur) && dur > 0) {
+          try {
+            navigator.mediaSession.setPositionState({
+              duration: dur,
+              playbackRate: audioEl.playbackRate || 1,
+              position: Math.min(cur, dur)
+            });
+          } catch (err) {}
+        }
+      }
+    });
+
+    audioEl.addEventListener('pause', function () {
+      // Do not mark as user-paused if the track naturally reached its end and is transitioning
+      if (audioEl.ended) return;
+      isPlaying = false;
+      if (typeof updatePlayButtons === 'function') updatePlayButtons();
+      if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
+      savePlaybackSession(false);
+    });
+
+    audioEl.addEventListener('playing', function () {
+      isPlaying = true;
+      if (typeof updatePlayButtons === 'function') updatePlayButtons();
+      if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
+      savePlaybackSession(true);
+    });
+
+    audioEl.addEventListener('seeked', function () {
+      savePlaybackSession();
+    });
+  }
+
+  // Save exact position whenever user minimizes app, locks phone, or closes tab
+  window.addEventListener('pagehide', function () { savePlaybackSession(); });
+  window.addEventListener('beforeunload', function () { savePlaybackSession(); });
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) savePlaybackSession();
+  });
+
+  // Register Lock Screen / Notification Shade MediaSession Controls
+  if ('mediaSession' in navigator) {
+    try {
+      navigator.mediaSession.setActionHandler('play', function () { window.togglePlay(); });
+      navigator.mediaSession.setActionHandler('pause', function () { window.togglePlay(); });
+      navigator.mediaSession.setActionHandler('nexttrack', function () { window.nextTrack(false); });
+      navigator.mediaSession.setActionHandler('previoustrack', function () { window.prevTrack(); });
+      navigator.mediaSession.setActionHandler('seekto', function (details) {
+        if (audioEl && details && typeof details.seekTime === 'number') {
+          pendingSeekTime = null;
+          audioEl.currentTime = details.seekTime;
+          syncPlayerSeekUI(details.seekTime, audioEl.duration);
+          savePlaybackSession();
+        }
+      });
+    } catch (e) {}
+  }
+
+  // Restore Exact Playback Session on Startup
+  function attemptRestorePlaybackSession() {
+    if (sessionRestored || !Array.isArray(driveSongs) || driveSongs.length === 0) return;
+    sessionRestored = true;
+
+    const saved = loadSavedSession();
+    if (!saved || !saved.songId) return;
+
+    const songMap = {};
+    driveSongs.forEach(function (s) { if (s && s.id) songMap[s.id] = s; });
+
+    const targetSong = songMap[saved.songId];
+    if (!targetSong) return;
+
+    // Restore Shuffle & Repeat settings
+    isShuffle = Boolean(saved.isShuffle);
+    repeatMode = typeof saved.repeatMode === 'number' ? saved.repeatMode : 0;
+    syncShuffleAndRepeatUI();
+
+    // Restore exact Queue and Unshuffled Backup order
+    const restoredQueue = (saved.queueIds || []).map(function (id) { return songMap[id]; }).filter(Boolean);
+    const restoredOrig = (saved.originalQueueIds || []).map(function (id) { return songMap[id]; }).filter(Boolean);
+
+    currentQueue = restoredQueue.length > 0 ? restoredQueue : driveSongs.slice();
+    unshuffledQueueBackup = restoredOrig.length > 0 ? restoredOrig : currentQueue.slice();
+
+    const idx = currentQueue.findIndex(function (s) { return s.id === targetSong.id; });
+    currentIndex = idx !== -1 ? idx : 0;
+    currentSong = targetSong;
+
+    // Restore song at exact saved timestamp; if user paused before closing, reopen in PAUSED state
+    masterLoadAndPlaySong(targetSong, {
+      autoPlay: Boolean(saved.isPlaying),
+      startTime: typeof saved.currentTime === 'number' ? saved.currentTime : 0,
+      savedDuration: typeof saved.duration === 'number' ? saved.duration : 0
+    });
+  }
+
+  // ==========================================================================
+  // SPOTIFY SMART MIX CATEGORIES & SONG ROW ALBUM SUBTITLES
+  // ==========================================================================
   const SMART_MIX_CATEGORIES = [
-    { id: 'Malayalam', title: 'Malayalam', type: 'Language', color: '#4A8094', cover: '/covers/cat_malayalam.jpg?v=42' },
-    { id: 'Hindi',     title: 'Hindi',     type: 'Language', color: '#D84818', cover: '/covers/cat_hindi.jpg?v=42' },
-    { id: 'English',   title: 'English',   type: 'Language', color: '#4C7A8C', cover: '/covers/cat_english.jpg?v=42' },
-    { id: 'Tamil',     title: 'Tamil',     type: 'Language', color: '#2D826E', cover: '/covers/cat_tamil.jpg?v=42' },
-    { id: 'Love',      title: 'Love',      type: 'Category', color: '#DC148C', cover: '/covers/cat_love.jpg?v=42' },
-    { id: 'Sleep',     title: 'Sleep',     type: 'Category', color: '#1E3264', cover: '/covers/cat_sleep.jpg?v=42' },
-    { id: 'Trending',  title: 'Trending',  type: 'Category', color: '#A8328E', cover: '/covers/cat_trending.jpg?v=42' },
-    { id: 'Mood',      title: 'Mood',      type: 'Category', color: '#E1118B', cover: '/covers/cat_mood.jpg?v=42' },
-    { id: 'Party',     title: 'Party',     type: 'Category', color: '#7D4B94', cover: '/covers/cat_party.jpg?v=42' }
+    { id: 'Malayalam', title: 'Malayalam', type: 'Language', color: '#4A8094', cover: '/api/category-cover/malayalam?v=43' },
+    { id: 'Hindi',     title: 'Hindi',     type: 'Language', color: '#D84818', cover: '/api/category-cover/hindi?v=43' },
+    { id: 'English',   title: 'English',   type: 'Language', color: '#4C7A8C', cover: '/api/category-cover/english?v=43' },
+    { id: 'Tamil',     title: 'Tamil',     type: 'Language', color: '#2D826E', cover: '/api/category-cover/tamil?v=43' },
+    { id: 'Love',      title: 'Love',      type: 'Category', color: '#DC148C', cover: '/api/category-cover/love?v=43' },
+    { id: 'Sleep',     title: 'Sleep',     type: 'Category', color: '#1E3264', cover: '/api/category-cover/sleep?v=43' },
+    { id: 'Trending',  title: 'Trending',  type: 'Category', color: '#A8328E', cover: '/api/category-cover/trending?v=43' },
+    { id: 'Mood',      title: 'Mood',      type: 'Category', color: '#E1118B', cover: '/api/category-cover/mood?v=43' },
+    { id: 'Party',     title: 'Party',     type: 'Category', color: '#7D4B94', cover: '/api/category-cover/party?v=43' }
   ];
 
   function filterSongsForSmartMix(catId) {
@@ -4387,9 +5037,9 @@
     const patterns = {
       love: /\b(love|heart|romance|romantic|punchiri|neeye|premavathi|double fantasy|die for you|good for you|eastside|all to myself|one side love|enadhuyire|hosanna|tum hi ho|kesariya|raataan)\b/i,
       sleep: /\b(sleep|night|slow|reverb|lofi|lo-fi|akale|arcade|after hours|middle of the night|puthu mazha|vellarathaaram|hope|calm|chill|melody)\b/i,
-      trending: /\b(popular|timeless|sao paulo|k-pop|delulu|komala|vellarathaaram|chorkk|paint the town red|heat waves|moth to a flame|one of the girls|fejo|weeknd|anirudh|sushin)\b/i,
+      trending: /\b(popular|timeless|sao paulo|k-pop|delulu|komala|vellarathaaram|chorkk|paint the town red|heat waves|moth to a flame|one of the girls|fejo|weeknd|anirudh|sushin|chembarathi)\b/i,
       mood: /\b(mood|vibe|heartbreak|mess|way down|gangsta|always be my fault|cant feel my face|vazhikatti|arcade|heat waves|after hours|melody)\b/i,
-      party: /\b(party|dance|remix|club|k-pop|sao paulo|gasoline|popular|timeless|headlights|moth to a flame|paint the town red|chorkk|delulu|komala|alok|alan walker|playboi)\b/i
+      party: /\b(party|dance|remix|club|k-pop|sao paulo|gasoline|popular|timeless|headlights|moth to a flame|paint the town red|chorkk|delulu|komala|alok|alan walker|playboi|chembarathi)\b/i
     };
 
     const re = patterns[key];
@@ -4416,7 +5066,7 @@
     return (
       '<div class="spotify-cat-tile" style="background-color:' + cat.color + ';" onclick="openSpotifySmartCategory('' + cat.id + '')">' +
         '<div class="spotify-cat-title">' + cat.title + '</div>' +
-        '<img class="spotify-cat-cover" src="' + cat.cover + '" alt="' + cat.title + '" loading="lazy">' +
+        '<img class="spotify-cat-cover" src="' + cat.cover + '" alt="" loading="lazy">' +
       '</div>'
     );
   }
@@ -4428,8 +5078,8 @@
     const homeContainers = document.querySelectorAll('#home-smart-mixes, #smart-mix-row, #home-mix-grid');
     homeContainers.forEach(function (el) {
       el.className = 'spotify-category-grid';
-      if (el.getAttribute('data-v42-rendered') !== 'home') {
-        el.setAttribute('data-v42-rendered', 'home');
+      if (el.getAttribute('data-v43-rendered') !== 'home') {
+        el.setAttribute('data-v43-rendered', 'home');
         el.innerHTML = homeHtml;
       }
     });
@@ -4443,8 +5093,8 @@
           const isHome = gridEl.closest('#view-home') !== null;
           const key = isHome ? 'home' : 'all';
           gridEl.className = 'spotify-category-grid';
-          if (gridEl.getAttribute('data-v42-rendered') !== key) {
-            gridEl.setAttribute('data-v42-rendered', key);
+          if (gridEl.getAttribute('data-v43-rendered') !== key) {
+            gridEl.setAttribute('data-v43-rendered', key);
             gridEl.innerHTML = isHome ? homeHtml : allHtml;
           }
         }
@@ -4456,8 +5106,8 @@
       const innerGrids = smartView.querySelectorAll('.smart-grid, .mix-grid, #smart-lang-grid, #smart-vibe-grid, .spotify-category-grid');
       if (innerGrids.length > 0) {
         innerGrids[0].className = 'spotify-category-grid';
-        if (innerGrids[0].getAttribute('data-v42-rendered') !== 'all') {
-          innerGrids[0].setAttribute('data-v42-rendered', 'all');
+        if (innerGrids[0].getAttribute('data-v43-rendered') !== 'all') {
+          innerGrids[0].setAttribute('data-v43-rendered', 'all');
           innerGrids[0].innerHTML = allHtml;
         }
         for (let i = 1; i < innerGrids.length; i++) {
@@ -4470,7 +5120,7 @@
     }
   }
 
-  function setPlaylistHeroCover(coverUrl, altText) {
+  function setPlaylistHeroCover(coverUrl) {
     const plView = document.getElementById('view-playlist');
     if (!plView) return;
     const heroTitleEl = document.getElementById('pl-hero-title');
@@ -4487,21 +5137,22 @@
 
     if (artBox) {
       if (artBox.tagName === 'IMG') {
+        artBox.alt = '';
         artBox.src = coverUrl;
-        artBox.alt = altText || 'Cover';
       } else {
-        artBox.innerHTML = '<img src="' + coverUrl + '" alt="' + (altText || 'Cover') + '" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;display:block;">';
+        artBox.innerHTML = '<img src="' + coverUrl + '" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;display:block;">';
       }
     }
   }
 
+  const origOpenSmartPlaylist = window.openSmartPlaylist;
   window.openSpotifySmartCategory = function (catId) {
     const cat = SMART_MIX_CATEGORIES.find(function (c) { return c.id.toLowerCase() === String(catId || '').toLowerCase(); }) || {
       id: catId,
       title: catId,
       type: 'Smart Mix',
       color: '#4A8094',
-      cover: '/covers/cat_' + String(catId || 'malayalam').toLowerCase() + '.jpg?v=42'
+      cover: '/api/category-cover/' + String(catId || 'malayalam').toLowerCase() + '?v=43'
     };
 
     const songs = filterSongsForSmartMix(cat.id);
@@ -4519,16 +5170,15 @@
     if (heroTitle) heroTitle.textContent = cat.title;
     if (heroCount) heroCount.textContent = songs.length + (songs.length === 1 ? ' Song' : ' Songs');
 
-    setPlaylistHeroCover(cat.cover, cat.title);
+    setPlaylistHeroCover(cat.cover);
 
     const listContainer = document.getElementById('pl-songs-list') || document.querySelector('#view-playlist .song-list');
     if (listContainer && typeof renderSongList === 'function') {
       renderSongList(songs, listContainer);
     }
-    enhanceSongRowsWithAlbumNames();
+    enhanceSongRowsAndImages();
   };
 
-  const origOpenSmartPlaylist = window.openSmartPlaylist;
   window.openSmartPlaylist = function (type, value) {
     const matchCat = SMART_MIX_CATEGORIES.find(function (c) { return c.id.toLowerCase() === String(value || '').toLowerCase(); });
     if (matchCat) {
@@ -4539,15 +5189,20 @@
       const pool = Array.isArray(activeSmartSongs) && activeSmartSongs.length > 0 ? activeSmartSongs : driveSongs;
       if (pool && pool.length > 0) {
         const firstMeta = window.getSongMeta(pool[0]);
-        setPlaylistHeroCover(firstMeta.artwork, value);
+        setPlaylistHeroCover(firstMeta.artwork);
       }
-      enhanceSongRowsWithAlbumNames();
+      enhanceSongRowsAndImages();
     }, 30);
     return res;
   };
 
-  function enhanceSongRowsWithAlbumNames() {
+  function enhanceSongRowsAndImages() {
+    document.querySelectorAll('img').forEach(function (img) {
+      if (img.alt) img.alt = '';
+    });
     if (!Array.isArray(driveSongs) || driveSongs.length === 0) return;
+    attemptRestorePlaybackSession();
+
     document.querySelectorAll('.song-row').forEach(function (row) {
       const onclickAttr = row.getAttribute('onclick') || '';
       const idMatch = onclickAttr.match(/playSongById\(\s*['"]([^'"]+)['"]/);
@@ -4559,8 +5214,11 @@
       const meta = window.getSongMeta(song);
 
       const img = row.querySelector('img');
-      if (img && img.getAttribute('src') !== meta.artwork) {
-        img.src = meta.artwork;
+      if (img) {
+        img.alt = '';
+        if (img.getAttribute('src') !== meta.artwork && !img.getAttribute('src').startsWith('data:')) {
+          img.src = meta.artwork;
+        }
       }
 
       const subEl = row.querySelector('.song-sub, .song-artist');
@@ -4576,6 +5234,10 @@
         }
       }
     });
+
+    if (currentSong) {
+      syncAllPlayerArtworkAndLabels(currentSong);
+    }
   }
 
   const origRefreshAllViews = window.refreshAllViews;
@@ -4583,20 +5245,20 @@
     window.refreshAllViews = function () {
       const r = origRefreshAllViews.apply(this, arguments);
       renderSpotifySmartMixGrids();
-      enhanceSongRowsWithAlbumNames();
+      enhanceSongRowsAndImages();
       return r;
     };
   }
 
   setTimeout(function () {
     renderSpotifySmartMixGrids();
-    enhanceSongRowsWithAlbumNames();
-  }, 250);
+    enhanceSongRowsAndImages();
+  }, 200);
 
   setInterval(function () {
     renderSpotifySmartMixGrids();
-    enhanceSongRowsWithAlbumNames();
-  }, 2000);
+    enhanceSongRowsAndImages();
+  }, 1500);
 })();
 </script>
 </body>

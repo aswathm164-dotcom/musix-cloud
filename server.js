@@ -483,8 +483,16 @@ async function getDriveSongs(forceRefresh = false) {
 
 
 
-// === MUSIX V42 ARTWORK ENGINE START ===
+
+// === MUSIX V43 ARTWORK ENGINE START ===
 const STATIC_COVERS_DIR = path.join(__dirname, 'public', 'covers');
+const RUNTIME_COVERS_DIR = path.join(require('os').tmpdir(), 'musix-covers-v43');
+[STATIC_COVERS_DIR, RUNTIME_COVERS_DIR].forEach(dir => {
+  if (!fs.existsSync(dir)) {
+    try { fs.mkdirSync(dir, { recursive: true }); } catch (e) {}
+  }
+});
+
 let prebuiltManifest = {};
 try {
   const manifestPath = path.join(STATIC_COVERS_DIR, 'index.json');
@@ -492,6 +500,281 @@ try {
     prebuiltManifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
   }
 } catch (e) {}
+
+const songRegistry = {};
+const coverMemoryCache = {};
+const coverInFlight = {};
+
+// Clean, text-free dark vinyl fallback SVG (never shows text or broken icon if a song has no cover anywhere)
+const CLEAN_VINYL_FALLBACK_SVG = Buffer.from(
+  '<svg xmlns="http://www.w3.org/2000/svg" width="600" height="600" viewBox="0 0 600 600">' +
+    '<defs>' +
+      '<linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">' +
+        '<stop offset="0%" stop-color="#1e1b2e"/>' +
+        '<stop offset="50%" stop-color="#151320"/>' +
+        '<stop offset="100%" stop-color="#0c0b12"/>' +
+      '</linearGradient>' +
+      '<radialGradient id="disc" cx="50%" cy="50%" r="50%">' +
+        '<stop offset="0%" stop-color="#2a273f"/>' +
+        '<stop offset="65%" stop-color="#14121d"/>' +
+        '<stop offset="100%" stop-color="#09080d"/>' +
+      '</radialGradient>' +
+      '<linearGradient id="accent" x1="0%" y1="0%" x2="100%" y2="100%">' +
+        '<stop offset="0%" stop-color="#ff2d55"/>' +
+        '<stop offset="100%" stop-color="#7928ca"/>' +
+      '</linearGradient>' +
+    '</defs>' +
+    '<rect width="600" height="600" fill="url(#bg)"/>' +
+    '<circle cx="300" cy="300" r="220" fill="url(#disc)" stroke="rgba(255,255,255,0.08)" stroke-width="3"/>' +
+    '<circle cx="300" cy="300" r="185" fill="none" stroke="rgba(255,255,255,0.04)" stroke-width="2"/>' +
+    '<circle cx="300" cy="300" r="150" fill="none" stroke="rgba(255,255,255,0.04)" stroke-width="2"/>' +
+    '<circle cx="300" cy="300" r="115" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="2"/>' +
+    '<circle cx="300" cy="300" r="72" fill="url(#accent)"/>' +
+    '<circle cx="300" cy="300" r="22" fill="#0f0e17"/>' +
+  '</svg>',
+  'utf8'
+);
+
+function parseCleanFilenameServer(rawFilename) {
+  const withoutExt = String(rawFilename || '')
+    .replace(/\.(mp3|m4a|flac|wav|ogg|aac)$/i, '')
+    .replace(/^\d+\s*[\-.]\s*/, '')
+    .trim();
+
+  let title = withoutExt;
+  let artist = 'Cloud Artist';
+  let album = 'Single';
+
+  const dashParts = withoutExt.split(/\s+-\s+/);
+  if (dashParts.length >= 2) {
+    title = dashParts[0].trim();
+    artist = dashParts.slice(1).join(', ').trim();
+  } else {
+    const featTail = withoutExt.match(/^(.*?\((?:feat|ft|with)[^)]+\))\s+(.+)$/i);
+    if (featTail) {
+      title = featTail[1].trim();
+      artist = featTail[2].trim();
+    } else if (/\s+KALEO$/i.test(withoutExt)) {
+      title = withoutExt.replace(/\s+KALEO$/i, '').trim();
+      artist = 'KALEO';
+    }
+  }
+
+  const fromMatch = title.match(/^(.*?)\s+From\s+(.+)$/i);
+  if (fromMatch) {
+    title = fromMatch[1].trim();
+    album = fromMatch[2].trim();
+  }
+
+  return { title, artist, album };
+}
+
+function rawScanBufferForEmbeddedArt(b) {
+  if (!b || b.length < 512) return null;
+  const markers = ['APIC', 'covr', 'PICTURE'];
+  for (const mk of markers) {
+    let idx = b.indexOf(Buffer.from(mk));
+    while (idx !== -1) {
+      const winEnd = Math.min(b.length, idx + 512);
+      for (let i = idx + mk.length; i < winEnd - 4; i++) {
+        if (b[i] === 0xFF && b[i + 1] === 0xD8 && b[i + 2] === 0xFF) {
+          let endPos = b.length;
+          for (let j = b.length - 2; j > i + 1024; j--) {
+            if (b[j] === 0xFF && b[j + 1] === 0xD9) {
+              endPos = j + 2;
+              break;
+            }
+          }
+          const slice = b.subarray(i, endPos);
+          if (slice.length > 1024) return { mime: 'image/jpeg', buf: Buffer.from(slice) };
+        }
+        if (b[i] === 0x89 && b[i + 1] === 0x50 && b[i + 2] === 0x4E && b[i + 3] === 0x47) {
+          const iend = b.indexOf(Buffer.from([0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82]), i);
+          const endPos = iend !== -1 ? iend + 8 : b.length;
+          const slice = b.subarray(i, endPos);
+          if (slice.length > 1024) return { mime: 'image/png', buf: Buffer.from(slice) };
+        }
+      }
+      idx = b.indexOf(Buffer.from(mk), idx + 4);
+    }
+  }
+  return null;
+}
+
+const JUNK_ART_RE = /\b(nursery rhyme|nursery rhymes|for kids|kids songs|kidz bop|kids bop|lullaby|karaoke|tribute|ringtone|8-bit)\b/i;
+
+async function resolveGuaranteedCover(fileId, queryTitle, queryArtist) {
+  const cleanId = String(fileId || '').replace(/\.(jpg|png|jpeg|webp)$/i, '');
+  if (coverMemoryCache[cleanId]) return coverMemoryCache[cleanId];
+
+  // 1. Check static public/covers/<id>.jpg or runtime /tmp cache
+  const staticPath = path.join(STATIC_COVERS_DIR, cleanId + '.jpg');
+  const runtimePath = path.join(RUNTIME_COVERS_DIR, cleanId + '.bin');
+  for (const p of [staticPath, runtimePath]) {
+    if (fs.existsSync(p)) {
+      try {
+        const b = fs.readFileSync(p);
+        if (b.length > 1024) {
+          const mime = (b[0] === 0x89 && b[1] === 0x50) ? 'image/png' : 'image/jpeg';
+          const item = { mime, buf: b };
+          coverMemoryCache[cleanId] = item;
+          return item;
+        }
+      } catch (e) {}
+    }
+  }
+
+  if (coverInFlight[cleanId]) return coverInFlight[cleanId];
+
+  coverInFlight[cleanId] = (async () => {
+    try {
+      // 2. Extract embedded cover directly from the Google Drive audio file
+      try {
+        const r1 = await drive.files.get(
+          { fileId: cleanId, alt: 'media' },
+          { responseType: 'arraybuffer', headers: { Range: 'bytes=0-1048575' } }
+        );
+        let buf = Buffer.from(r1.data);
+        if (buf.length >= 10 && buf.toString('ascii', 0, 3) === 'ID3') {
+          const tagSize = ((buf[6] & 0x7f) << 21) | ((buf[7] & 0x7f) << 14) | ((buf[8] & 0x7f) << 7) | (buf[9] & 0x7f);
+          const totalTag = Math.min(10 + tagSize + 4096, 6 * 1024 * 1024);
+          if (totalTag > buf.length) {
+            const r2 = await drive.files.get(
+              { fileId: cleanId, alt: 'media' },
+              { responseType: 'arraybuffer', headers: { Range: 'bytes=' + buf.length + '-' + (totalTag - 1) } }
+            );
+            buf = Buffer.concat([buf, Buffer.from(r2.data)]);
+          }
+        }
+
+        let extracted = null;
+        try {
+          const mm = await import('music-metadata');
+          const meta = await mm.parseBuffer(buf, { mimeType: 'audio/mpeg' }, { duration: false });
+          if (meta && meta.common) {
+            if (songRegistry[cleanId]) {
+              if (meta.common.title) songRegistry[cleanId].title = meta.common.title.trim();
+              if (meta.common.artist) songRegistry[cleanId].artist = meta.common.artist.trim();
+              if (meta.common.album) songRegistry[cleanId].album = meta.common.album.trim();
+            }
+            if (meta.common.picture && meta.common.picture[0] && meta.common.picture[0].data) {
+              const pBuf = Buffer.from(meta.common.picture[0].data);
+              if (pBuf.length > 1024) {
+                extracted = { mime: meta.common.picture[0].format || 'image/jpeg', buf: pBuf };
+              }
+            }
+          }
+        } catch (e) {}
+
+        if (!extracted) {
+          extracted = rawScanBufferForEmbeddedArt(buf);
+        }
+
+        if (extracted && extracted.buf && extracted.buf.length > 1024) {
+          coverMemoryCache[cleanId] = extracted;
+          try { fs.writeFileSync(runtimePath, extracted.buf); } catch (e) {}
+          return extracted;
+        }
+      } catch (e) {}
+
+      // 3. Online search fallback (iTunes IN/US + Deezer Track + Artist Portrait for indie tracks like Chembarathi)
+      const info = songRegistry[cleanId] || {};
+      const parsed = parseCleanFilenameServer(info.name || queryTitle || '');
+      const title = (queryTitle || info.title || parsed.title || '').trim();
+      const artist = (queryArtist || info.artist || parsed.artist || '').trim();
+      const album = (info.album && info.album !== 'Single' && info.album !== 'Cloud Drive') ? info.album : parsed.album;
+
+      const cleanTitle = title
+        .replace(/\((?:feat|ft|with|remix|from)[^)]*\)/gi, ' ')
+        .replace(/\b(?:feat\.?|ft\.?|with|ost|original motion picture soundtrack|one side love|lyrical|video|audio)\b/gi, ' ')
+        .replace(/[()\[\]\-_/,]+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+      const artistParts = (!artist || artist === 'Cloud Artist' || artist === 'Unknown')
+        ? []
+        : artist.split(/[/,&;]|\b(?:feat\.?|ft\.?|with)\b/i).map(s => s.trim()).filter(Boolean);
+      const primaryArtist = artistParts[0] || '';
+
+      const queries = [
+        (album && album !== 'Single') ? (cleanTitle + ' ' + album) : '',
+        (cleanTitle + ' ' + primaryArtist).trim(),
+        (cleanTitle + ' ' + artistParts.join(' ')).trim(),
+        cleanTitle
+      ].map(s => (s || '').trim()).filter(s => s.length >= 2);
+
+      const uniqueQueries = Array.from(new Set(queries));
+
+      for (const store of ['in', 'us']) {
+        for (const q of uniqueQueries) {
+          try {
+            const itRes = await axios.get('https://itunes.apple.com/search?term=' + encodeURIComponent(q) + '&country=' + store + '&media=music&entity=song&limit=5', { timeout: 3800 });
+            const hits = (itRes.data && itRes.data.results) || [];
+            for (const h of hits) {
+              const comb = (h.trackName || '') + ' ' + (h.artistName || '') + ' ' + (h.collectionName || '');
+              if (JUNK_ART_RE.test(comb) || !h.artworkUrl100) continue;
+              const imgRes = await axios.get(h.artworkUrl100.replace('100x100bb', '600x600bb'), { responseType: 'arraybuffer', timeout: 4500 });
+              const b = Buffer.from(imgRes.data);
+              if (b.length > 1024) {
+                const item = { mime: 'image/jpeg', buf: b };
+                coverMemoryCache[cleanId] = item;
+                try { fs.writeFileSync(runtimePath, b); } catch (e) {}
+                return item;
+              }
+            }
+          } catch (e) {}
+        }
+      }
+
+      for (const q of uniqueQueries) {
+        try {
+          const dzRes = await axios.get('https://api.deezer.com/search?q=' + encodeURIComponent(q) + '&limit=5', { timeout: 3800 });
+          const hits = (dzRes.data && dzRes.data.data) || [];
+          for (const h of hits) {
+            const comb = (h.title || '') + ' ' + ((h.artist && h.artist.name) || '') + ' ' + ((h.album && h.album.title) || '');
+            if (JUNK_ART_RE.test(comb)) continue;
+            const cover = h.album && (h.album.cover_big || h.album.cover_xl || h.album.cover_medium);
+            if (cover) {
+              const imgRes = await axios.get(cover, { responseType: 'arraybuffer', timeout: 4500 });
+              const b = Buffer.from(imgRes.data);
+              if (b.length > 1024) {
+                const item = { mime: 'image/jpeg', buf: b };
+                coverMemoryCache[cleanId] = item;
+                try { fs.writeFileSync(runtimePath, b); } catch (e) {}
+                return item;
+              }
+            }
+          }
+        } catch (e) {}
+      }
+
+      // 4. Indie Artist Portrait fallback (e.g. LiL PAYYAN / AZWIN)
+      for (const artName of artistParts) {
+        try {
+          const itArt = await axios.get('https://itunes.apple.com/search?term=' + encodeURIComponent(artName) + '&country=in&media=music&entity=song&limit=3', { timeout: 3500 });
+          const hits = (itArt.data && itArt.data.results) || [];
+          if (hits.length > 0 && hits[0].artworkUrl100) {
+            const imgRes = await axios.get(hits[0].artworkUrl100.replace('100x100bb', '600x600bb'), { responseType: 'arraybuffer', timeout: 4000 });
+            const b = Buffer.from(imgRes.data);
+            if (b.length > 1024) {
+              const item = { mime: 'image/jpeg', buf: b };
+              coverMemoryCache[cleanId] = item;
+              try { fs.writeFileSync(runtimePath, b); } catch (e) {}
+              return item;
+            }
+          }
+        } catch (e) {}
+      }
+    } catch (e) {} finally {
+      delete coverInFlight[cleanId];
+    }
+
+    // 5. Clean text-free vinyl fallback (HTTP 200 so browser NEVER displays a broken image icon)
+    return { mime: 'image/svg+xml', buf: CLEAN_VINYL_FALLBACK_SVG, isFallback: true };
+  })();
+
+  return coverInFlight[cleanId];
+}
 
 app.use((req, res, next) => {
   if (req.path === '/' || req.path === '/index.html' || req.path === '/sw.js') {
@@ -501,25 +784,43 @@ app.use((req, res, next) => {
     const origJson = res.json.bind(res);
     res.json = function (data) {
       if (Array.isArray(data)) {
-        const futureTs = Date.now() + 518400000;
+        const malRe = /\b(sushin shyam|jakes bejoy|vishnu vijay|vineeth sreenivasan|shaan rahman|rex vijayan|gopi sundar|dabzee|govind vasantha|fejo|vedan|bibin ashok|varkey|nevin thomas|mbl|lil payyan|azwin|chembarathi|sarvam maya|vellarathaaram|komala thaamara|masthishka maranam|delulu|athi bheekara kaamukan|neeye punchiri|chorkk|vazhikatti|puthu mazha|premavathi|akale)\b/i;
+        const futureTs = Date.now() + 604800000;
+
         data.forEach(f => {
           if (!f || !f.id) return;
-          f.cloudMeta = f.cloudMeta || {};
-          const pre = prebuiltManifest[f.id] || {};
-          const staticCoverFile = path.join(STATIC_COVERS_DIR, f.id + '.jpg');
-          const coverUrl = fs.existsSync(staticCoverFile)
-            ? ('/covers/' + encodeURIComponent(f.id) + '.jpg?v=42')
-            : ('/api/cover/' + encodeURIComponent(f.id) + '?v=42');
 
-          if (pre.title) f.cloudMeta.title = pre.title;
-          if (pre.artist && pre.artist !== 'Cloud Artist') f.cloudMeta.artist = pre.artist;
-          if (pre.album && pre.album !== 'Cloud Drive') f.cloudMeta.album = pre.album;
-          if (pre.year) f.cloudMeta.year = pre.year;
-          if (pre.language) {
-            f.cloudLang = pre.language;
-            f.cloudMeta.language = pre.language;
+          // Pre-populate fileMetaCache so /api/stream/:fileId starts immediately with 0 extra Drive calls!
+          if (f.size) {
+            fileMetaCache[f.id] = {
+              size: parseInt(f.size, 10),
+              mimeType: f.mimeType || 'audio/mpeg'
+            };
           }
 
+          f.cloudMeta = f.cloudMeta || {};
+          const pre = prebuiltManifest[f.id] || {};
+          const fromFile = parseCleanFilenameServer(f.name || '');
+
+          const title = pre.title || fromFile.title || f.cloudMeta.title || f.name;
+          const artist = (pre.artist && pre.artist !== 'Cloud Artist')
+            ? pre.artist
+            : (fromFile.artist !== 'Cloud Artist' ? fromFile.artist : (f.cloudMeta.artist || 'Cloud Artist'));
+          const album = (pre.album && pre.album !== 'Single' && pre.album !== 'Cloud Drive')
+            ? pre.album
+            : (fromFile.album !== 'Single' ? fromFile.album : ((f.cloudMeta.album && f.cloudMeta.album !== 'Cloud Drive') ? f.cloudMeta.album : 'Single'));
+
+          songRegistry[f.id] = { id: f.id, name: f.name || '', title, artist, album };
+
+          if (malRe.test((f.name || '') + ' ' + title + ' ' + artist + ' ' + album)) {
+            f.cloudLang = 'Malayalam';
+            f.cloudMeta.language = 'Malayalam';
+          }
+
+          const coverUrl = '/api/cover/' + encodeURIComponent(f.id) + '?v=43';
+          f.cloudMeta.title = title;
+          f.cloudMeta.artist = artist;
+          f.cloudMeta.album = album;
           f.cloudMeta.coverArt = coverUrl;
           f.cloudMeta.artwork = coverUrl;
           f.cloudMeta.updatedAt = futureTs;
@@ -533,54 +834,70 @@ app.use((req, res, next) => {
   next();
 });
 
-// Serve cover for any song (static pre-extracted cover first, dynamic extraction for newly uploaded songs)
-app.get(['/api/cover/:fileId', '/api/song-cover/:fileId'], async (req, res) => {
-  const fileId = req.params.fileId;
-  const staticPath = path.join(STATIC_COVERS_DIR, fileId + '.jpg');
+// Unified Cover Route: handles /api/cover/:fileId, /api/song-cover/:fileId, AND /covers/:fileId.jpg
+app.get(['/api/cover/:fileId', '/api/song-cover/:fileId', '/covers/:fileId'], async (req, res) => {
+  const rawParam = String(req.params.fileId || '');
+  if (rawParam.startsWith('cat_')) {
+    const slug = rawParam.replace(/^cat_/, '').replace(/\.(jpg|png)$/i, '');
+    return res.redirect(302, '/api/category-cover/' + encodeURIComponent(slug));
+  }
+  const cleanId = rawParam.replace(/\.(jpg|png|jpeg|webp)$/i, '');
+  const imgObj = await resolveGuaranteedCover(cleanId, req.query.title, req.query.artist);
+
   res.set({
-    'Cache-Control': 'public, max-age=604800',
+    'Content-Type': (imgObj && imgObj.mime) || 'image/svg+xml',
+    'Cache-Control': (imgObj && !imgObj.isFallback) ? 'public, max-age=604800' : 'public, max-age=300',
     'Access-Control-Allow-Origin': '*'
   });
-
-  if (fs.existsSync(staticPath)) {
-    res.set('Content-Type', 'image/jpeg');
-    return res.sendFile(staticPath);
-  }
-
-  // Dynamic extraction for any new song uploaded after build
-  try {
-    const mm = await import('music-metadata');
-    const r1 = await drive.files.get(
-      { fileId, alt: 'media' },
-      { responseType: 'arraybuffer', headers: { Range: 'bytes=0-1048575' } }
-    );
-    const buf = Buffer.from(r1.data);
-    const meta = await mm.parseBuffer(buf, { mimeType: 'audio/mpeg' }, { duration: false });
-    if (meta && meta.common && meta.common.picture && meta.common.picture[0] && meta.common.picture[0].data) {
-      const picBuf = Buffer.from(meta.common.picture[0].data);
-      try { fs.writeFileSync(staticPath, picBuf); } catch (e) {}
-      res.set('Content-Type', meta.common.picture[0].format || 'image/jpeg');
-      return res.send(picBuf);
-    }
-  } catch (e) {}
-
-  return res.redirect(302, '/icon-512.png');
+  return res.status(200).send((imgObj && imgObj.buf) || CLEAN_VINYL_FALLBACK_SVG);
 });
 
-app.get('/api/category-cover/:slug', (req, res) => {
+const CATEGORY_COVER_QUERIES = {
+  malayalam: 'Aavesham Sushin Shyam',
+  hindi: 'Aashiqui 2 Arijit Singh',
+  english: 'After Hours The Weeknd',
+  tamil: 'Leo Anirudh Ravichander',
+  love: 'Perfect Ed Sheeran',
+  sleep: 'Weightless Marconi Union',
+  trending: 'Starboy The Weeknd',
+  mood: 'Lovely Billie Eilish Khalid',
+  party: 'Titanium David Guetta Sia'
+};
+const categoryMemCache = {};
+
+app.get('/api/category-cover/:slug', async (req, res) => {
   const slug = String(req.params.slug || 'malayalam').toLowerCase().replace(/[^a-z0-9]/g, '');
+  res.set({ 'Cache-Control': 'public, max-age=604800', 'Access-Control-Allow-Origin': '*' });
+
   const staticCat = path.join(STATIC_COVERS_DIR, 'cat_' + slug + '.jpg');
-  res.set({
-    'Cache-Control': 'public, max-age=604800',
-    'Access-Control-Allow-Origin': '*'
-  });
   if (fs.existsSync(staticCat)) {
     res.set('Content-Type', 'image/jpeg');
     return res.sendFile(staticCat);
   }
-  return res.redirect(302, '/icon-512.png');
+  if (categoryMemCache[slug]) {
+    res.set('Content-Type', categoryMemCache[slug].mime);
+    return res.send(categoryMemCache[slug].buf);
+  }
+
+  const q = CATEGORY_COVER_QUERIES[slug] || 'After Hours The Weeknd';
+  try {
+    const itRes = await axios.get('https://itunes.apple.com/search?term=' + encodeURIComponent(q) + '&country=in&media=music&entity=song&limit=3', { timeout: 4000 });
+    const hits = (itRes.data && itRes.data.results) || [];
+    if (hits.length > 0 && hits[0].artworkUrl100) {
+      const imgRes = await axios.get(hits[0].artworkUrl100.replace('100x100bb', '600x600bb'), { responseType: 'arraybuffer', timeout: 4500 });
+      const b = Buffer.from(imgRes.data);
+      if (b.length > 1024) {
+        categoryMemCache[slug] = { mime: 'image/jpeg', buf: b };
+        res.set('Content-Type', 'image/jpeg');
+        return res.send(b);
+      }
+    }
+  } catch (e) {}
+
+  res.set('Content-Type', 'image/svg+xml');
+  return res.status(200).send(CLEAN_VINYL_FALLBACK_SVG);
 });
-// === MUSIX V42 ARTWORK ENGINE END ===
+// === MUSIX V43 ARTWORK ENGINE END ===
 
 app.get('/api/ping', (req, res) => res.json({ status: 'awake' }));
 
@@ -848,7 +1165,7 @@ app.get('/api/stream/:fileId', async (req, res) => {
     const range = req.headers.range;
 
     let meta = fileMetaCache[fileId];
-    if (!meta) {
+    if (!meta || !meta.size) {
       const gMeta = await drive.files.get({
         fileId: fileId,
         fields: 'size, mimeType',
@@ -861,14 +1178,14 @@ app.get('/api/stream/:fileId', async (req, res) => {
     }
 
     const fileSize = meta.size;
-    const mimeType = meta.mimeType;
+    const mimeType = meta.mimeType || 'audio/mpeg';
 
     if (range) {
       const parts = range.replace(/bytes=/, '').split('-');
-      const start = parseInt(parts[0], 10);
-      const requestedEnd = parts[1] ? parseInt(parts[1], 10) : Math.min(start + 2 * 1024 * 1024 - 1, fileSize - 1);
-      const end = Math.min(requestedEnd, fileSize - 1);
-      const chunkSize = end - start + 1;
+      const start = Math.max(0, parseInt(parts[0], 10) || 0);
+      // Stream all the way to fileSize - 1 on open-ended range requests so playback never stops at 2MB
+      const end = parts[1] ? Math.min(parseInt(parts[1], 10), fileSize - 1) : (fileSize - 1);
+      const chunkSize = Math.max(1, end - start + 1);
 
       const driveStream = await drive.files.get(
         { fileId: fileId, alt: 'media' },
@@ -883,6 +1200,7 @@ app.get('/api/stream/:fileId', async (req, res) => {
         'Accept-Ranges': 'bytes',
         'Content-Length': chunkSize,
         'Content-Type': mimeType,
+        'Access-Control-Allow-Origin': '*',
         'Cache-Control': 'public, max-age=31536000, immutable'
       });
 
@@ -894,6 +1212,7 @@ app.get('/api/stream/:fileId', async (req, res) => {
         'Content-Length': fileSize,
         'Content-Type': mimeType,
         'Accept-Ranges': 'bytes',
+        'Access-Control-Allow-Origin': '*',
         'Cache-Control': 'public, max-age=31536000, immutable'
       });
 
