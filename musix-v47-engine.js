@@ -242,6 +242,7 @@ module.exports = function registerMusixV47Engine(app, drive, rootDir) {
 
     coverInFlight[cleanId] = (async () => {
       try {
+        // 1. Extract embedded cover from Google Drive file
         try {
           const r1 = await drive.files.get(
             { fileId: cleanId, alt: 'media' },
@@ -284,6 +285,7 @@ module.exports = function registerMusixV47Engine(app, drive, rootDir) {
           }
         } catch (e) {}
 
+        // 2. Online Search Fallback (Apple Music US/IN + Deezer)
         const info = songRegistry[cleanId] || prebuiltManifest[cleanId] || {};
         const parsed = parseCleanFilename(info.name || queryTitle || '');
         const title = (queryTitle || info.title || parsed.title || '').trim();
@@ -382,11 +384,14 @@ module.exports = function registerMusixV47Engine(app, drive, rootDir) {
       return res.status(200).send(imgObj.buf);
     }
 
+    // Return 503 with no-store so Service Worker NEVER caches a fallback placeholder!
     res.set({ 'Cache-Control': 'no-store, no-cache, must-revalidate' });
     return res.status(503).end();
   });
 
-  // Genuine Daily Top-20 Trending Charts Engine
+  // ============================================================================
+  // GENUINE DAILY TOP-20 TRENDING CHARTS ENGINE (Malayalam, Tamil, English, Hindi)
+  // ============================================================================
   const TRENDING_SOURCES = {
     Malayalam: [
       'Malayalam Hit Songs 2025 2026',
@@ -415,6 +420,7 @@ module.exports = function registerMusixV47Engine(app, drive, rootDir) {
     const collected = [];
     const seenKeys = new Set();
 
+    // For English, also check Apple Music Official RSS Top Songs feed first
     if (lang === 'English') {
       try {
         const rssRes = await axios.get('https://rss.applemarketingtools.com/api/v2/us/music/most-played/25/songs.json', { timeout: 5000 });
@@ -464,8 +470,20 @@ module.exports = function registerMusixV47Engine(app, drive, rootDir) {
       } catch (e) {}
     }
 
+    // Backfill previewUrls for any RSS items missing audio preview
+    for (let i = 0; i < collected.length; i++) {
+      if (!collected[i].previewUrl) {
+        try {
+          const sr = await axios.get('https://itunes.apple.com/search?term=' + encodeURIComponent(collected[i].title + ' ' + collected[i].artist) + '&country=' + store + '&media=music&entity=song&limit=1', { timeout: 3500 });
+          const hit = sr.data && sr.data.results && sr.data.results[0];
+          if (hit && hit.previewUrl) collected[i].previewUrl = hit.previewUrl;
+        } catch (e) {}
+      }
+    }
+
+    // Match against user's Google Drive library so library songs play full length
     const allLibSongs = Object.values(songRegistry);
-    const movements = ['\u25B2 2', '\u25B2 1', '\u25CF NEW', '\u25B2 3', '\u2501', '\u25B2 1', '\u25BC 1', '\u25CF NEW', '\u25B2 4', '\u2501'];
+    const movements = ['? 2', '? 1', '? NEW', '? 3', '?', '? 1', '? 1', '? NEW', '? 4', '?'];
 
     return collected.slice(0, 20).map((item, idx) => {
       const rank = idx + 1;
@@ -522,6 +540,7 @@ module.exports = function registerMusixV47Engine(app, drive, rootDir) {
     return trendingDiskCache;
   }
 
+  // Trigger initial background chart check on server boot
   setTimeout(() => { refreshAllTrendingCharts(false); }, 1500);
 
   app.get('/api/trending', async (req, res) => {
