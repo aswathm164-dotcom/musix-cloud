@@ -486,6 +486,7 @@ async function getDriveSongs(forceRefresh = false) {
 
 
 
+
 // === MUSIX V43 ARTWORK ENGINE START ===
 const STATIC_COVERS_DIR = path.join(__dirname, 'public', 'covers');
 const RUNTIME_COVERS_DIR = path.join(require('os').tmpdir(), 'musix-covers-v43');
