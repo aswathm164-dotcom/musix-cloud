@@ -1,4 +1,4 @@
-const SHELL_CACHE = 'musix-shell-v39';
+const SHELL_CACHE = 'musix-shell-v24';
 const AUDIO_CACHE = 'musix-offline-audio-v1';
 const RECENT_AUDIO_CACHE = 'musix-recent-audio-v1';
 const ASSETS = [
@@ -65,14 +65,20 @@ self.addEventListener('fetch', function (e) {
 
   if (url.pathname.indexOf('/api/stream/') === 0) {
     e.respondWith((async function () {
-      try {
-        const offCache = await caches.open(AUDIO_CACHE);
-        const offMatch = await offCache.match(url.pathname);
-        if (offMatch && offMatch.status === 200) {
-          return serveAudioWithRange(e.request, offMatch);
-        }
-      } catch (err) {}
-      return fetch(e.request);
+      const offCache = await caches.open(AUDIO_CACHE);
+      const offMatch = await offCache.match(url.pathname);
+      if (offMatch) return serveAudioWithRange(e.request, offMatch);
+
+      const recCache = await caches.open(RECENT_AUDIO_CACHE);
+      const recMatch = await recCache.match(url.pathname);
+      if (recMatch) return serveAudioWithRange(e.request, recMatch);
+
+      const netRes = await fetch(e.request);
+      if (netRes && netRes.status === 200 && url.searchParams.get('warm') === '1') {
+        const clone = netRes.clone();
+        recCache.put(url.pathname, clone).catch(function () {});
+      }
+      return netRes;
     })());
     return;
   }

@@ -1458,63 +1458,81 @@
       .mobile-nav { display: flex; }
     }
   </style>
-<style id="musix-lang-cover-style">
-  .musix-card-has-collage {
+<style id="musix-v40-styles">
+  /* Ensure all song, card, album, and player images maintain aspect ratio & rounded corners */
+  .song-art img, .card-art img, .mini-art img, .sheet-art-box img, #pl-hero-art img {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover !important;
+    aspect-ratio: 1 / 1 !important;
+    display: block !important;
+  }
+
+  /* Spotify-Style Smart Mix Rectangular Category Tiles (Exact Reference Match) */
+  .spotify-category-grid {
+    display: grid !important;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)) !important;
+    gap: 14px !important;
+    padding: 4px 0 18px 0 !important;
+  }
+  @media (max-width: 640px) {
+    .spotify-category-grid {
+      grid-template-columns: repeat(2, 1fr) !important;
+      gap: 12px !important;
+    }
+  }
+  .spotify-cat-tile {
     position: relative !important;
+    height: 108px !important;
+    border-radius: 10px !important;
     overflow: hidden !important;
-    isolation: isolate;
+    cursor: pointer !important;
+    padding: 14px 16px !important;
+    display: flex !important;
+    align-items: flex-start !important;
+    justify-content: flex-start !important;
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.28) !important;
+    transition: transform 0.18s ease, filter 0.18s ease !important;
+    user-select: none !important;
+    border: none !important;
   }
-  /* Hide the giant watermark music note when real album covers are shown */
-  .musix-card-has-collage > svg,
-  .musix-card-has-collage .mix-watermark,
-  .musix-card-has-collage .card-icon-bg {
-    opacity: 0 !important;
+  .spotify-cat-tile:hover {
+    transform: translateY(-2px) scale(1.01) !important;
+    filter: brightness(1.06) !important;
   }
-  .musix-card-has-collage > *:not(.musix-lang-collage):not(.musix-lang-scrim) {
+  .spotify-cat-tile:active {
+    transform: scale(0.98) !important;
+  }
+  .spotify-cat-title {
     position: relative !important;
     z-index: 2 !important;
+    font-size: 1.22rem !important;
+    font-weight: 800 !important;
+    color: #ffffff !important;
+    line-height: 1.2 !important;
+    letter-spacing: -0.02em !important;
+    max-width: 62% !important;
+    word-break: break-word !important;
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.22) !important;
   }
-  .musix-lang-collage {
+  .spotify-cat-cover {
     position: absolute !important;
-    inset: 0 !important;
-    z-index: 0 !important;
-    display: grid !important;
-    grid-template-columns: 1fr 1fr !important;
-    grid-template-rows: 1fr 1fr !important;
-    gap: 2px !important;
-    background: #121216 !important;
-    pointer-events: none !important;
-  }
-  .musix-lang-collage img {
-    width: 100% !important;
-    height: 100% !important;
+    right: -12px !important;
+    bottom: -8px !important;
+    width: 82px !important;
+    height: 82px !important;
+    border-radius: 6px !important;
     object-fit: cover !important;
-    display: block !important;
-    filter: saturate(1.08) contrast(1.04);
-  }
-  .musix-lang-scrim {
-    position: absolute !important;
-    inset: 0 !important;
+    transform: rotate(25deg) !important;
+    box-shadow: -3px 5px 14px rgba(0, 0, 0, 0.48) !important;
     z-index: 1 !important;
-    background: linear-gradient(180deg, rgba(10,10,14,0.38) 0%, rgba(10,10,14,0.18) 42%, rgba(10,10,14,0.90) 100%) !important;
     pointer-events: none !important;
+    background: rgba(0, 0, 0, 0.2) !important;
   }
-  .musix-hero-collage {
-    width: 100% !important;
-    height: 100% !important;
-    display: grid !important;
-    grid-template-columns: 1fr 1fr !important;
-    grid-template-rows: 1fr 1fr !important;
-    gap: 2px !important;
-    border-radius: inherit !important;
-    overflow: hidden !important;
-    background: #18181f !important;
-  }
-  .musix-hero-collage img {
-    width: 100% !important;
-    height: 100% !important;
-    object-fit: cover !important;
-    display: block !important;
+  .song-album-sub {
+    color: rgba(255, 255, 255, 0.56);
+    font-size: 0.78rem;
+    margin-left: 4px;
   }
 </style>
 </head>
@@ -1827,8 +1845,8 @@
       </button>
     </div>
 
-    <audio id="audio-player" preload="auto" playsinline></audio>
-    <audio id="next-audio-preloader" preload="auto" style="display:none;"></audio>
+    <audio id="audio-player" preload="auto" playsinline crossorigin="anonymous"></audio>
+    <audio id="next-audio-preloader" preload="auto" style="display:none;" crossorigin="anonymous"></audio>
   </footer>
 
   <!-- SMARTPHONE BOTTOM NAVIGATION BAR -->
@@ -1872,7 +1890,7 @@
     <!-- 3. Large square album art -->
     <div class="np-art-stage">
       <div class="np-art-box" id="fs-art-box">
-        <img id="fs-cover" src="/icon-512.png" alt="Album Cover" />
+        <img id="fs-cover" src="/icon-512.png" alt="Album Cover" crossorigin="anonymous" />
       </div>
     </div>
 
@@ -2524,35 +2542,23 @@
       const cm = song.cloudMeta || {};
       const cached = metaCache[song.id] || oldMetaCache[song.id] || {};
 
-      let cleanParsedTitle = parsed.title;
-      let inferredAlbum = '';
-      const fromMatch = cleanParsedTitle.match(/^(.*?)\s+From\s+(.+)$/i);
-      if (fromMatch) {
-        cleanParsedTitle = fromMatch[1].trim();
-        inferredAlbum = fromMatch[2].trim();
-      }
-
-      const resolvedTitle = cm.title || cached.title || cleanParsedTitle;
+      const resolvedTitle = cm.title || cached.title || parsed.title;
       const resolvedArtist = cm.artist || cached.artist || parsed.artist;
-      const resolvedAlbum = (cm.album && cm.album !== 'Cloud Drive')
-        ? cm.album
-        : ((cached.album && cached.album !== 'Cloud Drive') ? cached.album : (inferredAlbum || 'Cloud Drive'));
+      const resolvedAlbum = cm.album || cached.album || 'Cloud Drive';
       const resolvedAlbumArtist = cm.albumArtist || cached.albumArtist || '';
       const resolvedGenre = cm.genre || cached.genre || 'Music';
       const resolvedYear = cm.year || cached.year || '';
       const resolvedTrack = cm.trackNumber || cached.trackNumber || '';
-      const resolvedArt = (cm.coverArt && cm.coverArt !== '/icon-512.png')
-        ? cm.coverArt
-        : ((cached.artwork && cached.artwork !== '/icon-512.png') ? cached.artwork : '/icon-512.png');
+      const resolvedArt = cm.coverArt || cached.artwork || '/icon-512.png';
 
       const strictLang =
         manualLangOverrides[song.id] ||
         song.cloudLang ||
         cm.language ||
-        determineSongLanguageStrict(song, resolvedTitle + ' ' + inferredAlbum, resolvedArtist, resolvedAlbum, resolvedGenre, (song.appProperties || {}).tagLang);
+        determineSongLanguageStrict(song, resolvedTitle, resolvedArtist, resolvedAlbum, resolvedGenre, (song.appProperties || {}).tagLang);
 
       const pArtist = (resolvedAlbumArtist || resolvedArtist).split(/,|&|feat\.|ft\./i)[0].trim() || 'Cloud Artist';
-      return {
+      const merged = {
         title: resolvedTitle,
         artist: resolvedArtist,
         primaryArtist: pArtist,
@@ -2567,6 +2573,8 @@
         artwork: resolvedArt,
         updatedAt: Math.max(cm.updatedAt || 0, cached.updatedAt || 0)
       };
+      metaCache[song.id] = merged;
+      return merged;
     }
 
     // One-time re-check of existing library with summary report
@@ -2973,7 +2981,32 @@
     }
 
     // Warm full track in Service Worker Recent Audio Cache so >=30s is always buffered ahead and replays are instant
-    async function ensureWarmAudioCache(songId) { return; }
+    async function ensureWarmAudioCache(songId) {
+      if (!songId || !navigator.onLine || warmBufferInFlight[songId]) return;
+      warmBufferInFlight[songId] = true;
+      try {
+        const offCache = await caches.open(AUDIO_CACHE_NAME);
+        if (await offCache.match('/api/stream/' + songId)) {
+          delete warmBufferInFlight[songId];
+          return;
+        }
+        const recCache = await caches.open(RECENT_AUDIO_CACHE_NAME);
+        if (await recCache.match('/api/stream/' + songId)) {
+          delete warmBufferInFlight[songId];
+          return;
+        }
+        const res = await fetch('/api/stream/' + songId + '?warm=1');
+        if (res.ok) {
+          const blob = await res.blob();
+          const headers = new Headers({
+            'Content-Type': blob.type || 'audio/mpeg',
+            'Content-Length': String(blob.size)
+          });
+          await recCache.put('/api/stream/' + songId, new Response(blob, { status: 200, headers: headers }));
+        }
+      } catch (e) {}
+      delete warmBufferInFlight[songId];
+    }
 
     // Preload next song in the queue (first 30+ seconds + audio element preload)
     async function preloadNextTrackInQueue() {
@@ -3168,123 +3201,6 @@
         showToast('Could not download song. Check connection.');
       }
     }
-
-    
-    // Clear any placeholder-only cache entries so real artwork always loads
-    Object.keys(metaCache).forEach(function (id) {
-      if (!metaCache[id] || !metaCache[id].artwork || metaCache[id].artwork === '/icon-512.png') {
-        delete metaCache[id];
-      }
-    });
-
-    let isFetchingArtQueue = false;
-    async function fetchAllMissingAlbumArt() {
-      if (isFetchingArtQueue || !driveSongs || driveSongs.length === 0) return;
-      isFetchingArtQueue = true;
-      let changedCount = 0;
-
-      for (let i = 0; i < driveSongs.length; i++) {
-        const song = driveSongs[i];
-        const existing = metaCache[song.id];
-        if (existing && existing.artwork && existing.artwork !== '/icon-512.png') continue;
-
-        const baseMeta = getSongMeta(song);
-        const searchTitle = baseMeta.title;
-        const searchAlbum = baseMeta.album !== 'Cloud Drive' ? baseMeta.album : '';
-        const searchArtist = baseMeta.artist !== 'Cloud Artist' ? baseMeta.artist : '';
-
-        let foundArt = '';
-        let foundAlbum = '';
-        let foundArtist = '';
-        let foundGenre = '';
-        let foundYear = '';
-
-        // 1. Query server /api/song-artwork (iTunes + Deezer)
-        try {
-          const srvRes = await fetch('/api/song-artwork?title=' + encodeURIComponent((searchTitle + ' ' + searchAlbum).trim()) + '&artist=' + encodeURIComponent(searchArtist));
-          if (srvRes.ok) {
-            const srvData = await srvRes.json();
-            foundArt = srvData.artwork || '';
-            foundAlbum = srvData.album || '';
-            foundArtist = srvData.artist || '';
-            foundGenre = srvData.genre || '';
-            foundYear = srvData.year || '';
-          }
-        } catch (e) {}
-
-        // 2. Fallback to direct browser iTunes search
-        if (!foundArt) {
-          try {
-            const q = (searchTitle + ' ' + searchArtist).trim();
-            const itRes = await fetch('https://itunes.apple.com/search?term=' + encodeURIComponent(q) + '&country=in&media=music&entity=song&limit=3');
-            if (itRes.ok) {
-              const itData = await itRes.json();
-              if (itData.results && itData.results.length > 0) {
-                const hit = itData.results[0];
-                foundArt = (hit.artworkUrl100 || '').replace('100x100bb', '600x600bb');
-                foundAlbum = hit.collectionName || foundAlbum;
-                foundArtist = hit.artistName || foundArtist;
-                foundGenre = hit.primaryGenreName || foundGenre;
-                foundYear = hit.releaseDate ? String(hit.releaseDate).slice(0, 4) : foundYear;
-              }
-            }
-          } catch (e) {}
-        }
-
-        if (foundArt) {
-          const finalArtist = searchArtist || foundArtist || 'Cloud Artist';
-          const finalAlbum = searchAlbum || foundAlbum || 'Cloud Drive';
-          const finalGenre = (baseMeta.genre && baseMeta.genre !== 'Music') ? baseMeta.genre : (foundGenre || 'Music');
-          const strictOriginalLang = determineSongLanguageStrict(song, song.name, finalArtist, finalAlbum, '', (song.appProperties || {}).tagLang);
-          const finalLang = (strictOriginalLang && strictOriginalLang !== 'Other/Unknown') ? strictOriginalLang : determineSongLanguageStrict(song, searchTitle, finalArtist, finalAlbum, finalGenre, (song.appProperties || {}).tagLang);
-
-          metaCache[song.id] = Object.assign({}, baseMeta, {
-            artist: finalArtist,
-            primaryArtist: finalArtist.split(/,|&|feat\.|ft\./i)[0].trim() || 'Cloud Artist',
-            album: finalAlbum,
-            genre: finalGenre,
-            year: baseMeta.year || foundYear,
-            language: finalLang,
-            artwork: foundArt,
-            updatedAt: Date.now()
-          });
-          changedCount++;
-
-          if (changedCount % 3 === 0) {
-            localStorage.setItem('am_meta_cache_v6', JSON.stringify(metaCache));
-            refreshAllViews();
-            updateSplashCollage();
-        setTimeout(fetchAllMissingAlbumArt, 200);
-          }
-        }
-        await new Promise(function (r) { setTimeout(r, 150); });
-      }
-
-      if (changedCount > 0) {
-        localStorage.setItem('am_meta_cache_v6', JSON.stringify(metaCache));
-        refreshAllViews();
-        updateSplashCollage();
-        setTimeout(fetchAllMissingAlbumArt, 200);
-      }
-      isFetchingArtQueue = false;
-    }
-
-// Re-verify cached languages against full filename and auto-start artwork queue
-setInterval(function () {
-  if (driveSongs && driveSongs.length > 0 && !isFetchingArtQueue) {
-    let needsArt = false;
-    driveSongs.forEach(function (s) {
-      const m = metaCache[s.id];
-      if (!m || !m.artwork || m.artwork === '/icon-512.png') needsArt = true;
-      const strictCheck = determineSongLanguageStrict(s, s.name, (m && m.artist) || '', (m && m.album) || '', '', (s.appProperties || {}).tagLang);
-      if (m && strictCheck && strictCheck !== 'Other/Unknown' && m.language !== strictCheck && !manualLangOverrides[s.id]) {
-        m.language = strictCheck;
-      }
-    });
-    if (needsArt) fetchAllMissingAlbumArt();
-  }
-}, 3000);
-
 
     function refreshAllViews() {
       renderHomeView();
@@ -4351,12 +4267,14 @@ setInterval(function () {
     connectRealtimeSyncStream();
     fetchLibrary(true);
   </script>
-<script id="musix-hotfix-v39">
+<script id="musix-v40-engine">
 (function () {
-  if (localStorage.getItem('musix_client_ver') !== 'v39') {
-    localStorage.setItem('musix_client_ver', 'v39');
+  // 1. One-time clean migration to v40 (clears old cached placeholder URLs)
+  if (localStorage.getItem('musix_client_ver') !== 'v40') {
+    localStorage.setItem('musix_client_ver', 'v40');
     localStorage.removeItem('am_meta_cache_v6');
     localStorage.removeItem('am_meta_cache_v5');
+    localStorage.removeItem('am_cached_drive_songs');
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.getRegistrations().then(function (regs) {
         Promise.all(regs.map(function (r) { return r.unregister(); })).finally(function () {
@@ -4367,174 +4285,311 @@ setInterval(function () {
     }
   }
 
+  // 2. Disable background full-file warm caching so bandwidth stays near zero
   window.ensureWarmAudioCache = async function () { return; };
   window.preloadNextTrackInQueue = function () { return; };
-  window.fetchAllMissingAlbumArt = async function () { return; };
+  if (typeof nextPreloader !== 'undefined' && nextPreloader) {
+    nextPreloader.preload = 'none';
+    nextPreloader.removeAttribute('src');
+  }
 
+  // 3. Stop sync-metadata infinite loop
+  let lastPushedHash = '';
+  const origPush = window.pushAllOverridesToCloud;
+  window.pushAllOverridesToCloud = async function (silent) {
+    const curHash = JSON.stringify(manualLangOverrides || {});
+    if (silent && (curHash === '{}' || curHash === lastPushedHash)) return true;
+    lastPushedHash = curHash;
+    if (typeof origPush === 'function') return origPush(silent);
+    return true;
+  };
+
+  // 4. Accurate Malayalam & language classification
+  const origDetermineLang = window.determineSongLanguageStrict;
+  const malayalamPattern = /\b(sushin shyam|jakes bejoy|vishnu vijay|vineeth sreenivasan|shaan rahman|rex vijayan|gopi sundar|dabzee|govind vasantha|fejo|vedan|bibin ashok|varkey|nevin thomas|mbl|sarvam maya|vellarathaaram|komala thaamara|masthishka maranam|delulu|athi bheekara kaamukan|neeye punchiri|chorkk|vazhikatti|puthu mazha|premavathi|akale)\b/i;
+
+  window.determineSongLanguageStrict = function (song, title, artist, album, genre, driveTagLang) {
+    if (song && manualLangOverrides && manualLangOverrides[song.id]) return manualLangOverrides[song.id];
+    const fullText = ((song && song.name) || '') + ' ' + (title || '') + ' ' + (artist || '') + ' ' + (album || '');
+    if (malayalamPattern.test(fullText)) return 'Malayalam';
+    if (typeof origDetermineLang === 'function') return origDetermineLang(song, title, artist, album, genre, driveTagLang);
+    return 'Other/Unknown';
+  };
+
+  // 5. Guarantee every song has its real /api/cover/:fileId URL, title, artist, and album name
   const origGetSongMeta = window.getSongMeta;
   window.getSongMeta = function (song) {
-    const m = origGetSongMeta ? origGetSongMeta(song) : {};
-    if (song && song.id) {
-      if (/popular\s+with\s+playboi/i.test((song.name || '') + ' ' + (m.title || '')) && /ariana/i.test(m.artist || '')) {
-        m.artist = 'The Weeknd, Playboi Carti, Madonna';
-        m.primaryArtist = 'The Weeknd';
-      }
-      const embeddedUrl = '/api/song-cover/' + encodeURIComponent(song.id) + '?v=38';
-      m.artwork = embeddedUrl;
-      if (metaCache && metaCache[song.id]) {
-        metaCache[song.id].artwork = embeddedUrl;
-        metaCache[song.id].artist = m.artist;
-      }
+    const m = origGetSongMeta ? origGetSongMeta(song) : { title: 'Unknown', artist: 'Cloud Artist', album: 'Single', language: 'Other/Unknown', vibe: 'Feel Good' };
+    if (!song || !song.id) return m;
+
+    const cm = song.cloudMeta || {};
+    let cleanTitle = cm.title || m.title || song.name || 'Unknown';
+    let cleanAlbum = (cm.album && cm.album !== 'Cloud Drive') ? cm.album : ((m.album && m.album !== 'Cloud Drive') ? m.album : '');
+
+    const fromMatch = String(cleanTitle).match(/^(.*?)\s+From\s+(.+)$/i);
+    if (fromMatch) {
+      cleanTitle = fromMatch[1].trim();
+      if (!cleanAlbum || cleanAlbum === 'Single') cleanAlbum = fromMatch[2].trim();
+    }
+
+    if (!cleanAlbum) cleanAlbum = 'Single';
+
+    let cleanArtist = cm.artist || m.artist || 'Cloud Artist';
+    if (/popular\s+with\s+playboi/i.test((song.name || '') + ' ' + cleanTitle) && /ariana/i.test(cleanArtist)) {
+      cleanArtist = 'The Weeknd, Playboi Carti, Madonna';
+      cleanAlbum = 'The Idol, Vol. 1';
+    }
+
+    const coverUrl = '/api/cover/' + encodeURIComponent(song.id) +
+      '?title=' + encodeURIComponent(cleanTitle) +
+      '&artist=' + encodeURIComponent(cleanArtist) +
+      '&v=40';
+
+    m.title = cleanTitle;
+    m.artist = cleanArtist;
+    m.album = cleanAlbum;
+    m.artwork = coverUrl;
+    m.language = window.determineSongLanguageStrict(song, cleanTitle, cleanArtist, cleanAlbum, m.genre || '', '');
+
+    if (typeof metaCache !== 'undefined' && metaCache) {
+      metaCache[song.id] = Object.assign({}, metaCache[song.id] || {}, m, { artwork: coverUrl });
     }
     return m;
   };
 
-  function getSongsForCategory(type, name) {
+  // 6. Spotify-Style Smart Mix Categories Definition (Exact match to reference screenshot)
+  const SMART_MIX_CATEGORIES = [
+    { id: 'Malayalam', title: 'Malayalam', type: 'Language', color: '#4A8094', cover: '/api/category-cover/malayalam?v=40' },
+    { id: 'Hindi',     title: 'Hindi',     type: 'Language', color: '#D84818', cover: '/api/category-cover/hindi?v=40' },
+    { id: 'English',   title: 'English',   type: 'Language', color: '#4C7A8C', cover: '/api/category-cover/english?v=40' },
+    { id: 'Tamil',     title: 'Tamil',     type: 'Language', color: '#2D826E', cover: '/api/category-cover/tamil?v=40' },
+    { id: 'Love',      title: 'Love',      type: 'Category', color: '#DC148C', cover: '/api/category-cover/love?v=40' },
+    { id: 'Sleep',     title: 'Sleep',     type: 'Category', color: '#1E3264', cover: '/api/category-cover/sleep?v=40' },
+    { id: 'Trending',  title: 'Trending',  type: 'Category', color: '#A8328E', cover: '/api/category-cover/trending?v=40' },
+    { id: 'Mood',      title: 'Mood',      type: 'Category', color: '#E1118B', cover: '/api/category-cover/mood?v=40' },
+    { id: 'Party',     title: 'Party',     type: 'Category', color: '#7D4B94', cover: '/api/category-cover/party?v=40' }
+  ];
+
+  function filterSongsForSmartMix(catId) {
     if (!Array.isArray(driveSongs) || driveSongs.length === 0) return [];
-    const target = String(name || '').trim().toLowerCase();
-    return driveSongs.filter(function (s) {
-      const m = window.getSongMeta(s);
-      if (String(type || '').toLowerCase() === 'vibe') {
-        const v = String(m.vibe || '').toLowerCase();
-        return v === target || target.indexOf(v) !== -1 || v.indexOf(target) !== -1;
-      }
-      const l = String(m.language || 'Other/Unknown').toLowerCase();
-      return l === target || target.indexOf(l) !== -1 || l.indexOf(target) !== -1;
-    });
-  }
+    const key = String(catId || '').toLowerCase();
 
-  function buildFourCoverUrls(songs) {
-    if (!songs || songs.length === 0) return [];
-    const urls = [];
-    for (let i = 0; i < 4; i++) {
-      const s = songs[i % songs.length];
-      urls.push('/api/song-cover/' + encodeURIComponent(s.id) + '?v=38');
-    }
-    return urls;
-  }
-
-  function decorateLanguageAndVibeCards() {
-    if (!Array.isArray(driveSongs) || driveSongs.length === 0) return;
-
-    // 1. Find all Smart Mix / Language / Vibe cards across Home and Smart Mix views
-    const allCards = document.querySelectorAll('[onclick*="openSmartPlaylist"], .smart-mix-card, .mix-card');
-    allCards.forEach(function (card) {
-      let type = '';
-      let name = '';
-      const onclickAttr = card.getAttribute('onclick') || '';
-      const match = onclickAttr.match(/openSmartPlaylist\(\s*['"]([^'"]+)['"]\s*,\s*['"]([^'"]+)['"]\s*\)/);
-      if (match) {
-        type = match[1];
-        name = match[2];
-      } else {
-        const rawText = (card.innerText || '').split('\n').map(function (t) { return t.trim(); }).filter(Boolean);
-        if (rawText.length >= 2 && (rawText[0] === 'LANGUAGE' || rawText[0] === 'VIBE')) {
-          type = rawText[0] === 'VIBE' ? 'Vibe' : 'Language';
-          name = rawText[1];
-        }
-      }
-
-      if (!name) return;
-      const matchingSongs = getSongsForCategory(type, name);
-      if (matchingSongs.length === 0) return;
-
-      const coverUrls = buildFourCoverUrls(matchingSongs);
-      const sig = coverUrls.join('|');
-      if (card.getAttribute('data-collage-sig') === sig) return;
-      card.setAttribute('data-collage-sig', sig);
-      card.classList.add('musix-card-has-collage');
-
-      const oldCollage = card.querySelector('.musix-lang-collage');
-      if (oldCollage) oldCollage.remove();
-      const oldScrim = card.querySelector('.musix-lang-scrim');
-      if (oldScrim) oldScrim.remove();
-
-      const collageDiv = document.createElement('div');
-      collageDiv.className = 'musix-lang-collage';
-      coverUrls.forEach(function (u) {
-        const img = document.createElement('img');
-        img.src = u;
-        img.alt = name;
-        img.loading = 'lazy';
-        collageDiv.appendChild(img);
+    if (['malayalam', 'hindi', 'english', 'tamil'].includes(key)) {
+      return driveSongs.filter(function (s) {
+        return String(window.getSongMeta(s).language || '').toLowerCase() === key;
       });
+    }
 
-      const scrimDiv = document.createElement('div');
-      scrimDiv.className = 'musix-lang-scrim';
+    const patterns = {
+      love: /\b(love|heart|romance|romantic|punchiri|neeye|premavathi|counsel|double fantasy|die for you|good for you|eastside|all to myself|one side love|enadhuyire|hosanna|tum hi ho|kesariya|raataan)\b/i,
+      sleep: /\b(sleep|night|slow|reverb|lofi|lo-fi|akale|arcade|after hours|middle of the night|puthu mazha|vellarathaaram|hope|calm|chill|melody)\b/i,
+      trending: /\b(popular|timeless|sao paulo|k-pop|delulu|komala|vellarathaaram|chorkk|paint the town red|heat waves|moth to a flame|one of the girls|fejo|weeknd|anirudh|sushin)\b/i,
+      mood: /\b(mood|vibe|heartbreak|mess|way down|gangsta|always be my fault|cant feel my face|vazhikatti|arcade|heat waves|after hours|melody)\b/i,
+      party: /\b(party|dance|remix|club|k-pop|sao paulo|gasoline|popular|timeless|headlights|moth to a flame|paint the town red|chorkk|delulu|komala|alok|alan walker|playboi)\b/i
+    };
 
-      card.insertBefore(scrimDiv, card.firstChild);
-      card.insertBefore(collageDiv, card.firstChild);
+    const re = patterns[key];
+    let matched = [];
+    if (re) {
+      matched = driveSongs.filter(function (s) {
+        const m = window.getSongMeta(s);
+        const text = (s.name || '') + ' ' + m.title + ' ' + m.artist + ' ' + m.album + ' ' + m.vibe;
+        return re.test(text);
+      });
+    }
+
+    if (matched.length < 8) {
+      driveSongs.forEach(function (s, idx) {
+        if (matched.length < 18 && !matched.some(function (x) { return x.id === s.id; })) {
+          if ((idx + key.length) % 3 === 0) matched.push(s);
+        }
+      });
+    }
+    return matched;
+  }
+
+  function buildSpotifyCategoryTileHtml(cat) {
+    return (
+      '<div class="spotify-cat-tile" style="background-color:' + cat.color + ';" onclick="openSpotifySmartCategory('' + cat.id + '')">' +
+        '<div class="spotify-cat-title">' + cat.title + '</div>' +
+        '<img class="spotify-cat-cover" src="' + cat.cover + '" alt="' + cat.title + '" loading="lazy">' +
+      '</div>'
+    );
+  }
+
+  function renderSpotifySmartMixGrids() {
+    const allHtml = SMART_MIX_CATEGORIES.map(buildSpotifyCategoryTileHtml).join('');
+    const homeHtml = SMART_MIX_CATEGORIES.slice(0, 6).map(buildSpotifyCategoryTileHtml).join('');
+
+    // Update Home Smart Mixes container
+    const homeContainers = document.querySelectorAll('#home-smart-mixes, #smart-mix-row, #home-mix-grid');
+    homeContainers.forEach(function (el) {
+      el.className = 'spotify-category-grid';
+      el.innerHTML = homeHtml;
     });
 
-    // 2. Update the Playlist Hero cover inside #view-playlist (replaces the "o o o" rings)
-    const plView = document.getElementById('view-playlist');
-    const heroTitleEl = document.getElementById('pl-hero-title');
-    const heroTypeEl = document.getElementById('pl-hero-type');
-    if (plView && heroTitleEl && heroTypeEl) {
-      const heroTitle = (heroTitleEl.textContent || '').trim();
-      const heroType = (heroTypeEl.textContent || '').trim();
-      const pool = (Array.isArray(activeSmartSongs) && activeSmartSongs.length > 0)
-        ? activeSmartSongs
-        : getSongsForCategory(heroType, heroTitle);
-
-      if (pool && pool.length > 0) {
-        const heroUrls = buildFourCoverUrls(pool);
-        const heroSig = heroTitle + '__' + heroUrls.join('|');
-
-        // Locate the hero artwork box inside the playlist header
-        let artBox = document.getElementById('pl-hero-art') ||
-                     document.getElementById('pl-hero-cover') ||
-                     plView.querySelector('.pl-hero-art, .playlist-hero-art, .hero-art, .pl-art-box');
-
-        if (!artBox && heroTitleEl.parentElement && heroTitleEl.parentElement.parentElement) {
-          const headerFlex = heroTitleEl.parentElement.parentElement;
-          if (headerFlex.firstElementChild && headerFlex.firstElementChild !== heroTitleEl.parentElement) {
-            artBox = headerFlex.firstElementChild;
-          }
+    // Also locate by section heading if container uses a generic class
+    document.querySelectorAll('h2, h3, .section-title').forEach(function (heading) {
+      const txt = (heading.textContent || '').trim().toLowerCase();
+      if (txt === 'smart mixes' || txt === 'smart mix' || txt === 'browse categories') {
+        const headerBar = heading.parentElement;
+        const gridEl = (headerBar && headerBar.nextElementSibling) ? headerBar.nextElementSibling : heading.nextElementSibling;
+        if (gridEl && !gridEl.id.includes('song')) {
+          const isHome = gridEl.closest('#view-home') !== null;
+          gridEl.className = 'spotify-category-grid';
+          gridEl.innerHTML = isHome ? homeHtml : allHtml;
         }
+      }
+    });
 
-        if (artBox && artBox.getAttribute('data-hero-sig') !== heroSig) {
-          artBox.setAttribute('data-hero-sig', heroSig);
-          if (artBox.tagName === 'IMG') {
-            artBox.src = heroUrls[0];
-          } else {
-            artBox.innerHTML = '';
-            const grid = document.createElement('div');
-            grid.className = 'musix-hero-collage';
-            heroUrls.forEach(function (u) {
-              const img = document.createElement('img');
-              img.src = u;
-              img.alt = heroTitle;
-              grid.appendChild(img);
-            });
-            artBox.appendChild(grid);
+    // Update dedicated Smart Mix tab (#view-smart)
+    const smartView = document.getElementById('view-smart');
+    if (smartView) {
+      const innerGrids = smartView.querySelectorAll('.smart-grid, .mix-grid, #smart-lang-grid, #smart-vibe-grid, .spotify-category-grid');
+      if (innerGrids.length > 0) {
+        innerGrids[0].className = 'spotify-category-grid';
+        innerGrids[0].innerHTML = allHtml;
+        for (let i = 1; i < innerGrids.length; i++) {
+          innerGrids[i].style.display = 'none';
+          if (innerGrids[i].previousElementSibling && /vibe|mood/i.test(innerGrids[i].previousElementSibling.textContent || '')) {
+            innerGrids[i].previousElementSibling.style.display = 'none';
           }
         }
       }
     }
   }
 
-  // Hook refreshAllViews and openSmartPlaylist so covers appear immediately on navigation
-  const origRefresh = window.refreshAllViews;
-  if (typeof origRefresh === 'function') {
+  // Open any Smart Mix Category and display its dedicated cover in the Playlist Hero
+  window.openSpotifySmartCategory = function (catId) {
+    const cat = SMART_MIX_CATEGORIES.find(function (c) { return c.id.toLowerCase() === String(catId || '').toLowerCase(); }) || {
+      id: catId,
+      title: catId,
+      type: 'Smart Mix',
+      color: '#4A8094',
+      cover: '/api/category-cover/' + String(catId || 'other').toLowerCase() + '?v=40'
+    };
+
+    const songs = filterSongsForSmartMix(cat.id);
+    window.activeSmartSongs = songs;
+
+    if (typeof origOpenSmartPlaylist === 'function') {
+      origOpenSmartPlaylist(cat.type === 'Language' ? 'Language' : 'Vibe', cat.title);
+    }
+
+    window.activeSmartSongs = songs;
+    const heroType = document.getElementById('pl-hero-type');
+    const heroTitle = document.getElementById('pl-hero-title');
+    const heroCount = document.getElementById('pl-hero-count');
+    if (heroType) heroType.textContent = cat.type.toUpperCase();
+    if (heroTitle) heroTitle.textContent = cat.title;
+    if (heroCount) heroCount.textContent = songs.length + (songs.length === 1 ? ' Song' : ' Songs');
+
+    // Set the single dedicated category cover in the Playlist Hero box
+    setPlaylistHeroCover(cat.cover, cat.title);
+
+    // Render songs inside the playlist container
+    const listContainer = document.getElementById('pl-songs-list') || document.querySelector('#view-playlist .song-list');
+    if (listContainer && typeof renderSongList === 'function') {
+      renderSongList(songs, listContainer);
+    }
+    enhanceSongRowsWithAlbumNames();
+  };
+
+  function setPlaylistHeroCover(coverUrl, altText) {
+    const plView = document.getElementById('view-playlist');
+    if (!plView) return;
+    const heroTitleEl = document.getElementById('pl-hero-title');
+    let artBox = document.getElementById('pl-hero-art') ||
+                 document.getElementById('pl-hero-cover') ||
+                 plView.querySelector('.pl-hero-art, .playlist-hero-art, .hero-art, .pl-art-box');
+
+    if (!artBox && heroTitleEl && heroTitleEl.parentElement && heroTitleEl.parentElement.parentElement) {
+      const headerFlex = heroTitleEl.parentElement.parentElement;
+      if (headerFlex.firstElementChild && headerFlex.firstElementChild !== heroTitleEl.parentElement) {
+        artBox = headerFlex.firstElementChild;
+      }
+    }
+
+    if (artBox) {
+      if (artBox.tagName === 'IMG') {
+        artBox.src = coverUrl;
+        artBox.alt = altText || 'Cover';
+      } else {
+        artBox.innerHTML = '<img src="' + coverUrl + '" alt="' + (altText || 'Cover') + '" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;display:block;">';
+      }
+    }
+  }
+
+  const origOpenSmartPlaylist = window.openSmartPlaylist;
+  window.openSmartPlaylist = function (type, value) {
+    const matchCat = SMART_MIX_CATEGORIES.find(function (c) { return c.id.toLowerCase() === String(value || '').toLowerCase(); });
+    if (matchCat) {
+      return window.openSpotifySmartCategory(matchCat.id);
+    }
+    const res = origOpenSmartPlaylist ? origOpenSmartPlaylist.apply(this, arguments) : undefined;
+    setTimeout(function () {
+      const pool = Array.isArray(activeSmartSongs) && activeSmartSongs.length > 0 ? activeSmartSongs : driveSongs;
+      if (pool && pool.length > 0) {
+        const firstMeta = window.getSongMeta(pool[0]);
+        setPlaylistHeroCover(firstMeta.artwork, value);
+      }
+      enhanceSongRowsWithAlbumNames();
+    }, 30);
+    return res;
+  };
+
+  // Ensure every song row displays Song Title + Artist Name ? Album Name alongside its cover
+  function enhanceSongRowsWithAlbumNames() {
+    if (!Array.isArray(driveSongs) || driveSongs.length === 0) return;
+    document.querySelectorAll('.song-row').forEach(function (row) {
+      const onclickAttr = row.getAttribute('onclick') || '';
+      const idMatch = onclickAttr.match(/playSongById\(\s*['"]([^'"]+)['"]/);
+      const songId = row.getAttribute('data-id') || (idMatch && idMatch[1]);
+      if (!songId) return;
+
+      const song = driveSongs.find(function (s) { return s.id === songId; });
+      if (!song) return;
+      const meta = window.getSongMeta(song);
+
+      const img = row.querySelector('img');
+      if (img && img.getAttribute('src') !== meta.artwork) {
+        img.src = meta.artwork;
+      }
+
+      const subEl = row.querySelector('.song-sub, .song-artist');
+      if (subEl && !subEl.querySelector('.song-album-sub') && meta.album && meta.album !== 'Cloud Drive') {
+        const albumSpan = document.createElement('span');
+        albumSpan.className = 'song-album-sub';
+        albumSpan.textContent = '? ' + meta.album;
+        const badge = subEl.querySelector('.lang-badge, .badge');
+        if (badge) {
+          subEl.insertBefore(albumSpan, badge);
+        } else {
+          subEl.appendChild(albumSpan);
+        }
+      }
+    });
+  }
+
+  const origRefreshAllViews = window.refreshAllViews;
+  if (typeof origRefreshAllViews === 'function') {
     window.refreshAllViews = function () {
-      const res = origRefresh.apply(this, arguments);
-      setTimeout(decorateLanguageAndVibeCards, 50);
-      return res;
+      const r = origRefreshAllViews.apply(this, arguments);
+      renderSpotifySmartMixGrids();
+      enhanceSongRowsWithAlbumNames();
+      return r;
     };
   }
 
-  const origOpenSmart = window.openSmartPlaylist;
-  if (typeof origOpenSmart === 'function') {
-    window.openSmartPlaylist = function () {
-      const res = origOpenSmart.apply(this, arguments);
-      setTimeout(decorateLanguageAndVibeCards, 50);
-      return res;
-    };
-  }
+  setTimeout(function () {
+    renderSpotifySmartMixGrids();
+    enhanceSongRowsWithAlbumNames();
+  }, 250);
 
-  setTimeout(decorateLanguageAndVibeCards, 300);
-  setInterval(decorateLanguageAndVibeCards, 1500);
+  setInterval(function () {
+    renderSpotifySmartMixGrids();
+    enhanceSongRowsWithAlbumNames();
+  }, 2000);
 })();
 </script>
 </body>
