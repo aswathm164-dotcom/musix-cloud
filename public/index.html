@@ -4292,11 +4292,11 @@ setInterval(function () {
     connectRealtimeSyncStream();
     fetchLibrary(true);
   </script>
-<script id="musix-hotfix-v34">
+<script id="musix-hotfix-v35">
 (function () {
-  // 1. One-time automatic Service Worker & cache migration to v34 (never loops)
-  if (localStorage.getItem('musix_client_ver') !== 'v34') {
-    localStorage.setItem('musix_client_ver', 'v34');
+  // 1. One-time automatic Service Worker & broken-cover purge for v35
+  if (localStorage.getItem('musix_client_ver') !== 'v35') {
+    localStorage.setItem('musix_client_ver', 'v35');
     try {
       const raw = JSON.parse(localStorage.getItem('am_meta_cache_v6') || '{}');
       Object.keys(raw).forEach(function (k) {
@@ -4317,6 +4317,7 @@ setInterval(function () {
     }
   }
 
+  // 2. Keep background audio preloading disabled to protect bandwidth
   window.ensureWarmAudioCache = async function () { return; };
   window.preloadNextTrackInQueue = function () { return; };
   if (typeof nextPreloader !== 'undefined' && nextPreloader) {
@@ -4324,6 +4325,7 @@ setInterval(function () {
     nextPreloader.removeAttribute('src');
   }
 
+  // 3. Prevent sync-metadata infinite loop
   let lastPushedHash = '';
   const origPush = window.pushAllOverridesToCloud;
   window.pushAllOverridesToCloud = async function (silent) {
@@ -4334,6 +4336,7 @@ setInterval(function () {
     return true;
   };
 
+  // 4. Malayalam classifier rules
   const origDetermineLang = window.determineSongLanguageStrict;
   const malayalamPattern = /\b(sushin shyam|jakes bejoy|vishnu vijay|vineeth sreenivasan|shaan rahman|rex vijayan|gopi sundar|dabzee|govind vasantha|fejo|vedan|bibin ashok|varkey|nevin thomas|mbl|sarvam maya|vellarathaaram|komala thaamara|masthishka maranam|delulu|athi bheekara kaamukan|neeye punchiri|chorkk|vazhikatti|puthu mazha|premavathi|akale)\b/i;
 
@@ -4345,6 +4348,17 @@ setInterval(function () {
     return 'Other/Unknown';
   };
 
+  // 5. Intercept getSongMeta so raw dzcdn.net links are NEVER returned to <img> tags
+  const origGetSongMeta = window.getSongMeta;
+  window.getSongMeta = function (song) {
+    const m = origGetSongMeta(song);
+    if (m && m.artwork && (m.artwork.indexOf('dzcdn.net') !== -1 || m.artwork.indexOf('deezer.com') !== -1)) {
+      m.artwork = '/icon-512.png';
+    }
+    return m;
+  };
+
+  // 6. High-res custom SVG gradient cover fallback so every track always has a sharp icon
   function generateCustomAlbumCover(title, artist) {
     const palettes = [
       ['#ff2d55', '#5856d6'],
@@ -4399,19 +4413,12 @@ setInterval(function () {
       };
       img.onload = function () { finish(img.naturalWidth > 10); };
       img.onerror = function () { finish(false); };
-      setTimeout(function () { finish(false); }, 4500);
+      setTimeout(function () { finish(false); }, 4000);
       img.src = url;
     });
   }
 
   const brokenUrls = new Set();
-  Object.keys(metaCache || {}).forEach(function (id) {
-    const art = metaCache[id] && metaCache[id].artwork;
-    if (!art || art.indexOf('icon-512.png') !== -1 || art.indexOf('dzcdn.net') !== -1 || art.indexOf('deezer.com') !== -1) {
-      if (metaCache[id]) delete metaCache[id].artwork;
-    }
-  });
-
   window.addEventListener('error', function (e) {
     const el = e.target;
     if (el && el.tagName === 'IMG' && el.src && !el.src.startsWith('data:')) {
@@ -4419,6 +4426,65 @@ setInterval(function () {
       el.src = generateCustomAlbumCover(el.alt || 'Musix', '');
     }
   }, true);
+
+  // Direct browser query to Apple iTunes Search API (fast, CORS-enabled, bypasses Render IP throttling)
+  async function searchAppleMusicDirect(title, artist) {
+    let movieName = '';
+    const fromMatch = (title || '').match(/^(.*?)\s+From\s+(.+)$/i);
+    let mainTitle = title || '';
+    if (fromMatch) {
+      mainTitle = fromMatch[1].trim();
+      movieName = fromMatch[2].trim();
+    }
+
+    const cleanTitle = mainTitle
+      .replace(/\((with|feat|ft|remix|slowed|reverb|from)[^)]*\)/gi, ' ')
+      .replace(/\b(with|feat|ft)\b.*$/i, ' ')
+      .replace(/\b(remix|from|ost|original motion picture soundtrack|one side love|song|lyrical|video)\b/gi, ' ')
+      .replace(/[()\[\]\-_]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    const cleanArtist = (!artist || artist === 'Cloud Artist' || artist === 'Unknown')
+      ? ''
+      : artist.split(/,|\/|&|\bwith\b|\bfeat\b|\bft\b/i)[0].trim();
+
+    const firstThree = cleanTitle.split(' ').slice(0, 3).join(' ');
+    const queries = [
+      movieName ? (cleanTitle + ' ' + movieName) : '',
+      (cleanTitle + ' ' + cleanArtist).trim(),
+      cleanTitle,
+      (firstThree + ' ' + cleanArtist).trim()
+    ].map(function (s) { return (s || '').trim(); }).filter(Boolean);
+
+    const uniqueQueries = Array.from(new Set(queries));
+    const stores = ['in', 'us'];
+
+    for (let s = 0; s < stores.length; s++) {
+      for (let q = 0; q < uniqueQueries.length; q++) {
+        try {
+          const url = 'https://itunes.apple.com/search?term=' + encodeURIComponent(uniqueQueries[q]) + '&country=' + stores[s] + '&media=music&entity=song&limit=4';
+          const res = await fetch(url);
+          if (!res.ok) continue;
+          const data = await res.json();
+          const hits = (data && data.results) || [];
+          for (let h = 0; h < hits.length; h++) {
+            if (hits[h].artworkUrl100) {
+              const artUrl = hits[h].artworkUrl100.replace('100x100bb', '600x600bb');
+              if (!brokenUrls.has(artUrl)) {
+                return {
+                  artwork: artUrl,
+                  album: movieName || hits[h].collectionName || '',
+                  artist: cleanArtist || hits[h].artistName || ''
+                };
+              }
+            }
+          }
+        } catch (e) {}
+      }
+    }
+    return null;
+  }
 
   function rerenderVisibleViews() {
     refreshAllViews();
@@ -4433,24 +4499,27 @@ setInterval(function () {
     }
   }
 
-  let artQueueBusy = false;
-  async function guaranteeEverySongCover() {
-    if (artQueueBusy || !Array.isArray(driveSongs) || driveSongs.length === 0) return;
-    artQueueBusy = true;
+  async function resolveSingleSongCover(song) {
+    const base = getSongMeta(song);
+    const curArt = (metaCache[song.id] && metaCache[song.id].artwork) || '';
+    if (curArt && curArt.indexOf('icon-512.png') === -1 && curArt.indexOf('dzcdn.net') === -1 && !brokenUrls.has(curArt)) {
+      return false;
+    }
 
-    for (let i = 0; i < driveSongs.length; i++) {
-      const song = driveSongs[i];
-      const base = getSongMeta(song);
-      const curArt = (metaCache[song.id] && metaCache[song.id].artwork) || '';
+    let chosenArt = '';
+    let foundAlbum = base.album;
+    let foundArtist = base.artist;
 
-      if (curArt && curArt.indexOf('icon-512.png') === -1 && curArt.indexOf('dzcdn.net') === -1 && !brokenUrls.has(curArt)) {
-        continue;
-      }
+    // 1. Fast browser-direct Apple Music lookup (IN + US)
+    const appleHit = await searchAppleMusicDirect(base.title, base.artist);
+    if (appleHit && appleHit.artwork) {
+      chosenArt = appleHit.artwork;
+      if (base.album === 'Cloud Drive' && appleHit.album) foundAlbum = appleHit.album;
+      if (base.artist === 'Cloud Artist' && appleHit.artist) foundArtist = appleHit.artist;
+    }
 
-      let chosenArt = '';
-      let foundAlbum = base.album;
-      let foundArtist = base.artist;
-
+    // 2. Fallback to server /api/song-artwork (proxied Deezer / MusicBrainz)
+    if (!chosenArt) {
       try {
         const res = await fetch('/api/song-artwork?title=' + encodeURIComponent(base.title) + '&artist=' + encodeURIComponent(base.artist));
         if (res.ok) {
@@ -4465,35 +4534,79 @@ setInterval(function () {
           }
         }
       } catch (e) {}
-
-      if (!chosenArt) {
-        const embUrl = '/api/song-embedded-art/' + encodeURIComponent(song.id);
-        const embOk = await verifyImageInBrowser(embUrl);
-        if (embOk) chosenArt = embUrl;
-      }
-
-      if (!chosenArt) {
-        chosenArt = generateCustomAlbumCover(base.title, base.artist);
-      }
-
-      metaCache[song.id] = Object.assign({}, base, metaCache[song.id] || {}, {
-        artwork: chosenArt,
-        album: foundAlbum,
-        artist: foundArtist,
-        language: window.determineSongLanguageStrict(song, base.title, foundArtist, foundAlbum, '', ''),
-        updatedAt: Date.now()
-      });
-
-      localStorage.setItem('am_meta_cache_v6', JSON.stringify(metaCache));
-      rerenderVisibleViews();
-      await new Promise(function (r) { setTimeout(r, 60); });
     }
 
-    artQueueBusy = false;
+    // 3. Fallback to embedded ID3 APIC cover inside the MP3 on Google Drive
+    if (!chosenArt) {
+      const embUrl = '/api/song-embedded-art/' + encodeURIComponent(song.id);
+      const embOk = await verifyImageInBrowser(embUrl);
+      if (embOk) chosenArt = embUrl;
+    }
+
+    // 4. Guaranteed custom gradient album icon so zero songs ever lack artwork
+    if (!chosenArt) {
+      chosenArt = generateCustomAlbumCover(base.title, base.artist);
+    }
+
+    metaCache[song.id] = Object.assign({}, base, metaCache[song.id] || {}, {
+      artwork: chosenArt,
+      album: foundAlbum,
+      artist: foundArtist,
+      language: window.determineSongLanguageStrict(song, base.title, foundArtist, foundAlbum, '', ''),
+      updatedAt: Date.now()
+    });
+    return true;
   }
 
-  setTimeout(guaranteeEverySongCover, 400);
-  setInterval(guaranteeEverySongCover, 4000);
+  let artPoolActive = false;
+  async function runParallelCoverPool() {
+    if (artPoolActive || !Array.isArray(driveSongs) || driveSongs.length === 0) return;
+    artPoolActive = true;
+
+    // Prioritize songs in the currently open playlist first, then the rest of the library
+    const priorityIds = new Set(Array.isArray(activeSmartSongs) ? activeSmartSongs.map(function (s) { return s.id; }) : []);
+    const orderedSongs = driveSongs.slice().sort(function (a, b) {
+      const ap = priorityIds.has(a.id) ? 0 : 1;
+      const bp = priorityIds.has(b.id) ? 0 : 1;
+      return ap - bp;
+    });
+
+    const missing = orderedSongs.filter(function (s) {
+      const a = (metaCache[s.id] && metaCache[s.id].artwork) || '';
+      return !a || a.indexOf('icon-512.png') !== -1 || a.indexOf('dzcdn.net') !== -1 || brokenUrls.has(a);
+    });
+
+    let cursor = 0;
+    let dirty = false;
+
+    async function worker() {
+      while (cursor < missing.length) {
+        const idx = cursor++;
+        const changed = await resolveSingleSongCover(missing[idx]);
+        if (changed) {
+          dirty = true;
+          if (idx % 4 === 0) {
+            localStorage.setItem('am_meta_cache_v6', JSON.stringify(metaCache));
+            rerenderVisibleViews();
+          }
+        }
+      }
+    }
+
+    // Run 6 parallel workers so all missing covers load in ~8 seconds
+    const workers = [];
+    for (let w = 0; w < 6; w++) workers.push(worker());
+    await Promise.all(workers);
+
+    if (dirty) {
+      localStorage.setItem('am_meta_cache_v6', JSON.stringify(metaCache));
+      rerenderVisibleViews();
+    }
+    artPoolActive = false;
+  }
+
+  setTimeout(runParallelCoverPool, 300);
+  setInterval(runParallelCoverPool, 4000);
 })();
 </script>
 </body>
