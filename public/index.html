@@ -1459,15 +1459,12 @@
     }
   </style>
 <style id="musix-v47-styles">
-  /* 1. Remove ONLY the Offline tab from the Mobile Bottom Navigation (4 tabs: Home, Mixes, Trending, Upload) */
   .bottom-nav [onclick*="offline"],
   #bottom-nav [onclick*="offline"],
   .mobile-nav [onclick*="offline"],
   nav.bottom-bar [onclick*="offline"] {
     display: none !important;
   }
-
-  /* 2. Consistent Rounded Artwork & Zero Broken Icons */
   .song-art img, .card-art img, .mini-art img, .sheet-art-box img, #pl-hero-art img {
     width: 100% !important;
     height: 100% !important;
@@ -1478,8 +1475,6 @@
     color: transparent !important;
     font-size: 0 !important;
   }
-
-  /* 3. Home Screen: Spotify-Style Horizontally Scrollable Recently Added Cards */
   #recent-row, .recent-scroll-row {
     display: flex !important;
     flex-direction: row !important;
@@ -1540,8 +1535,6 @@
     overflow: hidden !important;
     text-overflow: ellipsis !important;
   }
-
-  /* 4. Smart Mix Cards (Language, Vibe, and By Artist Cards) */
   .musix-smart-card {
     position: relative !important;
     height: 148px !important;
@@ -1598,8 +1591,6 @@
     color: rgba(255, 255, 255, 0.85) !important;
     margin-top: 2px !important;
   }
-
-  /* By Artist Grid Cards */
   .musix-artist-grid {
     display: grid !important;
     grid-template-columns: repeat(auto-fill, minmax(145px, 1fr)) !important;
@@ -1656,8 +1647,6 @@
     color: rgba(255, 255, 255, 0.58) !important;
     margin-top: 2px !important;
   }
-
-  /* 5. Trending Chart Styles (Spotify / YouTube Music Style) */
   .trending-meta-bar {
     display: flex !important;
     align-items: center !important;
@@ -4440,9 +4429,6 @@
   </script>
 <script id="musix-v47-production">
 (function musixV47ProductionApp() {
-    // ========================================================================
-    // 1. CRASH PROTECTION, ERROR LOGGING & ONE-TIME CACHE CLEANUP
-    // ========================================================================
     window.musixErrorLogs = window.musixErrorLogs || [];
     function logMusixError(context, err) {
       const msg = (err && (err.stack || err.message)) || String(err);
@@ -4502,11 +4488,9 @@
       }
     }
 
-    // Remove Offline button from mobile bottom navigation bar (keep 4 tabs: Home, Mixes, Trending, Upload)
     function removeOfflineTabFromBottomNav() {
       const navs = document.querySelectorAll('.bottom-nav, #bottom-nav, .mobile-nav, nav');
       navs.forEach(function (nav) {
-        // Only target the bottom bar (not the desktop left sidebar)
         if (nav.classList.contains('sidebar') || nav.id === 'sidebar') return;
         nav.querySelectorAll('button, a, .nav-item, .tab-btn, div[onclick]').forEach(function (btn) {
           const onClickText = btn.getAttribute('onclick') || '';
@@ -4519,7 +4503,6 @@
     }
     removeOfflineTabFromBottomNav();
 
-    // Prevent memory leak in applyDynamicSheetColor by caching RGB colors per URL
     const sheetColorCache = {};
     const origApplyDynamicColor = window.applyDynamicSheetColor;
     window.applyDynamicSheetColor = function (imgUrl) {
@@ -4540,9 +4523,6 @@
       }
     };
 
-    // ========================================================================
-    // 2. METADATA, LANGUAGE, VIBE & ARTIST CLASSIFIER
-    // ========================================================================
     let staticCoverManifest = {};
     fetch('/covers/index.json?v=47')
       .then(function (r) { return r.ok ? r.json() : {}; })
@@ -4665,13 +4645,10 @@
       };
     };
 
-    // ========================================================================
-    // 3. SINGLE-SOURCE-OF-TRUTH AUDIO PLAYER ENGINE (Pause, Resume, Next, Prev, Session)
-    // ========================================================================
+    // Single-Source-of-Truth Audio Player Engine
     const SESSION_KEY = 'musix_session_v47';
     let audioEl = document.getElementById('audio-player');
 
-    // Clone and replace <audio> element once on init so all duplicate base listeners are stripped cleanly!
     if (audioEl && !audioEl.hasAttribute('data-v47-clean')) {
       const cleanAudio = audioEl.cloneNode(false);
       cleanAudio.removeAttribute('crossorigin');
@@ -4798,7 +4775,7 @@
       const sheetArt = document.getElementById('sheet-art');
       if (sheetTitle) sheetTitle.textContent = meta.title;
       if (sheetArtist) {
-        const albumSuffix = (meta.album && meta.album !== 'Cloud Drive') ? (' ? ' + meta.album) : '';
+        const albumSuffix = (meta.album && meta.album !== 'Cloud Drive') ? (' \u2014 ' + meta.album) : '';
         sheetArtist.textContent = meta.artist + albumSuffix;
       }
       if (sheetArt) {
@@ -4852,7 +4829,6 @@
 
       const token = ++playRequestToken;
 
-      // If same song is already loaded and user just tapped it without startSec override, resume/play without resetting!
       const targetStreamUrl = song.streamUrl || ('/api/stream/' + encodeURIComponent(song.id));
       if (activeLoadedSongId === song.id && audioEl.getAttribute('src') === targetStreamUrl && startSec === 0 && opts.forceReload !== true) {
         if (audioEl.paused && shouldPlay) {
@@ -4936,7 +4912,6 @@
       }
     }
 
-    // Core Player Controls (Guaranteed Pause & Exact Position Resume)
     window.togglePlay = window.togglePlayPause = function (ev) {
       if (ev && ev.stopPropagation) ev.stopPropagation();
       if (!audioEl) return;
@@ -4948,7 +4923,6 @@
         return;
       }
 
-      // If currently playing -> PAUSE IMMEDIATELY at exact current position
       if (!audioEl.paused && isPlaying) {
         isPlaying = false;
         audioEl.pause();
@@ -4957,7 +4931,6 @@
         return;
       }
 
-      // If currently paused -> RESUME from exact current position (NEVER reload src!)
       const expectedSrc = currentSong.streamUrl || ('/api/stream/' + encodeURIComponent(currentSong.id));
       if (!audioEl.getAttribute('src') || audioEl.getAttribute('src') !== expectedSrc) {
         audioEl.src = expectedSrc;
@@ -5132,7 +5105,6 @@
       writeSavedSession();
     };
 
-    // Attach Clean Single-Instance Audio Lifecycle Listeners
     if (audioEl) {
       audioEl.addEventListener('loadedmetadata', function () {
         if (pendingRestoreSeekSec !== null && pendingRestoreSeekSec > 0) {
@@ -5208,7 +5180,6 @@
       }
     }
 
-    // Pause safely if headphones are unplugged
     if (navigator.mediaDevices && navigator.mediaDevices.addEventListener) {
       try {
         navigator.mediaDevices.addEventListener('devicechange', function () {
@@ -5268,7 +5239,6 @@
       currentIndex = idx !== -1 ? idx : 0;
       currentSong = target;
 
-      // Always restore in paused state at exact timestamp so reopening app never blasts audio unexpectedly
       loadAndControlTrack(target, {
         autoPlay: false,
         startTime: typeof saved.currentTime === 'number' ? saved.currentTime : 0,
@@ -5276,9 +5246,7 @@
       });
     }
 
-    // ========================================================================
-    // 4. HOME SCREEN: SPOTIFY-STYLE RECENTLY ADDED + "ALL" BUTTON
-    // ========================================================================
+    // Home Screen: Spotify-Style Recently Added
     window.openAllRecentlyAdded = function () {
       if (!Array.isArray(driveSongs) || driveSongs.length === 0) return;
       const sortedNewest = driveSongs.slice();
@@ -5300,7 +5268,6 @@
       const recentContainer = document.getElementById('recent-row') || document.querySelector('#view-home .recent-row, #view-home .horizontal-scroll');
       if (!recentContainer) return;
 
-      // Wire the "All" button next to Recently Added header
       const sectionHeader = recentContainer.previousElementSibling;
       if (sectionHeader) {
         const allBtn = sectionHeader.querySelector('button, .pill-btn, a');
@@ -5327,9 +5294,7 @@
       }).join('');
     }
 
-    // ========================================================================
-    // 5. SMART MIXES: BY LANGUAGE, BY ARTIST & 6 UNIQUE VIBE COLLECTIONS
-    // ========================================================================
+    // Smart Mixes: By Language, By Artist & 6 Unique Vibe Collections
     const VIBE_DEFINITIONS = [
       {
         id: 'Feel Good',
@@ -5389,7 +5354,6 @@
 
     function pickBestCoverFromSongs(songs) {
       if (!songs || songs.length === 0) return '/icon-512.png';
-      // Prefer a song that is in staticCoverManifest and not the first fallback
       for (let i = 0; i < songs.length; i++) {
         if (staticCoverManifest[songs[i].id]) {
           return window.getSongMeta(songs[i]).artwork;
@@ -5506,7 +5470,6 @@
     function renderAllSmartMixSections() {
       if (!Array.isArray(driveSongs) || driveSongs.length === 0) return;
 
-      // 1. Group by Language (English, Malayalam, Hindi, Tamil + any other with >0 songs)
       const langGroups = {};
       ['English', 'Malayalam', 'Hindi', 'Tamil'].forEach(function (l) { langGroups[l] = []; });
       driveSongs.forEach(function (s) {
@@ -5523,23 +5486,17 @@
         return buildSmartMixCardHtml('LANGUAGE', lang, list.length, cover, grad, 'Language', lang);
       });
 
-      // 2. Build Unique Vibe Collections (Feel Good, Melody & Vibe, Romantic, Sad Songs, Party, Devotional)
       const vibeCardsHtml = VIBE_DEFINITIONS.map(function (vDef) {
         const list = getSongsForVibe(vDef);
         const cover = pickBestCoverFromSongs(list);
         return buildSmartMixCardHtml('VIBE', vDef.title, list.length, cover, vDef.gradient, 'Vibe', vDef.id);
       });
 
-      // 3. Render Home Screen Smart Mixes (4 Languages + Top 2 Vibes = 6 Cards)
       const homeMixGrid = document.getElementById('home-smart-mixes') || document.getElementById('smart-mix-row') || document.querySelector('#view-home .mix-grid, #view-home .smart-grid');
       if (homeMixGrid) {
         homeMixGrid.innerHTML = langCardsHtml.slice(0, 4).concat(vibeCardsHtml.slice(0, 2)).join('');
       }
 
-      // 4. Render Dedicated Smart Mix View (#view-smart):
-      //    Section 1: By Language
-      //    Section 2: By Artist (Fixed & Populated!)
-      //    Section 3: Unique Vibe & Theme Collections (Feel Good, Melody & Vibe, Romantic, Sad Songs, Party, Devotional)
       const smartView = document.getElementById('view-smart');
       if (smartView) {
         const artists = extractAllArtistsList();
@@ -5557,7 +5514,6 @@
 
         let customWrap = document.getElementById('musix-v47-smart-wrap');
         if (!customWrap) {
-          // Hide old empty/duplicate containers inside #view-smart and insert unified container
           Array.from(smartView.children).forEach(function (ch, idx) {
             if (idx > 0) ch.style.display = 'none';
           });
@@ -5607,7 +5563,7 @@
         if (subEl && !subEl.querySelector('.song-album-sub') && meta.album && meta.album !== 'Cloud Drive' && meta.album !== 'Single') {
           const albumSpan = document.createElement('span');
           albumSpan.className = 'song-album-sub';
-          albumSpan.textContent = ' ? ' + meta.album;
+          albumSpan.textContent = ' \u2022 ' + meta.album;
           const badge = subEl.querySelector('.lang-badge, .badge');
           if (badge) subEl.insertBefore(albumSpan, badge);
           else subEl.appendChild(albumSpan);
@@ -5615,9 +5571,7 @@
       });
     }
 
-    // ========================================================================
-    // 6. TRENDING: SPOTIFY & YOUTUBE MUSIC STYLE (20 Genuine Songs Per Language)
-    // ========================================================================
+    // Trending: 20 Genuine Songs Per Language
     const TRENDING_LOCAL_CACHE_KEY = 'musix_trending_cache_v47';
     let activeTrendingLang = 'Malayalam';
     let currentTrendingList = [];
@@ -5643,7 +5597,6 @@
       const item = currentTrendingList[idx];
       if (!item) return;
 
-      // 1. If the song exists in the user's Google Drive library, play full song from Drive
       if (item.librarySongId && Array.isArray(driveSongs)) {
         const libSong = driveSongs.find(function (s) { return s.id === item.librarySongId; });
         if (libSong) {
@@ -5651,9 +5604,8 @@
         }
       }
 
-      // 2. Otherwise play the official chart audio stream directly inside Musix player
       if (item.previewUrl) {
-        const chartQueue = currentTrendingList.filter(function (x) { return x.previewUrl || x.librarySongId; }).map(function (x, i) {
+        const chartQueue = currentTrendingList.filter(function (x) { return x.previewUrl || x.librarySongId; }).map(function (x) {
           if (x.librarySongId && Array.isArray(driveSongs)) {
             const found = driveSongs.find(function (s) { return s.id === x.librarySongId; });
             if (found) return found;
@@ -5692,7 +5644,6 @@
         trendingView.appendChild(listContainer);
       }
 
-      // Clear any old "Connect to internet to load Trending." error text
       trendingView.querySelectorAll('p, div').forEach(function (el) {
         if ((el.textContent || '').trim() === 'Connect to internet to load Trending.') {
           el.textContent = '';
@@ -5713,8 +5664,8 @@
 
       const metaBarHtml =
         '<div class="trending-meta-bar">' +
-          '<span>?? Top 20 ' + activeTrendingLang + ' Chart ? Updated ' + dateStr + ' (Auto-refreshes every 24h)</span>' +
-          '<button class="trending-refresh-btn" onclick="loadTrending(\'' + activeTrendingLang + '\', true)">? Refresh Chart</button>' +
+          '<span>Top 20 ' + activeTrendingLang + ' Chart \u2022 Updated ' + dateStr + ' (Refreshes every 24h)</span>' +
+          '<button class="trending-refresh-btn" onclick="loadTrending(\'' + activeTrendingLang + '\', true)">\u21BB Refresh Chart</button>' +
         '</div>';
 
       if (filtered.length === 0) {
@@ -5722,11 +5673,11 @@
         return;
       }
 
-      const rowsHtml = filtered.map(function (item, i) {
+      const rowsHtml = filtered.map(function (item) {
         const origIdx = currentTrendingList.indexOf(item);
-        const mov = item.movement || '?';
+        const mov = item.movement || '\u2501';
         let movClass = 'trending-move-same';
-        if (mov.indexOf('?') !== -1) movClass = 'trending-move-up';
+        if (mov.indexOf('\u25B2') !== -1) movClass = 'trending-move-up';
         else if (mov.indexOf('NEW') !== -1) movClass = 'trending-move-new';
 
         const sourceBadge = item.librarySongId ? 'In Library' : 'Top 20 Chart';
@@ -5741,7 +5692,7 @@
             '<div class="song-info" style="min-width:0;flex:1;">' +
               '<div class="song-title" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + item.title + '</div>' +
               '<div class="song-sub" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' +
-                item.artist + ' <span class="song-album-sub">? ' + (item.album || 'Single') + '</span> ' +
+                item.artist + ' <span class="song-album-sub">\u2022 ' + (item.album || 'Single') + '</span> ' +
                 '<span class="lang-badge">' + sourceBadge + '</span>' +
               '</div>' +
             '</div>' +
@@ -5755,7 +5706,6 @@
     window.loadTrending = window.filterTrending = async function (lang, forceRefresh) {
       activeTrendingLang = lang || activeTrendingLang || 'Malayalam';
 
-      // Update active pill styling in #view-trending
       const trendingView = document.getElementById('view-trending');
       if (trendingView) {
         trendingView.querySelectorAll('button, .pill, .chip, .lang-pill').forEach(function (btn) {
@@ -5769,7 +5719,6 @@
         });
       }
 
-      // 1. Show cached chart immediately if available
       const cachedAll = getLocalTrendingCache();
       if (!forceRefresh && cachedAll[activeTrendingLang] && Array.isArray(cachedAll[activeTrendingLang].songs) && cachedAll[activeTrendingLang].songs.length > 0) {
         currentTrendingList = cachedAll[activeTrendingLang].songs;
@@ -5777,7 +5726,6 @@
         renderTrendingRows('');
       }
 
-      // 2. Fetch fresh / 24h-verified chart from server
       try {
         const url = '/api/trending?lang=' + encodeURIComponent(activeTrendingLang) + (forceRefresh ? '&refresh=1' : '');
         const res = await fetch(url);
@@ -5795,7 +5743,6 @@
       }
     };
 
-    // Wire Trending search input & language pills
     function wireTrendingControls() {
       const trendingView = document.getElementById('view-trending');
       if (!trendingView) return;
@@ -5819,7 +5766,6 @@
       });
     }
 
-    // Hook into refreshAllViews and switchView (Event-Driven ? NO 1000ms setInterval leaks!)
     const origRefreshAllViews = window.refreshAllViews;
     window.refreshAllViews = function () {
       if (typeof origRefreshAllViews === 'function') {
@@ -5851,7 +5797,6 @@
       };
     }
 
-    // Initial boot execution
     setTimeout(function () {
       removeOfflineTabFromBottomNav();
       wireTrendingControls();
