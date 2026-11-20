@@ -1,21 +1,18 @@
-const SHELL_CACHE = 'musix-shell-v24';
-const AUDIO_CACHE = 'musix-offline-audio-v1';
-const RECENT_AUDIO_CACHE = 'musix-recent-audio-v1';
-const ASSETS = [
-  '/',
-  '/index.html',
+const SHELL_CACHE = 'musix-shell-v48';
+const AUDIO_CACHE = 'musix-audio-v48';
+const COVER_CACHE = 'musix-covers-v48';
+
+const SHELL_ASSETS = [
   '/manifest.json',
   '/icon-192.png',
-  '/icon-512.png',
-  '/fonts/inter-black.woff2',
-  '/fonts/poppins-medium.woff2'
+  '/icon-512.png'
 ];
 
 self.addEventListener('install', function (e) {
   self.skipWaiting();
   e.waitUntil(
     caches.open(SHELL_CACHE).then(function (cache) {
-      return Promise.allSettled(ASSETS.map(function (u) { return cache.add(u); }));
+      return cache.addAll(SHELL_ASSETS);
     })
   );
 });
@@ -25,37 +22,34 @@ self.addEventListener('activate', function (e) {
     caches.keys().then(function (keys) {
       return Promise.all(
         keys.map(function (k) {
-          if (k !== SHELL_CACHE && k !== AUDIO_CACHE && k !== RECENT_AUDIO_CACHE) {
+          if (k !== SHELL_CACHE && k !== AUDIO_CACHE && k !== COVER_CACHE) {
             return caches.delete(k);
           }
-          return null;
         })
       );
+    }).then(function () {
+      return self.clients.claim();
     })
   );
-  self.clients.claim();
 });
 
 async function serveAudioWithRange(request, cachedResponse) {
   const rangeHeader = request.headers.get('range');
   if (!rangeHeader) return cachedResponse;
-
-  const arrayBuffer = await cachedResponse.arrayBuffer();
-  const bytes = /^bytes=(\d+)-(\d+)?$/i.exec(rangeHeader);
-  if (!bytes) return cachedResponse;
-
-  const start = parseInt(bytes[1], 10);
-  const end = bytes[2] ? parseInt(bytes[2], 10) : arrayBuffer.byteLength - 1;
-  const sliced = arrayBuffer.slice(start, end + 1);
-
+  const buf = await cachedResponse.arrayBuffer();
+  const total = buf.byteLength;
+  const parts = rangeHeader.replace(/bytes=/, '').split('-');
+  const start = parseInt(parts[0], 10) || 0;
+  const end = parts[1] ? Math.min(parseInt(parts[1], 10), total - 1) : total - 1;
+  const sliced = buf.slice(start, end + 1);
   return new Response(sliced, {
     status: 206,
     statusText: 'Partial Content',
     headers: {
       'Content-Type': cachedResponse.headers.get('Content-Type') || 'audio/mpeg',
-      'Content-Range': 'bytes ' + start + '-' + end + '/' + arrayBuffer.byteLength,
-      'Accept-Ranges': 'bytes',
-      'Content-Length': String(sliced.byteLength)
+      'Content-Range': 'bytes ' + start + '-' + end + '/' + total,
+      'Content-Length': String(sliced.byteLength),
+      'Accept-Ranges': 'bytes'
     }
   });
 }
@@ -65,71 +59,57 @@ self.addEventListener('fetch', function (e) {
 
   if (url.pathname.indexOf('/api/stream/') === 0) {
     e.respondWith((async function () {
-      const offCache = await caches.open(AUDIO_CACHE);
-      const offMatch = await offCache.match(url.pathname);
-      if (offMatch) return serveAudioWithRange(e.request, offMatch);
-
-      const recCache = await caches.open(RECENT_AUDIO_CACHE);
-      const recMatch = await recCache.match(url.pathname);
-      if (recMatch) return serveAudioWithRange(e.request, recMatch);
-
-      const netRes = await fetch(e.request);
-      if (netRes && netRes.status === 200 && url.searchParams.get('warm') === '1') {
-        const clone = netRes.clone();
-        recCache.put(url.pathname, clone).catch(function () {});
-      }
-      return netRes;
+      try {
+        const offCache = await caches.open(AUDIO_CACHE);
+        const offMatch = await offCache.match(url.pathname);
+        if (offMatch && offMatch.status === 200) {
+          return serveAudioWithRange(e.request, offMatch);
+        }
+      } catch (err) {}
+      return fetch(e.request);
     })());
     return;
   }
 
-  if (url.pathname === '/api/songs') {
-    e.respondWith(
-      fetch(e.request)
-        .then(function (res) {
-          if (res && res.status === 200) {
-            const clone = res.clone();
-            caches.open(SHELL_CACHE).then(function (cache) {
-              cache.put('/api/songs', clone);
-            });
-          }
-          return res;
-        })
-        .catch(function () {
-          return caches.match('/api/songs');
-        })
-    );
+  if (url.pathname.indexOf('/api/cover/') === 0 || url.pathname.indexOf('/covers/') === 0 || url.hostname === 'cdn.jsdelivr.net') {
+    e.respondWith((async function () {
+      const cCache = await caches.open(COVER_CACHE);
+      const cached = await cCache.match(e.request);
+      if (cached && cached.status === 200) return cached;
+      try {
+        const netRes = await fetch(e.request);
+        const ct = (netRes && netRes.headers && netRes.headers.get('content-type')) || '';
+        if (netRes && netRes.status === 200 && ct.indexOf('svg') === -1) {
+          cCache.put(e.request, netRes.clone());
+        }
+        return netRes;
+      } catch (err) {
+        return cached || caches.match('/icon-512.png');
+      }
+    })());
     return;
   }
 
-  if (url.pathname.indexOf('/api/') === 0) return;
+  if (url.pathname.indexOf('/api/') === 0) {
+    return;
+  }
 
-  if (url.pathname.indexOf('/fonts/') === 0) {
+  if (e.request.mode === 'navigate' || url.pathname === '/' || url.pathname === '/index.html') {
     e.respondWith(
-      caches.match(e.request).then(function (cached) {
-        return cached || fetch(e.request).then(function (res) {
-          const clone = res.clone();
-          caches.open(SHELL_CACHE).then(function (c) { c.put(e.request, clone); });
-          return res;
-        });
+      fetch(e.request).then(function (netRes) {
+        const copy = netRes.clone();
+        caches.open(SHELL_CACHE).then(function (c) { c.put(e.request, copy); });
+        return netRes;
+      }).catch(function () {
+        return caches.match(e.request) || caches.match('/');
       })
     );
     return;
   }
 
   e.respondWith(
-    fetch(e.request)
-      .then(function (res) {
-        if (res && res.status === 200) {
-          const clone = res.clone();
-          caches.open(SHELL_CACHE).then(function (cache) {
-            cache.put(e.request, clone);
-          });
-        }
-        return res;
-      })
-      .catch(function () {
-        return caches.match(e.request);
-      })
+    caches.match(e.request).then(function (cached) {
+      return cached || fetch(e.request);
+    })
   );
 });

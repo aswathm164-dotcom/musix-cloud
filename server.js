@@ -702,6 +702,8 @@ app.post('/api/rescan-drive-tags', async (req, res) => {
   }
 });
 
+require('./musix-v48-zero-bw')(app, drive, __dirname);
+
 app.get('/api/songs', async (req, res) => {
   try {
     const force = req.query.refresh === '1';
@@ -718,7 +720,7 @@ app.get('/api/stream/:fileId', async (req, res) => {
     const range = req.headers.range;
     const isFullFetch = req.query.download === '1' || req.query.warm === '1';
 
-    let meta = fileMetaCache[fileId];
+    let meta = (global.musixFileMetaCache && global.musixFileMetaCache[fileId]) || fileMetaCache[fileId];
     if (!meta) {
       const gMeta = await drive.files.get({
         fileId: fileId,
