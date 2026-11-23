@@ -1,6 +1,6 @@
-const SHELL_CACHE = 'musix-shell-v48';
-const AUDIO_CACHE = 'musix-audio-v48';
-const COVER_CACHE = 'musix-covers-v48';
+const SHELL_CACHE = 'musix-shell-v50';
+const AUDIO_CACHE = 'musix-audio-v50';
+const COVER_CACHE = 'musix-covers-v50';
 
 const SHELL_ASSETS = [
   '/manifest.json',
@@ -33,53 +33,22 @@ self.addEventListener('activate', function (e) {
   );
 });
 
-async function serveAudioWithRange(request, cachedResponse) {
-  const rangeHeader = request.headers.get('range');
-  if (!rangeHeader) return cachedResponse;
-  const buf = await cachedResponse.arrayBuffer();
-  const total = buf.byteLength;
-  const parts = rangeHeader.replace(/bytes=/, '').split('-');
-  const start = parseInt(parts[0], 10) || 0;
-  const end = parts[1] ? Math.min(parseInt(parts[1], 10), total - 1) : total - 1;
-  const sliced = buf.slice(start, end + 1);
-  return new Response(sliced, {
-    status: 206,
-    statusText: 'Partial Content',
-    headers: {
-      'Content-Type': cachedResponse.headers.get('Content-Type') || 'audio/mpeg',
-      'Content-Range': 'bytes ' + start + '-' + end + '/' + total,
-      'Content-Length': String(sliced.byteLength),
-      'Accept-Ranges': 'bytes'
-    }
-  });
-}
-
 self.addEventListener('fetch', function (e) {
   const url = new URL(e.request.url);
 
-  if (url.pathname.indexOf('/api/stream/') === 0) {
-    e.respondWith((async function () {
-      try {
-        const offCache = await caches.open(AUDIO_CACHE);
-        const offMatch = await offCache.match(url.pathname);
-        if (offMatch && offMatch.status === 200) {
-          return serveAudioWithRange(e.request, offMatch);
-        }
-      } catch (err) {}
-      return fetch(e.request);
-    })());
+  // Never intercept /api/ requests or audio streams so native <audio> follows 302 Drive redirects cleanly
+  if (url.pathname.indexOf('/api/') === 0) {
     return;
   }
 
-  if (url.pathname.indexOf('/api/cover/') === 0 || url.pathname.indexOf('/covers/') === 0 || url.hostname === 'cdn.jsdelivr.net') {
+  if (url.pathname.indexOf('/covers/') === 0 || url.hostname === 'cdn.jsdelivr.net') {
     e.respondWith((async function () {
       const cCache = await caches.open(COVER_CACHE);
       const cached = await cCache.match(e.request);
       if (cached && cached.status === 200) return cached;
       try {
         const netRes = await fetch(e.request);
-        const ct = (netRes && netRes.headers && netRes.headers.get('content-type')) || '';
-        if (netRes && netRes.status === 200 && ct.indexOf('svg') === -1) {
+        if (netRes && netRes.status === 200) {
           cCache.put(e.request, netRes.clone());
         }
         return netRes;
@@ -87,10 +56,6 @@ self.addEventListener('fetch', function (e) {
         return cached || caches.match('/icon-512.png');
       }
     })());
-    return;
-  }
-
-  if (url.pathname.indexOf('/api/') === 0) {
     return;
   }
 

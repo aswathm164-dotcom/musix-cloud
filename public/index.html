@@ -4468,8 +4468,8 @@
       }
     }, true);
 
-    if (localStorage.getItem('musix_client_ver') !== 'v49') {
-      localStorage.setItem('musix_client_ver', 'v49');
+    if (localStorage.getItem('musix_client_ver') !== 'v50') {
+      localStorage.setItem('musix_client_ver', 'v50');
       localStorage.removeItem('am_meta_cache_v6');
       localStorage.removeItem('am_meta_cache_v5');
       if ('caches' in window) {
@@ -4652,12 +4652,12 @@
     const SESSION_KEY = 'musix_session_v48';
     let audioEl = document.getElementById('audio-player');
 
-    if (audioEl && !audioEl.hasAttribute('data-v48-clean')) {
+    if (audioEl && !audioEl.hasAttribute('data-v50-clean')) {
       const cleanAudio = audioEl.cloneNode(false);
       cleanAudio.removeAttribute('crossorigin');
       cleanAudio.preload = 'auto';
       cleanAudio.setAttribute('playsinline', '');
-      cleanAudio.setAttribute('data-v48-clean', '1');
+      cleanAudio.setAttribute('data-v50-clean', '1');
       audioEl.parentNode.replaceChild(cleanAudio, audioEl);
       audioEl = cleanAudio;
       try { audio = cleanAudio; } catch (e) {}
@@ -5797,6 +5797,20 @@
       window.loadTrending('Malayalam', false);
     }, 150);
   })();
+</script>
+<script id="musix-v50-audio-guard">
+(function () {
+  const el = document.getElementById('audio-player');
+  if (!el) return;
+  el.addEventListener('error', function () {
+    const err = el.error;
+    console.error('[MusixAudioError]', {
+      code: err ? err.code : 'unknown',
+      message: err ? err.message : '',
+      src: el.currentSrc || el.src
+    });
+  });
+})();
 </script>
 </body>
 </html>
