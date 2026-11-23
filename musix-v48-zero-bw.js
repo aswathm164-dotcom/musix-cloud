@@ -147,9 +147,6 @@ module.exports = function registerMusixV48Engine(app, drive, rootDir) {
       'Cache-Control': 'no-store, no-cache, must-revalidate',
       'Access-Control-Allow-Origin': '*'
     });
-    if (!process.env.GOOGLE_REFRESH_TOKEN || !process.env.GOOGLE_CLIENT_ID) {
-      return res.status(503).json({ error: 'MISSING_RENDER_ENV: Add GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, and GOOGLE_REFRESH_TOKEN on Render.' });
-    }
     if (cachedDriveAccessToken && Date.now() < cachedDriveAccessExpiry) {
       return res.json({
         token: cachedDriveAccessToken,
@@ -175,7 +172,6 @@ module.exports = function registerMusixV48Engine(app, drive, rootDir) {
     }
   });
 
-  // Fallback proxy route if browser ever calls /api/stream/:fileId directly
   app.get('/api/stream/:fileId', (req, res, next) => next());
 
   // 2. INSTANT /api/songs SNAPSHOT & CACHE HEADERS

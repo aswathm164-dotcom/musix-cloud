@@ -4468,8 +4468,8 @@
       }
     }, true);
 
-    if (localStorage.getItem('musix_client_ver') !== 'v50') {
-      localStorage.setItem('musix_client_ver', 'v50');
+    if (localStorage.getItem('musix_client_ver') !== 'v52') {
+      localStorage.setItem('musix_client_ver', 'v52');
       localStorage.removeItem('am_meta_cache_v6');
       localStorage.removeItem('am_meta_cache_v5');
       if ('caches' in window) {
@@ -5798,18 +5798,161 @@
     }, 150);
   })();
 </script>
-<script id="musix-v50-audio-guard">
+<script id="musix-v52-direct-bearer">
 (function () {
-  const el = document.getElementById('audio-player');
-  if (!el) return;
-  el.addEventListener('error', function () {
-    const err = el.error;
-    console.error('[MusixAudioError]', {
-      code: err ? err.code : 'unknown',
-      message: err ? err.message : '',
-      src: el.currentSrc || el.src
+  const blobUrlCache = {};
+  const blobOrder = [];
+  const inFlightDownloads = {};
+  let clientToken = '';
+  let clientTokenExpiry = 0;
+
+  async function getValidDriveBearerToken(forceRefresh) {
+    if (!forceRefresh && clientToken && Date.now() < clientTokenExpiry) {
+      return clientToken;
+    }
+    const res = await fetch('/api/drive-token');
+    const data = await res.json().catch(function () { return {}; });
+    if (!res.ok || !data.token) {
+      throw new Error(data.error || ('Token HTTP ' + res.status));
+    }
+    clientToken = data.token;
+    clientTokenExpiry = Date.now() + Math.max(300, (data.expiresIn || 2400) - 180) * 1000;
+    return clientToken;
+  }
+
+  function storeBlobUrl(fileId, blobUrl) {
+    if (blobUrlCache[fileId]) return blobUrlCache[fileId];
+    if (blobOrder.length >= 6) {
+      const oldest = blobOrder.shift();
+      if (oldest && blobUrlCache[oldest]) {
+        try { URL.revokeObjectURL(blobUrlCache[oldest]); } catch (e) {}
+        delete blobUrlCache[oldest];
+      }
+    }
+    blobUrlCache[fileId] = blobUrl;
+    blobOrder.push(fileId);
+    return blobUrl;
+  }
+
+  async function resolveDirectDriveBlobUrl(fileId) {
+    if (blobUrlCache[fileId]) return blobUrlCache[fileId];
+
+    if ('caches' in window) {
+      try {
+        const offCache = await caches.open('musix-audio-v52');
+        const offMatch = await offCache.match('/api/stream/' + encodeURIComponent(fileId));
+        if (offMatch && offMatch.ok) {
+          const offBlob = await offMatch.blob();
+          if (offBlob.size > 1024) return storeBlobUrl(fileId, URL.createObjectURL(offBlob));
+        }
+      } catch (e) {}
+    }
+
+    if (inFlightDownloads[fileId]) return inFlightDownloads[fileId];
+
+    inFlightDownloads[fileId] = (async function () {
+      try {
+        const driveApiUrl = 'https://www.googleapis.com/drive/v3/files/' + encodeURIComponent(fileId) + '?alt=media';
+        let token = await getValidDriveBearerToken(false);
+        let resp = await fetch(driveApiUrl, {
+          headers: { Authorization: 'Bearer ' + token }
+        });
+
+        if (resp.status === 401) {
+          token = await getValidDriveBearerToken(true);
+          resp = await fetch(driveApiUrl, {
+            headers: { Authorization: 'Bearer ' + token }
+          });
+        }
+
+        if (!resp.ok) {
+          throw new Error('Google Drive HTTP ' + resp.status);
+        }
+
+        const audioBlob = await resp.blob();
+        if (!audioBlob || audioBlob.size < 1024) {
+          throw new Error('Empty audio payload');
+        }
+        return storeBlobUrl(fileId, URL.createObjectURL(audioBlob));
+      } finally {
+        delete inFlightDownloads[fileId];
+      }
+    })();
+
+    return inFlightDownloads[fileId];
+  }
+
+  const audioEl = document.getElementById('audio-player');
+  if (audioEl) {
+    const nativeSrcDesc = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, 'src');
+    let logicalSrc = '';
+    let loadSeq = 0;
+
+    Object.defineProperty(audioEl, 'src', {
+      configurable: true,
+      get: function () {
+        return logicalSrc || nativeSrcDesc.get.call(this);
+      },
+      set: function (val) {
+        logicalSrc = String(val || '');
+        const match = logicalSrc.match(//api/stream/([^/?#]+)/);
+        if (!match) {
+          nativeSrcDesc.set.call(this, logicalSrc);
+          return;
+        }
+
+        const fileId = decodeURIComponent(match[1]);
+        const seq = ++loadSeq;
+
+        if (blobUrlCache[fileId]) {
+          nativeSrcDesc.set.call(this, blobUrlCache[fileId]);
+          return;
+        }
+
+        nativeSrcDesc.set.call(this, '');
+
+        resolveDirectDriveBlobUrl(fileId)
+          .then(function (blobUrl) {
+            if (seq !== loadSeq) return;
+            nativeSrcDesc.set.call(audioEl, blobUrl);
+            audioEl.load();
+            if (typeof isPlaying !== 'undefined' && isPlaying) {
+              audioEl.play().catch(function (err) {
+                if (err && err.name !== 'AbortError' && err.name !== 'NotAllowedError') {
+                  console.warn('[MusixPlayError]', err.message);
+                }
+              });
+            }
+          })
+          .catch(function (err) {
+            if (seq !== loadSeq) return;
+            console.error('[MusixDriveStreamError]', err.message);
+            if (typeof showToast === 'function') {
+              showToast('Audio load error: ' + err.message);
+            }
+            nativeSrcDesc.set.call(audioEl, logicalSrc);
+            audioEl.load();
+            if (typeof isPlaying !== 'undefined' && isPlaying) {
+              audioEl.play().catch(function () {});
+            }
+          });
+      }
     });
-  });
+
+    audioEl.addEventListener('playing', function () {
+      setTimeout(function () {
+        try {
+          if (Array.isArray(currentQueue) && currentQueue.length > 1 && typeof currentIndex === 'number') {
+            const nextIdx = (currentIndex + 1) % currentQueue.length;
+            const nextSong = currentQueue[nextIdx];
+            if (nextSong && nextSong.id && !nextSong.isExternalTrending && !blobUrlCache[nextSong.id]) {
+              resolveDirectDriveBlobUrl(nextSong.id).catch(function () {});
+            }
+          }
+        } catch (e) {}
+      }, 2000);
+    });
+  }
 })();
 </script>
 </body>
