@@ -138,32 +138,27 @@ module.exports = function registerMusixV48Engine(app, drive, rootDir) {
   let liveDriveSongsCache = null;
   let backgroundSyncInFlight = false;
 
-  // 1. ZERO-BANDWIDTH DIRECT GOOGLE DRIVE API V3 STREAM REDIRECT (v49)
+  // 1. ZERO-BANDWIDTH DIRECT GOOGLE DRIVE CDN STREAM REDIRECT (v51)
   app.get('/api/stream/:fileId', async (req, res, next) => {
     const fileId = req.params.fileId;
-    if (!process.env.GOOGLE_REFRESH_TOKEN || !process.env.GOOGLE_CLIENT_ID) {
-      res.set({ 'Cache-Control': 'no-store', 'X-Musix-Error': 'MISSING_RENDER_ENV' });
-      return res.status(503).json({ error: 'Missing Google Drive environment variables on Render.' });
-    }
     try {
-      const authClient = drive && drive.context && drive.context._options && drive.context._options.auth;
-      if (authClient && typeof authClient.getAccessToken === 'function') {
-        const tokenResp = await authClient.getAccessToken();
-        const accessToken = typeof tokenResp === 'string' ? tokenResp : (tokenResp && tokenResp.token);
-        if (accessToken) {
-          const apiMediaUrl =
-            'https://www.googleapis.com/drive/v3/files/' +
-            encodeURIComponent(fileId) +
-            '?alt=media&access_token=' +
-            encodeURIComponent(accessToken);
-          res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
-          return res.redirect(302, apiMediaUrl);
-        }
+      if (!publicPermCache[fileId]) {
+        await drive.permissions.create({
+          fileId: fileId,
+          requestBody: { role: 'reader', type: 'anyone' }
+        });
+        publicPermCache[fileId] = true;
       }
+      const directDriveCdnUrl =
+        'https://drive.usercontent.google.com/download?id=' +
+        encodeURIComponent(fileId) +
+        '&export=download&confirm=t';
+      res.set('Cache-Control', 'public, max-age=3600');
+      return res.redirect(302, directDriveCdnUrl);
     } catch (err) {
-      console.error('Direct Drive token stream error:', err.message);
+      console.error('Direct Drive CDN fallback to proxy:', err.message);
+      return next();
     }
-    return next();
   });
 
   // 2. INSTANT /api/songs SNAPSHOT & CACHE HEADERS
