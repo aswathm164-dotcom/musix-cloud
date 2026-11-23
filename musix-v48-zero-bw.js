@@ -138,28 +138,45 @@ module.exports = function registerMusixV48Engine(app, drive, rootDir) {
   let liveDriveSongsCache = null;
   let backgroundSyncInFlight = false;
 
-  // 1. ZERO-BANDWIDTH DIRECT GOOGLE DRIVE CDN STREAM REDIRECT (v51)
-  app.get('/api/stream/:fileId', async (req, res, next) => {
-    const fileId = req.params.fileId;
+  // 1. ZERO-BANDWIDTH GOOGLE DRIVE API V3 TOKEN ENDPOINT (v52)
+  let cachedDriveAccessToken = '';
+  let cachedDriveAccessExpiry = 0;
+
+  app.get('/api/drive-token', async (req, res) => {
+    res.set({
+      'Cache-Control': 'no-store, no-cache, must-revalidate',
+      'Access-Control-Allow-Origin': '*'
+    });
+    if (!process.env.GOOGLE_REFRESH_TOKEN || !process.env.GOOGLE_CLIENT_ID) {
+      return res.status(503).json({ error: 'MISSING_RENDER_ENV: Add GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, and GOOGLE_REFRESH_TOKEN on Render.' });
+    }
+    if (cachedDriveAccessToken && Date.now() < cachedDriveAccessExpiry) {
+      return res.json({
+        token: cachedDriveAccessToken,
+        expiresIn: Math.floor((cachedDriveAccessExpiry - Date.now()) / 1000)
+      });
+    }
     try {
-      if (!publicPermCache[fileId]) {
-        await drive.permissions.create({
-          fileId: fileId,
-          requestBody: { role: 'reader', type: 'anyone' }
-        });
-        publicPermCache[fileId] = true;
+      const authClient = drive && drive.context && drive.context._options && drive.context._options.auth;
+      if (!authClient || typeof authClient.getAccessToken !== 'function') {
+        return res.status(500).json({ error: 'Google OAuth2 client not initialized.' });
       }
-      const directDriveCdnUrl =
-        'https://drive.usercontent.google.com/download?id=' +
-        encodeURIComponent(fileId) +
-        '&export=download&confirm=t';
-      res.set('Cache-Control', 'public, max-age=3600');
-      return res.redirect(302, directDriveCdnUrl);
+      const tokenResp = await authClient.getAccessToken();
+      const token = typeof tokenResp === 'string' ? tokenResp : (tokenResp && tokenResp.token);
+      if (!token) {
+        return res.status(502).json({ error: 'Failed to obtain access token from Google.' });
+      }
+      cachedDriveAccessToken = token;
+      cachedDriveAccessExpiry = Date.now() + 45 * 60 * 1000;
+      return res.json({ token: token, expiresIn: 2700 });
     } catch (err) {
-      console.error('Direct Drive CDN fallback to proxy:', err.message);
-      return next();
+      console.error('Google Drive token error:', err.message);
+      return res.status(502).json({ error: 'Google OAuth Error: ' + err.message });
     }
   });
+
+  // Fallback proxy route if browser ever calls /api/stream/:fileId directly
+  app.get('/api/stream/:fileId', (req, res, next) => next());
 
   // 2. INSTANT /api/songs SNAPSHOT & CACHE HEADERS
   app.use((req, res, next) => {
